@@ -92,28 +92,55 @@ pub fn find_theater_texture_dir(bms_base: &Path, theater_name: &str) -> Option<P
     None
 }
 
-/// Merges a 1024x1554 or custom page image into the target DDS texture file.
-pub fn merge_page_to_dds(
+/// Restores an original stock BMS texture from DDS_Backup (in assets/data/DDS_Backup or BMS Docs).
+pub fn restore_original_texture(
+    bms_dir: &Path,
+    assets_dir: &Path,
     texture_dir: &Path,
-    slot: &str,
-    page_img: &RgbaImage,
+    filename: &str,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let dest_path = texture_dir.join(filename);
+
+    let candidates = [
+        assets_dir.join("data").join("DDS_Backup").join(filename),
+        bms_dir.join("Docs").join("07 Kneeboard Templates").join("F-16").join("DDS_Backup").join(filename),
+    ];
+
+    for candidate in &candidates {
+        if candidate.exists() {
+            fs::copy(candidate, &dest_path)?;
+            log::info!("Restored stock BMS original texture for {}: from {:?}", filename, candidate);
+            return Ok(true);
+        }
+    }
+
+    log::warn!("Stock original texture for {} not found in DDS_Backup", filename);
+    Ok(false)
+}
+
+/// Merges both left (offset 0) and right (offset 1024) pages into a single 2048x2048 DDS texture in ONE pass.
+/// If either left or right is None, the existing texture data on that side is preserved.
+pub fn merge_texture_pair_to_dds(
+    texture_dir: &Path,
+    filename: &str,
+    left_img: Option<&RgbaImage>,
+    right_img: Option<&RgbaImage>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (filename, offset_x) = KneeboardSlotMap::get_slot_info(slot)
-        .ok_or_else(|| format!("Unknown kneeboard slot: {}", slot))?;
+    if left_img.is_none() && right_img.is_none() {
+        return Ok(()); // Nothing to update
+    }
 
     let dest_path = texture_dir.join(filename);
-    log::info!("Merging slot {} into texture: {}", slot, dest_path.display());
+    log::info!("Merging texture pair into {}: Left={} | Right={}", filename, left_img.is_some(), right_img.is_some());
 
     // Prepare 2048x2048 RGBA canvas
     let mut canvas = if dest_path.exists() {
-        // Try to load and decode existing DDS texture so we don't overwrite the other half
         let mut loaded = None;
         if let Ok(file) = fs::File::open(&dest_path) {
             let mut reader = std::io::BufReader::new(file);
             if let Ok(dds_data) = ddsfile::Dds::read(&mut reader) {
                 match image_dds::image_from_dds(&dds_data, 0) {
                     Ok(img) => {
-                        log::info!("Successfully decoded existing DDS: {}", filename);
                         loaded = Some(img);
                     }
                     Err(e) => {
@@ -129,11 +156,17 @@ pub fn merge_page_to_dds(
         RgbaImage::from_pixel(2048, 2048, image::Rgba([250, 250, 248, 255]))
     };
 
-    // Resize page image to 1024x2048 exact stretch (matching BMS kneeboard aspect ratio)
-    let resized = imageops::resize(page_img, 1024, 2048, imageops::FilterType::Triangle);
+    // Overlay Left Page at X=0
+    if let Some(left) = left_img {
+        let resized = imageops::resize(left, 1024, 2048, imageops::FilterType::Triangle);
+        imageops::overlay(&mut canvas, &resized, 0, 0);
+    }
 
-    // Composite at offset (0, 0) or (1024, 0)
-    imageops::overlay(&mut canvas, &resized, offset_x as i64, 0);
+    // Overlay Right Page at X=1024
+    if let Some(right) = right_img {
+        let resized = imageops::resize(right, 1024, 2048, imageops::FilterType::Triangle);
+        imageops::overlay(&mut canvas, &resized, 1024, 0);
+    }
 
     // Fast SIMD BC1 (DXT1) compression with no mipmaps
     let dds = dds_from_image(
@@ -150,7 +183,23 @@ pub fn merge_page_to_dds(
     drop(writer);
 
     fs::rename(&temp_path, &dest_path)?;
-    log::info!("Merged page {} into {}", slot, dest_path.display());
+    log::info!("Successfully written batched texture: {}", dest_path.display());
 
     Ok(())
+}
+
+/// Merges a 1024x1554 or custom page image into the target DDS texture file.
+pub fn merge_page_to_dds(
+    texture_dir: &Path,
+    slot: &str,
+    page_img: &RgbaImage,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (filename, offset_x) = KneeboardSlotMap::get_slot_info(slot)
+        .ok_or_else(|| format!("Unknown kneeboard slot: {}", slot))?;
+
+    if offset_x == 0 {
+        merge_texture_pair_to_dds(texture_dir, filename, Some(page_img), None)
+    } else {
+        merge_texture_pair_to_dds(texture_dir, filename, None, Some(page_img))
+    }
 }

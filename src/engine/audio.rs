@@ -85,6 +85,18 @@ impl AudioPlayer {
         }
     }
 
+    /// Plays raw audio bytes and waits until playback finishes (sync).
+    pub fn play_bytes_sync(&self, bytes: &'static [u8]) {
+        let cursor = std::io::Cursor::new(bytes);
+        if let Ok(source) = Decoder::new(cursor) {
+            if let Ok(sink) = Sink::try_new(&self.stream_handle) {
+                log::info!("Playing completion audio cue");
+                sink.append(source);
+                sink.sleep_until_end();
+            }
+        }
+    }
+
     /// Plays a system sound from disk if present, falling back to embedded bytes.
     pub fn play_system_sound(&self, filename: &str, fallback_bytes: &'static [u8]) {
         let local_path = Path::new(filename);

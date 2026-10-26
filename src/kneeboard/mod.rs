@@ -4,6 +4,8 @@ pub mod runways;
 pub mod renderer;
 pub mod custom;
 pub mod briefing_render;
+pub mod briefing_html;
+pub mod layout;
 pub mod database;
 pub mod crop;
 pub mod blank_html;

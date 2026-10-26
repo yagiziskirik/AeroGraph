@@ -59,29 +59,44 @@ pub struct CommAgency {
     pub vhf: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PackageFlight {
     pub callsign: String,
     pub flight_num: String,
+    pub is_primary: bool,
     pub role: String,
     pub aircraft: String,
-    pub vhf: String,
+    pub task: String,
     pub to_time: String,
     pub push_time: String,
     pub tgt_time: String,
+    pub vhf: String,
     pub pilots: Vec<String>,
-    pub tacan: String,
-    pub laser: String,
+    pub laser_tacan: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WeatherReport {
-    pub situation: String,
-    pub wind: String,
-    pub visibility: String,
-    pub temp: String,
-    pub cloud_base: String,
-    pub con_layer: String,
+    pub to_situation: String,
+    pub to_wind: String,
+    pub to_visibility: String,
+    pub to_temp: String,
+    pub to_cloud_base: String,
+    pub to_con_layer: String,
+
+    pub tgt_situation: String,
+    pub tgt_wind: String,
+    pub tgt_visibility: String,
+    pub tgt_temp: String,
+    pub tgt_cloud_base: String,
+    pub tgt_con_layer: String,
+
+    pub lnd_situation: String,
+    pub lnd_wind: String,
+    pub lnd_visibility: String,
+    pub lnd_temp: String,
+    pub lnd_cloud_base: String,
+    pub lnd_con_layer: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

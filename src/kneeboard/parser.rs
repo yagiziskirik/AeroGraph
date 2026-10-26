@@ -13,6 +13,134 @@ pub fn parse_briefing(path: &Path) -> Option<BriefingData> {
     let text = String::from_utf8_lossy(&bytes);
     let mut data = BriefingData::default();
 
+    // Timestamp: e.g. "BRIEFING RECORD generated at 10/26/2026 16:18:56."
+    if let Ok(re) = Regex::new(r"BRIEFING RECORD generated at\s+([^\r\n.]+)") {
+        if let Some(caps) = re.captures(&text) {
+            data.timestamp_str = caps[1].trim().to_string();
+        }
+    }
+
+    // Pilot Roster table mapping: Callsign -> [Pilot 1, Pilot 2, ...]
+    let mut roster_map: HashMap<String, Vec<String>> = HashMap::new();
+    if let Some(pos) = text.find("Pilot Roster:") {
+        let after = &text[pos + "Pilot Roster:".len()..];
+        let end_pos = after.find("Package Elements:").unwrap_or(after.len());
+        for line in after[..end_pos].lines() {
+            let cols: Vec<&str> = line.split('\t').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+            if cols.len() >= 2 && !cols[0].starts_with("Callsign") {
+                let cs = cols[0].to_string();
+                let pilots: Vec<String> = cols[1..].iter().map(|s| s.to_string()).collect();
+                roster_map.insert(cs, pilots);
+            }
+        }
+    }
+
+    // Package Elements table: Flights in Package
+    if let Some(pos) = text.find("Package Elements:") {
+        let after = &text[pos + "Package Elements:".len()..];
+        let end_pos = after.find("Threat Analysis:").or_else(|| after.find("Steerpoints:")).unwrap_or(after.len());
+        let pe_text = &after[..end_pos];
+
+        let mut current_flight: Option<crate::kneeboard::models::PackageFlight> = None;
+        let mut flt_idx = 0;
+
+        for line in pe_text.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with("Callsign") {
+                continue;
+            }
+            if trimmed.starts_with("T/O:") {
+                if let Some(ref mut flt) = current_flight {
+                    for part in trimmed.split('\t') {
+                        let p = part.trim();
+                        if p.starts_with("T/O:") {
+                            flt.to_time = p.trim_start_matches("T/O:").trim().to_string();
+                        } else if p.starts_with("Push:") {
+                            flt.push_time = p.trim_start_matches("Push:").trim().to_string();
+                        } else if p.starts_with("Tgt:") {
+                            flt.tgt_time = p.trim_start_matches("Tgt:").trim().to_string();
+                        }
+                    }
+                    data.package_flights.push(flt.clone());
+                    current_flight = None;
+                }
+            } else {
+                let cols: Vec<&str> = line.split('\t').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+                if cols.len() >= 4 {
+                    flt_idx += 1;
+                    let cs = cols[0].to_string();
+                    let flt_raw = cols[1].to_string();
+                    let is_primary = flt_raw.contains("(x") || flt_raw.contains("(X");
+                    let flight_num = flt_raw;
+                    let role = cols[2].to_string();
+                    let aircraft = cols[3].to_string();
+                    let task = if cols.len() > 4 { cols[4].to_string() } else { String::new() };
+                    let vhf = format!("VHF #{}", 14 + flt_idx);
+                    let pilots = roster_map.get(&cs).cloned().unwrap_or_default();
+
+                    current_flight = Some(crate::kneeboard::models::PackageFlight {
+                        callsign: cs,
+                        flight_num,
+                        is_primary,
+                        role,
+                        aircraft,
+                        task,
+                        to_time: "--".to_string(),
+                        push_time: "--".to_string(),
+                        tgt_time: "--".to_string(),
+                        vhf,
+                        pilots,
+                        laser_tacan: Vec::new(),
+                    });
+                }
+            }
+        }
+        if let Some(flt) = current_flight {
+            data.package_flights.push(flt);
+        }
+    }
+
+    // Weather section: Situation, Wind, Visibility, Temp, Cloud Base, Con Layer
+    if let Some(pos) = text.find("Weather:") {
+        let after = &text[pos + "Weather:".len()..];
+        let end_pos = after.find("Support:").or_else(|| after.find("\n\n\n")).unwrap_or(after.len());
+        let w_text = &after[..end_pos];
+
+        let mut w = crate::kneeboard::models::WeatherReport::default();
+        for line in w_text.lines() {
+            let cols: Vec<&str> = line.split('\t').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+            if cols.len() >= 4 {
+                let param = cols[0].to_lowercase();
+                if param.starts_with("situation") {
+                    w.to_situation = cols[1].to_string();
+                    w.tgt_situation = cols[2].to_string();
+                    w.lnd_situation = cols[3].to_string();
+                } else if param.starts_with("wind") {
+                    w.to_wind = cols[1].to_string();
+                    w.tgt_wind = cols[2].to_string();
+                    w.lnd_wind = cols[3].to_string();
+                } else if param.starts_with("visibility") {
+                    w.to_visibility = cols[1].to_string();
+                    w.tgt_visibility = cols[2].to_string();
+                    w.lnd_visibility = cols[3].to_string();
+                } else if param.starts_with("temp") {
+                    w.to_temp = cols[1].to_string();
+                    w.tgt_temp = cols[2].to_string();
+                    w.lnd_temp = cols[3].to_string();
+                } else if param.starts_with("cloud base") {
+                    w.to_cloud_base = cols[1].to_string();
+                    w.tgt_cloud_base = cols[2].to_string();
+                    w.lnd_cloud_base = cols[3].to_string();
+                } else if param.starts_with("con layer") {
+                    w.to_con_layer = cols[1].to_string();
+                    w.tgt_con_layer = cols[2].to_string();
+                    w.lnd_con_layer = cols[3].to_string();
+                }
+            }
+        }
+        data.weather = Some(w);
+    }
+
     // Callsign & Role: e.g. "Satan 7 (DEAD)"
     if let Ok(re) = Regex::new(r"(?m)^\s*([A-Za-z0-9_-]+)\s*\(([A-Z\s]+)\)") {
         if let Some(caps) = re.captures(&text) {
@@ -181,22 +309,31 @@ pub fn parse_briefing(path: &Path) -> Option<BriefingData> {
     }
 
     // Comm Ladder Table
-    if let Ok(re_comm) = Regex::new(r"(?s)Comm Ladder:\s*\r?\n([\s\S]+?)(?:\r?\n\r?\n[A-Z][A-Za-z\s]+:|\Z)") {
-        if let Some(caps) = re_comm.captures(&text) {
-            for line in caps[1].lines() {
-                let trimmed = line.trim();
-                if trimmed.is_empty() || trimmed.starts_with("Agency") {
-                    continue;
-                }
-                let cols: Vec<&str> = trimmed.split('\t').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
-                if cols.len() >= 4 {
-                    data.comm_ladder.push(CommAgency {
-                        agency: cols[0].to_string(),
-                        callsign: cols[1].to_string(),
-                        uhf: cols[2].to_string(),
-                        vhf: cols[3].to_string(),
-                    });
-                }
+    if let Some(pos) = text.find("Comm Ladder:") {
+        let after = &text[pos + "Comm Ladder:".len()..];
+        let end_pos = after.find("\nIff")
+            .or_else(|| after.find("\r\nIff"))
+            .or_else(|| after.find("\nLink 16"))
+            .unwrap_or(after.len());
+        let comm_text = &after[..end_pos];
+
+        for line in comm_text.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with("Agency") {
+                continue;
+            }
+            let cols: Vec<&str> = trimmed.split('\t').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+            if cols.len() >= 4 {
+                let agency = cols[0].trim_end_matches(':').to_string();
+                let cs = cols[1].to_string();
+                let uhf = cols[2].to_string();
+                let vhf = cols[3].to_string();
+                data.comm_ladder.push(CommAgency {
+                    agency,
+                    callsign: cs,
+                    uhf,
+                    vhf,
+                });
             }
         }
     }
