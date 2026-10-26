@@ -1,0 +1,5 @@
+/target/
+/DELETE/
+/assets/work/
+*.tmp
+*.log

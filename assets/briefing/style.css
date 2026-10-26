@@ -1,0 +1,27 @@
+body {background:white; font-family:sans-serif; margin:0px;}
+table {width:100%;}
+th {padding:5px; line-height:100%; font-size:160%;} 
+th.title {background:#222222; color:#FFFFFF}
+tr.header {background:#CCCCEE; font-weight:bold;}
+th.stamp {background:#EEEEEE; color:#444444}
+td {padding:5px; line-height:100%; font-size:160%;} 
+tr {background:#EEEEEE;}
+tr.odd {background:#EEEEEE;}
+tr.even {background:#DDDDDD;}
+tr.ownflight {background:#CCEECC; font-weight:bold;}
+tr.ownroster {background:#CCEECC;}
+div.page {
+  position: relative;
+  float: left;
+  width: 1024px;
+  height: 1554px;
+  padding: 0px;
+  padding-top: 24px;
+  margin-top: 24px;
+}
+div.section {
+  margin: auto;
+  width: 96%;
+  padding: 1ex;
+  padding-top: 3ex;
+}

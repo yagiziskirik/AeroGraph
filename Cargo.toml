@@ -1,0 +1,51 @@
+[package]
+name = "aerograph"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Serialization & Config
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+flate2 = "1.0"
+base64 = "0.22"
+toml = "0.8"
+
+# Windows Native APIs
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Com",
+    "Win32_Media_Speech",
+    "Win32_System_Registry",
+    "Win32_System_Console",
+    "Win32_Security",
+] }
+
+# Audio Playback
+rodio = { version = "0.19", default-features = false, features = ["symphonia-mp3", "symphonia-wav"] }
+
+# System Tray & File Dialog
+tray-icon = "0.25"
+tao = "0.30"
+rfd = "0.15"
+directories = "5.0"
+
+# Logging & Utilities
+log = "0.4"
+env_logger = "0.11"
+rand = "0.8"
+regex = "1.10"
+md-5 = "0.7"
+
+# Image & Vector graphics
+image = { version = "0.25", default-features = false, features = ["ico", "png", "jpeg", "webp"] }
+resvg = "0.44"
+usvg = "0.44"
+
+# DDS Texture Support
+image_dds = { version = "0.6", default-features = false, features = ["encode", "image", "ddsfile"] }
+ddsfile = "0.5"

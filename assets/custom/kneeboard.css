@@ -1,0 +1,30 @@
+body {background:white; font-family:sans-serif; margin:0px;}
+table {width:100%;}
+tr.odd {background:#EEEEEE;}
+tr.even {background:#DDDDDD;}
+tr.ir {background:#FFDDDD;}
+th {padding:5px; line-height:100%; font-size:200%;} 
+th.title {background:#444444; color:#FFFFFF}
+tr.header {background:#CCCCEE; font-weight:bold;}
+th.stamp {background:#EEEEEE; color:#444444}
+td {padding:5px; line-height:100%; font-size:200%;}
+td.half {padding:5px; line-height:100%; font-size:200%; width:50%;}
+td.rwr {padding:5px; line-height:100%; font-size:200%; font-weight:bold;}
+td.mar {padding:5px; line-height:100%; font-size:200%; font-weight:bold;}
+td.rightalign {text-align: right;}
+tr {background:#EEEEEE;}
+div.page {
+  position: relative;
+  float: left;
+  width: 1024px;
+  height: 1554px;
+  padding: 0px;
+  padding-top: 24px;
+  margin-top: 24px;
+}
+div.section {
+  margin: auto;
+  width: 96%;
+  padding: 1ex;
+  padding-top: 3ex;
+}

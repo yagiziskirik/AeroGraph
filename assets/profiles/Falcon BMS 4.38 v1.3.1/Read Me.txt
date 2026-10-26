@@ -1,0 +1,157 @@
+Welcome to this new new version of the FoxVox BMS VCC Library, valid for BMS versions 4.38 and higher (to date).
+
+---------- Changes ------------
+
+v1.0
+- Added new voice commands for 4.38
+- Added new Set Course & Heading commands
+- Added new FoxVoxBMS plugin to replace old plugins
+  - No configuration required
+  - No longer requires updating any parameters
+  - Single plugin captures all required BMS information
+  - Supports callsigns, airport, and flight information
+- Updated voice keys for updated recognition
+
+v1.1
+- Updated FoxVoxBMS.dll plugin to v1.1 to support callsigns changing after entering 3D/during flight
+- Updated several voice keys for better detection
+- Added Enable/Disable Comms Menu command
+
+v1.2
+- Updated various voice keys
+- Removed the Comms Menu key control group
+- Added New Commands
+  - Engage Crew Chief
+  - Change:  Heading, Course, QNH
+  - Push
+  - Jet Misc
+- Changed startup behavior to default with only the comms functions enabled
+
+v1.3
+- Update voice keys, particularly callbacks for 'Heavy' approach
+- Fixed BMS plugin path
+
+v1.3.1
+- Change to AWACS voice keys to reduce false callbacks
+
+
+* Note: Simply enable the command groups that you want to use, or optionally delete them from the library.  Also, remember to enable them with the VCC Configuration active if you want to use them during VCC operation.
+
+
+---------- Instructions ------------
+
+After installing FoxVox and extracting the library files to a location of your choice (keeping all the assets together), do the following:
+
+1. Open the library in the FoxVox application.
+
+2. (Optional) For female pilots, set the 'Female' variable to initialize as True:
+
+	A. Click the Variables toolbar button to open the variable definitions window.
+	B. Change the value for Female to True (type in 'True' for value).
+
+	Designated pilot gender can also be change on the fly by speaking one of the following voice commands:
+	(changes made via voice are in-session only and not saved with the library)
+		1) "Change to Male Pilot"
+		2) "Change to Female Pilot"
+		3) "Change Gender" (or "Change Pilot Gender") to alternate
+
+3. Save the changes made.
+
+4. To engage the Crew Chief, enable voice recognition and say "Engage/Start Crew Chief".  To exit the Crew Chief early at any time, say "Chief skip to flight".  You can re-engage the crew chief again once he's signed off if you are not in the BMS 3D pit or if you haven't yet started the jet engine.
+
+5. To fully reset the library and start over, say "Reset Game", but ONLY if the 'Game' voice command group is enabled. Otherwise, you must click the 'Reset Library' button located on the main toolbar.
+
+
+---------- Support Links ------------
+
+https://foxster.itch.io/foxvox
+https://www.youtube.com/@foxster2
+https://foxster.itch.io/foxvox/devlog/870907/foxvox-tutorial-videos
+
+
+---------- New Things to Try ------------
+
+Try out commands using callsigns:
+
+"Gunsan, Goblin2 Singleton F16, request taxi for departure"
+"Gunsan Approach, Goblin2 1, request vectors for visual approach"
+"Texaco5, Rocket2, request air to air refuel"
+"Mudhen5 2, say status"
+etc...
+
+You can also shorten it to just your flight callsign (ignoring the airport) like such:
+"Goblin2 1 request taxi back"
+"Goblin2 ready for departure"
+"Goblin2 airborne"
+
+Also, voice commands for Wingman, Element, and Flight as well as AWACS are disabled automatically when not applicable (not present, or human controlled).
+
+Callsigns load from BMS so they need to be the actual callsigns in use.  You can test them without running BMS by defining the following variables manually:
+
+PkgSize   [Singelton, 2 Ship, 3 Ship, 4 Ship]
+Aircraft  [F16, F15, F18, etc]
+Callsign  [Goblin2, Rocket3, etc.]
+Seat      [1, 2, 3, or 4] (player's seat location)
+AISeats   [234, 24, 1, (or any correct combination)]
+AISeat1   [true, false]
+AISeat2   [true, false]
+AISeat3   [true, false]
+AISeat4   [true, false]
+Tanker    [Texaco7, etc.]
+Awacs     [Sentry6, etc.]
+Departure [Gunsan, Gimpo, etc.]
+Arrival   [Gunsan, Gimpo, etc.]
+Alternate [Gunsan, Gimpo, etc.]
+
+If BMS is not running, the plugin will automatically load these values for testing purposes for you:
+
+PkgSize   = Singelton
+Aircraft  = F16
+Callsign  = Goblin2
+Seat      = 1
+AISeats   = [Null]
+AISeat1   = False
+AISeat2   = False
+AISeat3   = False
+AISeat4   = False
+Tanker    = Texaco1
+Awacs     = Sentry7
+Departure = Gunsan
+Arrival   = Gunsan
+Alternate = Osan
+
+
+*** NOTE: The callsigns only work if ***
+
+    A:  You're in BMS 3D at the time (BMS sets the required callsign variables)
+    B:  You manually define/set the variables in your library file for testing purposes as shown
+
+---------- Notes ------------
+
+The library is designed to set the following up automatically based on BMS keybinds:
+
+- UHF/VHF Push-to-Talk
+- Large Movements based on joystick input for VCC
+- Left & Right Brake Movements based on joystick/keyboard input for VCC
+- MPO Switch for VCC
+
+If everything works correctly, everything should all be set up automatically from the plugin.  If not, you'll need to set them manually and feel free to let me know.  If the auto-binding doesn't work for some reason, you can just set the PTT manually to your controller.
+
+The following menu bindings are available included, but disabled on the 'Comms Menus' Key Command Group:
+
+- Pinky shift + Comms Switch Up (UHF) = ATC Menu
+- Pinky shift + Comms Switch Down (VHF) = AWACS Menu
+- Pinky shift + Comms Switch Left = Wingman Menu
+- Pinky shift + Comms Switch Right = JTAC/Other Agencies Menu
+
+To use them, just enable the group on the configurations where you want them active.  Alternatively, feel free to delete them.
+
+All dependent files should be kept together with the library.  If a folder is moved or renamed, but still located alongside or below the library file path, FoxVox will automatically find and update the file paths, but any file renaming will need to be also performed within the library.
+
+You can fully run the VCC interaction without launching BMS in an automated test mode (it detects if BMS is not active).  When running in test mode without BMS, the Crew Chief responses to inputs are done automatically on a timer instead.  This allows you to refine the voice detection and practice without having to start BMS.
+
+Special thanks and credits go to Bogey Dope for providing the original sound assets and design, and for giving permission to distribute his work with this library.  Also thanks to Tomcattwo for providing the updated startup procedure; AND ... Special thanks to all those who have left positive reviews, feedback, and even donations for this project.  I am truly grateful for your support.
+
+For more involvement, support, news and announcements, join the Discord:  https://discord.gg/vc37eJ4Bsp
+
+Enjoy!!
