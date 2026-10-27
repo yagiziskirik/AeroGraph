@@ -12,24 +12,24 @@ use crate::config::AppConfig;
 use crate::engine::audio::AudioPlayer;
 use crate::kneeboard::blank_html::generate_blank_chart_html;
 use crate::kneeboard::briefing_render::render_briefing_pages;
-use crate::kneeboard::crop::find_theater_base_map;
+use crate::kneeboard::crop::{crop_theater_map_dual, find_theater_base_map};
 use crate::kneeboard::custom::check_and_render_custom_pages;
 use crate::kneeboard::dds::{find_theater_texture_dir, merge_texture_pair_to_dds, restore_original_texture};
 use crate::kneeboard::ils::find_and_render_ils_chart;
 use crate::kneeboard::layout::{KneeboardLayoutConfig, KneeboardPageType};
 use crate::kneeboard::mission_html::{
-    compute_mission_route_coords, generate_mission_overview_page, generate_tactical_target_page,
-    resolve_threat_coords,
+    compute_mission_route_coords, compute_route_crop_box, compute_target_crop_box,
+    generate_mission_overview_html, generate_tactical_target_html, resolve_threat_coords,
 };
 use crate::kneeboard::parser::{parse_briefing, parse_callsign_stpts};
-use crate::kneeboard::renderer::render_html_to_png;
+use crate::kneeboard::renderer::{render_html_batch_parallel, render_html_to_png};
 use crate::kneeboard::runways::{calculate_active_runways, find_airport, map_theater_id, TheaterDatabase};
 use crate::kneeboard::taxi_html::generate_taxi_chart_html;
 
 pub struct KneeboardWatcher;
 
 impl KneeboardWatcher {
-    /// Spawns the background EZWatch thread.
+    /// Spawns the background KneeboardWatcher thread.
     pub fn spawn_loop(
         running: Arc<AtomicBool>,
         config: Arc<std::sync::Mutex<AppConfig>>,
@@ -50,17 +50,24 @@ impl KneeboardWatcher {
         log::info!("KneeboardWatcher thread started (Pure Rust + WebKit Pipeline)");
 
         let mut last_briefing_mtime = None;
+        let mut cached_bms_base_dir = {
+            let cfg = config.lock().unwrap();
+            cfg.get_bms_base_dir()
+        };
 
         while running.load(Ordering::SeqCst) {
-            let (ezwatch_enabled, bms_base_dir) = {
+            let auto_kneeboards = {
                 let cfg = config.lock().unwrap();
-                (cfg.ezwatch_enabled, cfg.get_bms_base_dir())
+                if cached_bms_base_dir.is_none() {
+                    cached_bms_base_dir = cfg.get_bms_base_dir();
+                }
+                cfg.auto_kneeboards
             };
 
             let manual_requested = manual_rx.try_recv().is_ok();
 
-            if ezwatch_enabled || manual_requested {
-                if let Some(ref bms_dir) = bms_base_dir {
+            if auto_kneeboards || manual_requested {
+                if let Some(ref bms_dir) = cached_bms_base_dir {
                     let briefing_path = bms_dir.join("User").join("Briefings").join("briefing.txt");
 
                     let mut needs_regen = manual_requested;
@@ -79,11 +86,11 @@ impl KneeboardWatcher {
 
                     if needs_regen {
                         let t0 = Instant::now();
-                        log::info!("📋 [EZWatch] Briefing change triggered! Regenerating kneeboards in pure Rust...");
+                        log::info!("📋 [Kneeboards] Briefing change triggered! Regenerating kneeboards in pure Rust...");
                         let cfg = config.lock().unwrap().clone();
                         Self::execute_pipeline(&cfg, bms_dir, audio_player.as_ref());
                         let elapsed = t0.elapsed();
-                        log::info!("✅ [EZWatch] Kneeboards successfully updated in {:.2}s", elapsed.as_secs_f64());
+                        log::info!("✅ [Kneeboards] Kneeboards successfully updated in {:.2}s", elapsed.as_secs_f64());
                     }
                 }
             }
@@ -219,6 +226,12 @@ impl KneeboardWatcher {
         // =========================================================================
         // 5. Mission Route & Tactical Target Maps (Only if configured in slots)
         // =========================================================================
+        let mut parallel_render_jobs: Vec<(PathBuf, PathBuf)> = Vec::new();
+        let route_png = images_dir.join("mission_route.png");
+        let target_png = images_dir.join("mission_target.png");
+        let dep_png = images_dir.join("dep_gnd.png");
+        let arr_png = images_dir.join("arr_gnd.png");
+
         if need_maps {
             let th_id = map_theater_id(&theater_name);
             let th_size = db.as_ref()
@@ -235,21 +248,41 @@ impl KneeboardWatcher {
             let resolved_threats = resolve_threat_coords(&b_data.threats, &geo_file);
 
             if let Some(ref map_path) = base_map {
-                if layout_cfg.has_type(&KneeboardPageType::MissionRoute) {
-                    let route_png = images_dir.join("mission_route.png");
-                    if generate_mission_overview_page(&b_data, &b_data.steerpoints, &resolved_threats, th_size, map_path, &work_dir, &route_png, &wkhtmltoimage_path).is_ok() {
-                        if let Ok(img) = image::open(&route_png) {
-                            slot_images.insert("F16_4R".to_string(), img.to_rgba8());
-                        }
+                let need_route = layout_cfg.has_type(&KneeboardPageType::MissionRoute);
+                let need_target = layout_cfg.has_type(&KneeboardPageType::MissionTarget);
+
+                let route_crop_jpg = work_dir.join("crop_route_overview.jpg");
+                let target_crop_jpg = work_dir.join("crop_target_zoom.jpg");
+
+                let route_box = if need_route {
+                    compute_route_crop_box(&b_data.steerpoints, &resolved_threats, th_size)
+                        .map(|b| (b, route_crop_jpg.as_path()))
+                } else {
+                    None
+                };
+
+                let target_box = if need_target {
+                    compute_target_crop_box(&b_data.steerpoints, th_size)
+                        .map(|b| (b, target_crop_jpg.as_path()))
+                } else {
+                    None
+                };
+
+                // Fast dual map crop: loads from on-disk raw cache (or decodes once),
+                // crops both regions, and frees map buffer from RAM immediately.
+                if let Err(e) = crop_theater_map_dual(map_path, th_size, &work_dir, route_box, target_box) {
+                    log::error!("Fast dual map crop failed: {}", e);
+                }
+
+                if need_route {
+                    if let Ok(route_html) = generate_mission_overview_html(&b_data, &b_data.steerpoints, &resolved_threats, th_size, map_path, &work_dir) {
+                        parallel_render_jobs.push((route_html, route_png.clone()));
                     }
                 }
 
-                if layout_cfg.has_type(&KneeboardPageType::MissionTarget) {
-                    let target_png = images_dir.join("mission_target.png");
-                    if generate_tactical_target_page(&b_data, &b_data.steerpoints, &resolved_threats, th_size, map_path, &work_dir, &target_png, &wkhtmltoimage_path).is_ok() {
-                        if let Ok(img) = image::open(&target_png) {
-                            slot_images.insert("F16_5R".to_string(), img.to_rgba8());
-                        }
+                if need_target {
+                    if let Ok(target_html) = generate_tactical_target_html(&b_data, &b_data.steerpoints, &resolved_threats, th_size, map_path, &work_dir) {
+                        parallel_render_jobs.push((target_html, target_png.clone()));
                     }
                 }
             }
@@ -266,27 +299,18 @@ impl KneeboardWatcher {
             };
 
             let dep_af = db.as_ref().and_then(|d| dep_ap.and_then(|ap| d.load_airfield_model(&assets_dir, &ap.id)));
-            let dep_png = images_dir.join("dep_gnd.png");
 
             if let (Some(dep), Some(af)) = (dep_ap, dep_af.as_ref()) {
                 let dep_html = work_dir.join("dep_gnd.html");
                 let html = generate_taxi_chart_html(dep, af, &dep_active, b_data.takeoff_wind_deg, b_data.takeoff_wind_kts, true);
                 if fs::write(&dep_html, html).is_ok() {
-                    if render_html_to_png(&wkhtmltoimage_path, &dep_html, &dep_png).is_ok() {
-                        if let Ok(img) = image::open(&dep_png) {
-                            slot_images.insert("F16_6R".to_string(), img.to_rgba8());
-                        }
-                    }
+                    parallel_render_jobs.push((dep_html, dep_png.clone()));
                 }
             } else {
                 let blank_html = work_dir.join("dep_gnd_blank.html");
                 let html = generate_blank_chart_html(&dep_name, "AIRFIELD MODEL NOT AVAILABLE");
                 if fs::write(&blank_html, html).is_ok() {
-                    if render_html_to_png(&wkhtmltoimage_path, &blank_html, &dep_png).is_ok() {
-                        if let Ok(img) = image::open(&dep_png) {
-                            slot_images.insert("F16_6R".to_string(), img.to_rgba8());
-                        }
-                    }
+                    parallel_render_jobs.push((blank_html, dep_png.clone()));
                 }
             }
         }
@@ -377,27 +401,47 @@ impl KneeboardWatcher {
             };
 
             let arr_af = db.as_ref().and_then(|d| arr_ap.and_then(|ap| d.load_airfield_model(&assets_dir, &ap.id)));
-            let arr_png = images_dir.join("arr_gnd.png");
 
             if let (Some(arr), Some(af)) = (arr_ap, arr_af.as_ref()) {
                 let arr_html = work_dir.join("arr_gnd.html");
                 let html = generate_taxi_chart_html(arr, af, &arr_active, b_data.landing_wind_deg, b_data.landing_wind_kts, false);
                 if fs::write(&arr_html, html).is_ok() {
-                    if render_html_to_png(&wkhtmltoimage_path, &arr_html, &arr_png).is_ok() {
-                        if let Ok(img) = image::open(&arr_png) {
-                            slot_images.insert("F16_9R".to_string(), img.to_rgba8());
-                        }
-                    }
+                    parallel_render_jobs.push((arr_html, arr_png.clone()));
                 }
             } else {
                 let blank_html = work_dir.join("arr_gnd_blank.html");
                 let html = generate_blank_chart_html(&arr_name, "AIRFIELD MODEL NOT AVAILABLE");
                 if fs::write(&blank_html, html).is_ok() {
-                    if render_html_to_png(&wkhtmltoimage_path, &blank_html, &arr_png).is_ok() {
-                        if let Ok(img) = image::open(&arr_png) {
-                            slot_images.insert("F16_9R".to_string(), img.to_rgba8());
-                        }
-                    }
+                    parallel_render_jobs.push((blank_html, arr_png.clone()));
+                }
+            }
+        }
+
+        // =========================================================================
+        // Execute Parallel HTML Rendering for Maps & Taxi Charts
+        // =========================================================================
+        if !parallel_render_jobs.is_empty() {
+            let job_refs: Vec<(&Path, &Path)> = parallel_render_jobs.iter().map(|(h, p)| (h.as_path(), p.as_path())).collect();
+            render_html_batch_parallel(&wkhtmltoimage_path, &job_refs);
+
+            if layout_cfg.has_type(&KneeboardPageType::MissionRoute) {
+                if let Ok(img) = image::open(&route_png) {
+                    slot_images.insert("F16_4R".to_string(), img.to_rgba8());
+                }
+            }
+            if layout_cfg.has_type(&KneeboardPageType::MissionTarget) {
+                if let Ok(img) = image::open(&target_png) {
+                    slot_images.insert("F16_5R".to_string(), img.to_rgba8());
+                }
+            }
+            if layout_cfg.has_type(&KneeboardPageType::DepTaxi) {
+                if let Ok(img) = image::open(&dep_png) {
+                    slot_images.insert("F16_6R".to_string(), img.to_rgba8());
+                }
+            }
+            if layout_cfg.has_type(&KneeboardPageType::ArrTaxi) {
+                if let Ok(img) = image::open(&arr_png) {
+                    slot_images.insert("F16_9R".to_string(), img.to_rgba8());
                 }
             }
         }

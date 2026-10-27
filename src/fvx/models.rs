@@ -70,6 +70,8 @@ pub struct CommandGroup {
     #[serde(default)]
     pub GroupCommand: Option<GroupCommandDef>,
     #[serde(default)]
+    pub Conditions: Option<Vec<ConditionGroup>>,
+    #[serde(default)]
     pub Commands: Vec<CommandDef>,
     #[serde(default)]
     pub Configurations: Option<Vec<ConfigurationRef>>,

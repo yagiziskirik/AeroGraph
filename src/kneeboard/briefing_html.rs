@@ -19,6 +19,20 @@ pub fn inject_comments_into_briefing(data: &mut BriefingData, comments_path: &Pa
     }
 }
 
+/// Generates the standard Falcon BMS Laser Code and air-to-air TACAN channel for a given flight and aircraft.
+fn default_laser_tacan(flight_idx: usize, ac_idx: usize) -> String {
+    let f = flight_idx + 1;
+    let a = ac_idx + 1;
+    let laser = format!("{}{}", f, a);
+    let tacan = match a {
+        1 => format!("{}Y", 11 + f),
+        2 => format!("{}Y", 21 + f),
+        3 => format!("{}Y", 74 + f),
+        _ => format!("{}Y", 84 + f),
+    };
+    format!("{} ({})", laser, tacan)
+}
+
 /// Generates Page 1 HTML (Flight Roster & Comm Ladder) matching briefing/style.css.
 pub fn generate_briefing_page_1_html(data: &BriefingData) -> String {
     let mut flight_rows = Vec::new();
@@ -66,10 +80,13 @@ pub fn generate_briefing_page_1_html(data: &BriefingData) -> String {
             pilot_cols.join("")
         ));
 
-        // Line 4: Laser / TACAN - matches the EXACT number of aircraft in the flight
+        // Line 4: Laser / TACAN - matches the EXACT number of aircraft in the flight, with robust default fallback
         let num_ac = flt.pilots.len().max(1);
         let mut lt_cols = Vec::new();
-        for lt in flt.laser_tacan.iter().take(num_ac) {
+        for ac_i in 0..num_ac {
+            let lt = flt.laser_tacan.get(ac_i).filter(|s| !s.is_empty()).cloned().unwrap_or_else(|| {
+                default_laser_tacan(idx, ac_i)
+            });
             lt_cols.push(format!("<td>{}</td>", lt));
         }
         while lt_cols.len() < 4 {

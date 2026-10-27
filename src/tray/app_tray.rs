@@ -9,7 +9,7 @@ pub struct AppTray {
     pub item_reload: MenuItem,
     pub item_listening: MenuItem,
     pub item_gender: MenuItem,
-    pub item_ezwatch: MenuItem,
+    pub item_auto_kneeboards: MenuItem,
     pub item_regen_now: MenuItem,
     pub item_open_images: MenuItem,
     pub item_autostart: MenuItem,
@@ -23,7 +23,7 @@ impl AppTray {
         current_profile_name: &str,
         pilot_female: bool,
         listening_enabled: bool,
-        ezwatch_enabled: bool,
+        auto_kneeboards_enabled: bool,
         autostart_enabled: bool,
         console_visible: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
@@ -35,24 +35,45 @@ impl AppTray {
         let item_reload = MenuItem::new("Reload Profile", true, None);
 
         // 2. Voice Section
-        let listening_text = if listening_enabled { "🎙️ Listening: Active" } else { "🎙️ Listening: Muted" };
+        let listening_text = if listening_enabled {
+            "🎙️ Listening: Active"
+        } else {
+            "🎙️ Listening: Muted"
+        };
         let item_listening = MenuItem::new(listening_text, true, None);
 
-        let gender_text = if pilot_female { "Pilot: Female" } else { "Pilot: Male" };
+        let gender_text = if pilot_female {
+            "Pilot: Female"
+        } else {
+            "Pilot: Male"
+        };
         let item_gender = MenuItem::new(gender_text, true, None);
 
-        // 3. Kneeboards (EZWatch) Section
-        let ezwatch_text = if ezwatch_enabled { "📋 Auto-Kneeboards (EZWatch): Enabled" } else { "📋 Auto-Kneeboards (EZWatch): Disabled" };
-        let item_ezwatch = MenuItem::new(ezwatch_text, true, None);
+        // 3. Kneeboards Section
+        let kneeboards_text = if auto_kneeboards_enabled {
+            "📋 Auto-Kneeboards: Enabled"
+        } else {
+            "📋 Auto-Kneeboards: Disabled"
+        };
+
+        let item_auto_kneeboards = MenuItem::new(kneeboards_text, true, None);
 
         let item_regen_now = MenuItem::new("⚡ Regenerate Kneeboards Now", true, None);
         let item_open_images = MenuItem::new("📁 Open Kneeboard Images", true, None);
 
         // 4. System / App Section
-        let autostart_text = if autostart_enabled { "🚀 Start with Windows: Enabled" } else { "🚀 Start with Windows: Disabled" };
+        let autostart_text = if autostart_enabled {
+            "🚀 Start with Windows: Enabled"
+        } else {
+            "🚀 Start with Windows: Disabled"
+        };
         let item_autostart = MenuItem::new(autostart_text, true, None);
 
-        let console_text = if console_visible { "Hide Console Window" } else { "Show Console Window" };
+        let console_text = if console_visible {
+            "Hide Console Window"
+        } else {
+            "Show Console Window"
+        };
         let item_console = MenuItem::new(console_text, true, None);
 
         let item_open_log = MenuItem::new("Open Log File", true, None);
@@ -65,7 +86,7 @@ impl AppTray {
         let _ = menu.append(&item_select);
         let _ = menu.append(&item_reload);
         let _ = menu.append(&PredefinedMenuItem::separator());
-        let _ = menu.append(&item_ezwatch);
+        let _ = menu.append(&item_auto_kneeboards);
         let _ = menu.append(&item_regen_now);
         let _ = menu.append(&item_open_images);
         let _ = menu.append(&PredefinedMenuItem::separator());
@@ -93,7 +114,7 @@ impl AppTray {
             item_reload,
             item_listening,
             item_gender,
-            item_ezwatch,
+            item_auto_kneeboards,
             item_regen_now,
             item_open_images,
             item_autostart,
@@ -108,23 +129,43 @@ impl AppTray {
     }
 
     pub fn set_listening_active(&self, active: bool) {
-        self.item_listening.set_text(if active { "🎙️ Listening: Active" } else { "🎙️ Listening: Muted" });
+        self.item_listening.set_text(if active {
+            "🎙️ Listening: Active"
+        } else {
+            "🎙️ Listening: Muted"
+        });
     }
 
     pub fn set_gender(&self, female: bool) {
-        self.item_gender.set_text(if female { "Pilot: Female" } else { "Pilot: Male" });
+        self.item_gender.set_text(if female {
+            "Pilot: Female"
+        } else {
+            "Pilot: Male"
+        });
     }
 
-    pub fn set_ezwatch_enabled(&self, enabled: bool) {
-        self.item_ezwatch.set_text(if enabled { "📋 Auto-Kneeboards (EZWatch): Enabled" } else { "📋 Auto-Kneeboards (EZWatch): Disabled" });
+    pub fn set_auto_kneeboards_enabled(&self, enabled: bool) {
+        self.item_auto_kneeboards.set_text(if enabled {
+            "📋 Auto-Kneeboards: Enabled"
+        } else {
+            "📋 Auto-Kneeboards: Disabled"
+        });
     }
 
     pub fn set_autostart_enabled(&self, enabled: bool) {
-        self.item_autostart.set_text(if enabled { "🚀 Start with Windows: Enabled" } else { "🚀 Start with Windows: Disabled" });
+        self.item_autostart.set_text(if enabled {
+            "🚀 Start with Windows: Enabled"
+        } else {
+            "🚀 Start with Windows: Disabled"
+        });
     }
 
     pub fn set_console_visible(&self, visible: bool) {
-        self.item_console.set_text(if visible { "Hide Console Window" } else { "Show Console Window" });
+        self.item_console.set_text(if visible {
+            "Hide Console Window"
+        } else {
+            "Show Console Window"
+        });
     }
 
     pub fn prompt_select_profile() -> Option<PathBuf> {

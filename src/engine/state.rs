@@ -13,6 +13,7 @@ pub struct StateEngine {
     pub active_configuration: Option<String>,
     pub audio_player: Option<AudioPlayer>,
     pub fired_commands: std::collections::HashSet<String>,
+    pub bms_connected: bool,
 }
 
 impl StateEngine {
@@ -32,6 +33,7 @@ impl StateEngine {
             active_configuration: None,
             audio_player: audio,
             fired_commands: std::collections::HashSet::new(),
+            bms_connected: false,
         }
     }
 
@@ -56,42 +58,35 @@ impl StateEngine {
 
     /// Returns true if Crew Chief mode is actively engaged.
     pub fn is_chief_engaged(&self) -> bool {
-        self.active_configuration.as_deref() == Some("3c7a455a-8e77-41f1-9953-b3d98bdd3440")
+        self.active_configuration.is_some()
     }
 
     /// Checks whether a command group is active in the current state.
     pub fn is_group_active(&self, group: &crate::fvx::models::CommandGroup) -> bool {
-        let name = group.Name.as_deref().unwrap_or("");
-        let is_chief = group.Name.is_none();
-
-        if self.is_chief_engaged() {
-            if is_chief {
-                return true;
-            }
-            if name == "Engage Crew Chief" || name == "Chief Unrecognized" {
-                return false; // Cannot engage while already in Chief mode
-            }
-            // Check if this cockpit comms group is disabled under the active configuration
-            if let Some(ref active_cfg) = self.active_configuration {
-                if let Some(cfgs) = &group.Configurations {
-                    if let Some(cfg) = cfgs.iter().find(|c| c.Id == *active_cfg) {
-                        if cfg.Disabled.unwrap_or(false) {
-                            return false;
-                        }
+        // 1. Check configuration state
+        if let Some(ref active_cfg) = self.active_configuration {
+            if let Some(cfgs) = &group.Configurations {
+                if let Some(cfg) = cfgs.iter().find(|c| c.Id == *active_cfg) {
+                    if cfg.Disabled.unwrap_or(false) {
+                        return false;
                     }
                 }
             }
-            !group.Disabled.unwrap_or(false)
         } else {
-            // Out of Chief mode:
-            if is_chief || name == "Chief Unrecognized" {
+            // Out of specialized configuration: check base group Disabled flag
+            if group.Disabled.unwrap_or(false) {
                 return false;
             }
-            if name == "Engage Crew Chief" {
-                return true; // Can always engage Chief when out of Chief mode!
-            }
-            !group.Disabled.unwrap_or(false)
         }
+
+        // 2. Check group-level conditions parsed from the .fvx profile (e.g. rpm == 0, In3D != True)
+        if let Some(cond_groups) = &group.Conditions {
+            if !self.evaluate_condition_groups(cond_groups) {
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Updates internal variables from BMS primary flight data.
@@ -118,6 +113,7 @@ impl StateEngine {
 
     /// Sets BMS connection status and associated profile variables.
     pub fn set_bms_connected(&mut self, connected: bool) {
+        self.bms_connected = connected;
         if connected {
             self.variables.insert("BMSVersionMajor".to_string(), "4".to_string());
             self.variables.insert("BMSVersionMinor".to_string(), "38".to_string());
@@ -265,15 +261,22 @@ impl StateEngine {
             }
         }
 
-        // Reset variables if output specifies ResetVariables == true (e.g. Start Crew Chief)
+        // Reset dialogue tracking variables if output specifies ResetVariables == true (e.g. Start Crew Chief)
         if out.ResetVariables == Some(true) {
-            let female_val = self.variables.get("Female").cloned().unwrap_or_else(|| "False".to_string());
-            self.variables.clear();
-            self.variables.insert("Female".to_string(), female_val);
             self.variables.insert("Completed".to_string(), "0".to_string());
             self.variables.insert("Step".to_string(), "".to_string());
-            self.variables.insert("rpm".to_string(), "0".to_string());
-            log::debug!("StateEngine: ResetVariables executed");
+            self.variables.remove("BlockSayAgain");
+            if !self.bms_connected {
+                self.variables.insert("rpm".to_string(), "0".to_string());
+                self.variables.insert("nozzlePos".to_string(), "0".to_string());
+                self.variables.insert("speedBrake".to_string(), "0".to_string());
+                self.variables.insert("gearPos".to_string(), "0".to_string());
+                self.variables.remove("Test");
+                self.variables.remove("AAR");
+                self.variables.remove("Movement");
+                self.variables.remove("InitSpdBrk");
+            }
+            log::debug!("StateEngine: ResetVariables executed (bms_connected: {})", self.bms_connected);
         }
 
         // Update configuration if requested (e.g. Engage Chief -> "3c7a...", Cleared Off -> "0000...")
@@ -371,7 +374,7 @@ impl StateEngine {
     }
 
     /// Evaluates condition groups (OR across groups, AND within group).
-    fn evaluate_condition_groups(&self, groups: &[ConditionGroup]) -> bool {
+    pub fn evaluate_condition_groups(&self, groups: &[ConditionGroup]) -> bool {
         if groups.is_empty() {
             return true;
         }

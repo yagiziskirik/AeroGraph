@@ -9,6 +9,11 @@ pub mod engine;
 pub mod kneeboard;
 pub mod tray;
 
+#[derive(Debug, Clone, Copy)]
+pub enum AppEvent {
+    ListeningChanged(bool),
+}
+
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
@@ -47,8 +52,14 @@ impl log::Log for DualLogger {
 
     fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
+            let (h, m, s, ms) = unsafe {
+                use windows::Win32::System::SystemInformation::GetLocalTime;
+                let st = GetLocalTime();
+                (st.wHour, st.wMinute, st.wSecond, st.wMilliseconds)
+            };
             let msg = format!(
-                "[{}] {}: {}\n",
+                "[{:02}:{:02}:{:02}.{:03}] [{}] {}: {}\n",
+                h, m, s, ms,
                 record.level(),
                 record.target(),
                 record.args()
@@ -182,7 +193,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut config = AppConfig::load();
-    log::info!("Configuration loaded (Polling rate: {} Hz | EZWatch: {})", config.polling_rate_hz, config.ezwatch_enabled);
+    log::info!("Configuration loaded (Polling rate: {} Hz | Auto-Kneeboards: {})", config.polling_rate_hz, config.auto_kneeboards);
 
     if config.show_console {
         set_console_visible(true);
@@ -221,12 +232,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let autostart_enabled = AppConfig::is_auto_start_enabled();
 
     // 2. Initialize Tao event loop & System Tray
-    let event_loop = EventLoopBuilder::new().build();
+    let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build();
+    let proxy = event_loop.create_proxy();
     let tray = AppTray::new(
         &profile_name,
         config.pilot_female,
         config.listening_enabled,
-        config.ezwatch_enabled,
+        config.auto_kneeboards,
         autostart_enabled,
         config.show_console,
     )?;
@@ -247,12 +259,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let v_profile = shared_profile.clone();
     let v_config = shared_config.clone();
     let v_reload = reload_trigger.clone();
+    let v_proxy = proxy.clone();
 
     thread::spawn(move || {
-        run_voice_worker_loop(r_voice, v_profile, v_config, v_reload);
+        run_voice_worker_loop(r_voice, v_profile, v_config, v_reload, v_proxy);
     });
 
-    // 5. Spawn background EZWatch kneeboard thread
+    // 5. Spawn background kneeboard watcher thread
     let w_config = shared_config.clone();
 
     KneeboardWatcher::spawn_loop(r_watcher, w_config, manual_trigger_rx);
@@ -263,6 +276,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::WaitUntil(std::time::Instant::now() + Duration::from_millis(50));
+
+        if let Event::UserEvent(AppEvent::ListeningChanged(active)) = event {
+            tray.set_listening_active(active);
+            last_tray_listening = active;
+        }
 
         if let Event::NewEvents(_) = event {
             // Keep tray menu in sync if listening was toggled via voice ("stand by" / "radio check")
@@ -288,12 +306,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     last_tray_listening = cfg.listening_enabled;
                     let _ = cfg.save();
                     log::info!("Listening set to: {}", if cfg.listening_enabled { "Active" } else { "Muted" });
-                } else if menu_event.id == tray.item_ezwatch.id() {
+                } else if menu_event.id == tray.item_auto_kneeboards.id() {
                     let mut cfg = shared_config.lock().unwrap();
-                    cfg.ezwatch_enabled = !cfg.ezwatch_enabled;
-                    tray.set_ezwatch_enabled(cfg.ezwatch_enabled);
+                    cfg.auto_kneeboards = !cfg.auto_kneeboards;
+                    tray.set_auto_kneeboards_enabled(cfg.auto_kneeboards);
                     let _ = cfg.save();
-                    log::info!("EZWatch auto-generation set to: {}", cfg.ezwatch_enabled);
+                    log::info!("Auto-kneeboard generation set to: {}", cfg.auto_kneeboards);
                 } else if menu_event.id == tray.item_regen_now.id() {
                     log::info!("Manual kneeboard regeneration requested from tray menu");
                     let _ = manual_trigger_tx.send(());
@@ -362,6 +380,7 @@ fn run_voice_worker_loop(
     profile_lock: Arc<Mutex<Option<LoadedProfile>>>,
     config_lock: Arc<Mutex<AppConfig>>,
     reload_trigger: Arc<AtomicBool>,
+    proxy: tao::event_loop::EventLoopProxy<AppEvent>,
 ) {
     let mut bms_client = BmsSharedMemoryClient::new();
     let mut sapi = match SapiEngine::new() {
@@ -382,8 +401,10 @@ fn run_voice_worker_loop(
     let mut axis_sampler: Option<AxisSampler> = None;
     let bms_dir = BmsConfig::find_bms_directory();
     log::info!("Falcon BMS directory: {:?}", bms_dir);
+    let cached_bms_cfg = bms_dir.as_ref().and_then(|d| BmsConfig::load_from_bms(d, None).ok()).unwrap_or_default();
     let mut active_profile_name: Option<String> = None;
     let mut last_compiled_config: Option<Option<String>> = None;
+    let mut last_compiled_strings: Option<crate::bms::shared_memory::BmsStringInfo> = None;
     let mut last_ptt_com1 = false;
     let mut last_ptt_com2 = false;
     let mut last_ptt_com1_time: Option<Instant> = None;
@@ -430,12 +451,39 @@ fn run_voice_worker_loop(
         }
 
         if let Some(vibe) = bms_client.read_vibe_data() {
-            if vibe.in_3d != 0 {
-                state_engine.variables.insert("In3D".to_string(), "True".to_string());
-            }
+            let in_3d = if vibe.in_3d != 0 { "True" } else { "False" };
+            state_engine.variables.insert("In3D".to_string(), in_3d.to_string());
+            let on_ground = if vibe.is_on_ground != 0 { "True" } else { "False" };
+            state_engine.variables.insert("OnGround".to_string(), on_ground.to_string());
         }
 
         let strings = bms_client.read_string_info();
+        if !strings.awacs.is_empty() {
+            state_engine.variables.insert("Awacs".to_string(), strings.awacs.clone());
+        } else {
+            state_engine.variables.remove("Awacs");
+        }
+        if !strings.tanker.is_empty() {
+            state_engine.variables.insert("Tanker".to_string(), strings.tanker.clone());
+        } else {
+            state_engine.variables.remove("Tanker");
+        }
+        let pkg_size: usize = strings.package_size.trim().parse().unwrap_or(0);
+        if pkg_size >= 2 {
+            state_engine.variables.insert("AISeat2".to_string(), "True".to_string());
+        } else {
+            state_engine.variables.remove("AISeat2");
+        }
+        if pkg_size >= 3 {
+            state_engine.variables.insert("AISeat3".to_string(), "True".to_string());
+        } else {
+            state_engine.variables.remove("AISeat3");
+        }
+        if pkg_size >= 4 {
+            state_engine.variables.insert("AISeat4".to_string(), "True".to_string());
+        } else {
+            state_engine.variables.remove("AISeat4");
+        }
 
         // Process profile
         let profile_opt = profile_lock.lock().unwrap();
@@ -447,8 +495,8 @@ fn run_voice_worker_loop(
                 active_profile_name = Some(profile_name.clone());
                 log::info!("Loaded profile: {}", profile_name);
 
-                if let Some(ref dir) = bms_dir {
-                    let bms_cfg = BmsConfig::load_from_bms(dir, None).unwrap_or_default();
+                if let Some(ref _dir) = bms_dir {
+                    let bms_cfg = cached_bms_cfg.clone();
                     let req_axes = loaded.extract_required_axes();
                     log::info!("Required axes for this profile: {:?}", req_axes);
                     match AxisSampler::new(bms_cfg, &req_axes) {
@@ -478,10 +526,15 @@ fn run_voice_worker_loop(
             }
 
             let chief_engaged = state_engine.is_chief_engaged();
+            let strings_changed = last_compiled_strings.as_ref() != Some(&strings);
             let state_changed = last_compiled_config != Some(state_engine.active_configuration.clone())
-                || last_chief_engaged != chief_engaged;
+                || last_chief_engaged != chief_engaged
+                || strings_changed;
 
             if profile_changed || state_changed {
+                if strings_changed && last_compiled_strings.is_some() {
+                    log::info!("🔄 [BMS Flight Data] Callsign or airbase updated from Falcon BMS (Callsign: \"{}\", Base: \"{}\")", strings.callsign, strings.departure);
+                }
                 if let Some(ref mut engine) = sapi {
                     let cfg_id = state_engine.active_configuration.as_deref();
                     match engine.compile_and_load_grammar(&loaded.profile, &strings, cfg_id) {
@@ -501,6 +554,7 @@ fn run_voice_worker_loop(
                 }
                 last_compiled_config = Some(state_engine.active_configuration.clone());
                 last_chief_engaged = chief_engaged;
+                last_compiled_strings = Some(strings.clone());
             }
 
             let mut ptt_com1 = false;
@@ -536,33 +590,49 @@ fn run_voice_worker_loop(
             };
 
             if let Some(ref engine) = sapi {
-                engine.set_active(true);
-
                 if let Some((g_idx, c_idx, text, confidence)) = engine.poll_recognition() {
                     let clean_text = text.trim().to_lowercase();
 
-                    if clean_text == "stand by" {
-                        log::info!("🛑 [Voice Command] \"Stand by\" -> Pausing voice recognition");
+                    // System-wide Standby and Comms Check override EVERYTHING else
+                    if clean_text == "stand by" || clean_text == "standby" {
+                        log::info!("🛑 [Voice Command] \"{}\" -> Pausing voice recognition (System-wide Mute)", text);
                         {
                             let mut cfg = config_lock.lock().unwrap();
                             cfg.listening_enabled = false;
                             let _ = cfg.save();
                         }
+                        let _ = proxy.send_event(AppEvent::ListeningChanged(false));
                         if let Some(ref player) = state_engine.audio_player {
                             player.play_system_sound("standing-by.mp3", crate::engine::audio::STANDING_BY_BYTES);
                         }
                         continue;
-                    } else if clean_text == "radio check" {
-                        log::info!("🎙️ [Voice Command] \"Radio check\" -> Resuming voice recognition");
-                        {
-                            let mut cfg = config_lock.lock().unwrap();
-                            cfg.listening_enabled = true;
-                            let _ = cfg.save();
+                    } else if clean_text == "comms check" || clean_text == "radio check" {
+                        let was_muted = {
+                            let cfg = config_lock.lock().unwrap();
+                            !cfg.listening_enabled
+                        };
+                        if was_muted {
+                            log::info!("🎙️ [Voice Command] \"{}\" -> Resuming voice recognition (System-wide Unmute)", text);
+                            {
+                                let mut cfg = config_lock.lock().unwrap();
+                                cfg.listening_enabled = true;
+                                let _ = cfg.save();
+                            }
+                            let _ = proxy.send_event(AppEvent::ListeningChanged(true));
+                            if let Some(ref player) = state_engine.audio_player {
+                                player.play_system_sound("loud-n-clear.mp3", crate::engine::audio::LOUD_N_CLEAR_BYTES);
+                            }
+                            continue;
+                        } else {
+                            if !state_engine.is_chief_engaged() {
+                                log::info!("🎙️ [Voice Command] \"{}\" -> Cockpit comms check acknowledged", text);
+                                if let Some(ref player) = state_engine.audio_player {
+                                    player.play_system_sound("loud-n-clear.mp3", crate::engine::audio::LOUD_N_CLEAR_BYTES);
+                                }
+                                continue;
+                            }
+                            // In Chief mode, let it pass through to Group 0 command execution!
                         }
-                        if let Some(ref player) = state_engine.audio_player {
-                            player.play_system_sound("loud-n-clear.mp3", crate::engine::audio::LOUD_N_CLEAR_BYTES);
-                        }
-                        continue;
                     }
 
                     if !listening_enabled {
@@ -576,8 +646,9 @@ fn run_voice_worker_loop(
                     }
 
                     if let Some(group) = loaded.profile.CommandGroups.get(g_idx) {
+                        let grp_name = group.Name.as_deref().unwrap_or("Command");
                         if !state_engine.is_group_active(group) {
-                            log::debug!("Ignoring command from inactive group: {:?}", group.Name);
+                            log::info!("🚫 [Condition Gated] Command group [{}] is inactive under current conditions. Ignoring \"{}\"", grp_name, text);
                         } else {
                             let requires_ptt1 = group.PushToTalk.as_ref().map_or(false, |ptt| {
                                 ptt.VariableInputs.iter().any(|v| v.Name == "SimTransmitCom1")
@@ -603,6 +674,12 @@ fn run_voice_worker_loop(
                             if ptt_allowed {
                                 if let Some(cmd) = group.Commands.get(c_idx) {
                                     let cmd_name = cmd.Name.as_deref().unwrap_or("Unnamed");
+                                    if let Some(conds) = &cmd.Conditions {
+                                        if !state_engine.evaluate_condition_groups(conds) {
+                                            log::info!("🚫 [Condition Gated] Command [{}] condition not met under current state. Ignoring \"{}\"", cmd_name, text);
+                                            continue;
+                                        }
+                                    }
                                     log::info!("🎤 Recognized speech (conf: {:.2}): \"{}\" -> [{} > {}]", confidence, text, grp_name, cmd_name);
                                     state_engine.execute_command(cmd, loaded);
                                 }

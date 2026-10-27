@@ -103,7 +103,7 @@ pub struct IntellivibeData {
 }
 
 /// Dynamic flight information parsed from String Shared Memory
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BmsStringInfo {
     pub callsign: String,
     pub package_size: String,

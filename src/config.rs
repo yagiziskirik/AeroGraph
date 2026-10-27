@@ -39,9 +39,9 @@ pub struct AppConfig {
     #[serde(default = "default_true")]
     pub listening_enabled: bool,
 
-    // --- Kneeboard / EZWatch Settings ---
-    #[serde(default = "default_true")]
-    pub ezwatch_enabled: bool,
+    // --- Kneeboard Auto-Monitoring Settings ---
+    #[serde(alias = "ezwatch_enabled", default = "default_true")]
+    pub auto_kneeboards: bool,
 
     #[serde(default)]
     pub bms_base_dir: Option<String>,
@@ -73,7 +73,7 @@ impl Default for AppConfig {
             input_device: None,
             show_console: false,
             listening_enabled: true,
-            ezwatch_enabled: true,
+            auto_kneeboards: true,
             bms_base_dir: None,
             play_sound_on_update: true,
             custom_slots: HashMap::new(),

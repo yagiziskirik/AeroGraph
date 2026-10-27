@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use super::briefing_html::{generate_briefing_page_1_html, generate_briefing_page_2_html, inject_comments_into_briefing};
 use super::models::BriefingData;
-use super::renderer::render_html_to_png;
+use super::renderer::render_html_batch_parallel;
 
 pub struct BriefingRenderResult {
     pub page_1_png: PathBuf,
@@ -42,14 +42,11 @@ pub fn render_briefing_pages(
     fs::write(&page_2_html, p2_content)
         .map_err(|e| format!("Failed to write {:?}: {}", page_2_html, e))?;
 
-    // 3. Render HTML to PNG via wkhtmltoimage.exe
-    log::info!("Rendering Briefing Page 1 -> {:?}", page_1_png);
-    render_html_to_png(wkhtmltoimage_bin, &page_1_html, &page_1_png)
-        .map_err(|e| format!("Failed to render briefing page 1: {}", e))?;
-
-    log::info!("Rendering Briefing Page 2 -> {:?}", page_2_png);
-    render_html_to_png(wkhtmltoimage_bin, &page_2_html, &page_2_png)
-        .map_err(|e| format!("Failed to render briefing page 2: {}", e))?;
+    // 3. Render HTML to PNG in parallel via wkhtmltoimage.exe
+    render_html_batch_parallel(
+        wkhtmltoimage_bin,
+        &[(&page_1_html, &page_1_png), (&page_2_html, &page_2_png)],
+    );
 
     Ok(BriefingRenderResult {
         page_1_png,

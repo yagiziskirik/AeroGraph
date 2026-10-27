@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use crate::kneeboard::crop::crop_theater_map;
 use crate::kneeboard::models::{BriefingData, Steerpoint, TargetSteerpoint, Threat};
 use crate::kneeboard::renderer::render_html_to_png;
@@ -399,23 +399,14 @@ fn get_edge_point(
     (from_x + t * vx, from_y + t * vy)
 }
 
-pub fn generate_mission_overview_page(
-    b_data: &BriefingData,
+pub fn compute_route_crop_box(
     merged_stpts: &[Steerpoint],
     resolved_threats: &[Threat],
     theater_size_ft: f64,
-    base_map_path: &Path,
-    work_dir: &Path,
-    out_png: &Path,
-    wkhtmltoimage_path: &Path,
-) -> Result<(), String> {
-    if merged_stpts.is_empty() {
-        return Err("No steerpoints available for mission overview".to_string());
-    }
-
+) -> Option<(f64, f64, f64, f64)> {
     let valid_pts: Vec<&Steerpoint> = merged_stpts.iter().filter(|p| p.x != 0.0 || p.y != 0.0).collect();
     if valid_pts.is_empty() {
-        return Err("No valid coordinates in steerpoints".to_string());
+        return None;
     }
 
     let mut xs: Vec<f64> = valid_pts.iter().map(|p| p.x).collect();
@@ -445,8 +436,65 @@ pub fn generate_mission_overview_page(
     let crop_min_y = (mid_y - half_w).max(0.0);
     let crop_max_y = (mid_y + half_w).min(theater_size_ft);
 
+    Some((crop_min_x, crop_max_x, crop_min_y, crop_max_y))
+}
+
+pub fn compute_target_crop_box(
+    merged_stpts: &[Steerpoint],
+    theater_size_ft: f64,
+) -> Option<(f64, f64, f64, f64)> {
+    let valid_pts: Vec<&Steerpoint> = merged_stpts.iter().filter(|p| p.x != 0.0 || p.y != 0.0).collect();
+    if valid_pts.is_empty() {
+        return None;
+    }
+
+    let tgt_pt = valid_pts.iter().find(|p| p.action_code == 20 || p.desc.to_uppercase().contains("TGT"))
+        .copied()
+        .unwrap_or(valid_pts[valid_pts.len() / 2]);
+
+    let tgt_x = tgt_pt.x;
+    let tgt_y = tgt_pt.y;
+    let span_nm = 34.0f64;
+    let half_ft = (span_nm * NM_TO_FT) / 2.0;
+    let half_w_ft = half_ft * (992.0 / 1300.0);
+
+    let crop_min_x = (tgt_x - half_ft).max(0.0);
+    let crop_max_x = (tgt_x + half_ft).min(theater_size_ft);
+    let crop_min_y = (tgt_y - half_w_ft).max(0.0);
+    let crop_max_y = (tgt_y + half_w_ft).min(theater_size_ft);
+
+    Some((crop_min_x, crop_max_x, crop_min_y, crop_max_y))
+}
+
+pub fn generate_mission_overview_page(
+    b_data: &BriefingData,
+    merged_stpts: &[Steerpoint],
+    resolved_threats: &[Threat],
+    theater_size_ft: f64,
+    base_map_path: &Path,
+    work_dir: &Path,
+    out_png: &Path,
+    wkhtmltoimage_path: &Path,
+) -> Result<(), String> {
+    let html_file = generate_mission_overview_html(b_data, merged_stpts, resolved_threats, theater_size_ft, base_map_path, work_dir)?;
+    render_html_to_png(wkhtmltoimage_path, &html_file, out_png)
+}
+
+pub fn generate_mission_overview_html(
+    b_data: &BriefingData,
+    merged_stpts: &[Steerpoint],
+    resolved_threats: &[Threat],
+    theater_size_ft: f64,
+    base_map_path: &Path,
+    work_dir: &Path,
+) -> Result<PathBuf, String> {
+    let (crop_min_x, crop_max_x, crop_min_y, crop_max_y) = compute_route_crop_box(merged_stpts, resolved_threats, theater_size_ft)
+        .ok_or_else(|| "No valid coordinates in steerpoints for mission overview".to_string())?;
+
     let crop_jpg = work_dir.join("crop_route_overview.jpg");
-    crop_theater_map(base_map_path, theater_size_ft, (crop_min_x, crop_max_x, crop_min_y, crop_max_y), &crop_jpg)?;
+    if !crop_jpg.exists() {
+        crop_theater_map(base_map_path, theater_size_ft, (crop_min_x, crop_max_x, crop_min_y, crop_max_y), &crop_jpg)?;
+    }
 
     let w_svg = 992.0f64;
     let h_svg = 1300.0f64;
@@ -456,6 +504,8 @@ pub fn generate_mission_overview_page(
         let sy = ((crop_max_x - x) / (crop_max_x - crop_min_x)) * h_svg;
         (sx, sy)
     };
+
+    let valid_pts: Vec<&Steerpoint> = merged_stpts.iter().filter(|p| p.x != 0.0 || p.y != 0.0).collect();
 
     struct SvgPt<'a> {
         num: u32,
@@ -807,7 +857,7 @@ pub fn generate_mission_overview_page(
     let html_file = work_dir.join("mission_route.html");
     fs::write(&html_file, html).map_err(|e| format!("Failed to write mission_route.html: {}", e))?;
 
-    render_html_to_png(wkhtmltoimage_path, &html_file, out_png)
+    Ok(html_file)
 }
 
 pub fn generate_tactical_target_page(
@@ -820,15 +870,22 @@ pub fn generate_tactical_target_page(
     out_png: &Path,
     wkhtmltoimage_path: &Path,
 ) -> Result<(), String> {
-    if merged_stpts.is_empty() {
-        return Err("No steerpoints available for tactical target map".to_string());
-    }
+    let html_file = generate_tactical_target_html(b_data, merged_stpts, resolved_threats, theater_size_ft, base_map_path, work_dir)?;
+    render_html_to_png(wkhtmltoimage_path, &html_file, out_png)
+}
+
+pub fn generate_tactical_target_html(
+    b_data: &BriefingData,
+    merged_stpts: &[Steerpoint],
+    resolved_threats: &[Threat],
+    theater_size_ft: f64,
+    base_map_path: &Path,
+    work_dir: &Path,
+) -> Result<PathBuf, String> {
+    let (crop_min_x, crop_max_x, crop_min_y, crop_max_y) = compute_target_crop_box(merged_stpts, theater_size_ft)
+        .ok_or_else(|| "No valid coordinates in steerpoints for tactical target".to_string())?;
 
     let valid_pts: Vec<&Steerpoint> = merged_stpts.iter().filter(|p| p.x != 0.0 || p.y != 0.0).collect();
-    if valid_pts.is_empty() {
-        return Err("No valid coordinates in steerpoints".to_string());
-    }
-
     let tgt_pt = valid_pts.iter().find(|p| p.action_code == 20 || p.desc.to_uppercase().contains("TGT"))
         .copied()
         .unwrap_or(valid_pts[valid_pts.len() / 2]);
@@ -839,17 +896,11 @@ pub fn generate_tactical_target_page(
 
     let tgt_x = tgt_pt.x;
     let tgt_y = tgt_pt.y;
-    let span_nm = 34.0f64;
-    let half_ft = (span_nm * NM_TO_FT) / 2.0;
-    let half_w_ft = half_ft * (992.0 / 1300.0);
-
-    let crop_min_x = (tgt_x - half_ft).max(0.0);
-    let crop_max_x = (tgt_x + half_ft).min(theater_size_ft);
-    let crop_min_y = (tgt_y - half_w_ft).max(0.0);
-    let crop_max_y = (tgt_y + half_w_ft).min(theater_size_ft);
 
     let crop_jpg = work_dir.join("crop_target_zoom.jpg");
-    crop_theater_map(base_map_path, theater_size_ft, (crop_min_x, crop_max_x, crop_min_y, crop_max_y), &crop_jpg)?;
+    if !crop_jpg.exists() {
+        crop_theater_map(base_map_path, theater_size_ft, (crop_min_x, crop_max_x, crop_min_y, crop_max_y), &crop_jpg)?;
+    }
 
     let w_svg = 992.0f64;
     let h_svg = 1300.0f64;
@@ -1393,5 +1444,5 @@ pub fn generate_tactical_target_page(
     let html_file = work_dir.join("mission_target.html");
     fs::write(&html_file, html).map_err(|e| format!("Failed to write mission_target.html: {}", e))?;
 
-    render_html_to_png(wkhtmltoimage_path, &html_file, out_png)
+    Ok(html_file)
 }

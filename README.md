@@ -10,7 +10,7 @@
 
 1. **Launch**:
    Run `AeroGraph.exe`. The application docks into your Windows System Tray (notification area).
-2. **Kneeboard Monitoring (EZWatch)**:
+2. **Automated Kneeboard Monitoring**:
    Whenever you commit or change a flight in Falcon BMS, AeroGraph automatically detects the updated `User/Briefings/briefing.txt` and regenerates your kneeboards in the background.
 3. **Manual Regeneration**:
    Right-click the tray icon and select **Regenerate Kneeboards**, or run from command line:

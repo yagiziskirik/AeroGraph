@@ -1101,19 +1101,7 @@ pub fn generate_taxi_chart_html(
 
 </body>
 </html>
-",
-        map_h,
-        icao_badge_html, ap_name, chart_type_title, elev,
-        wind_deg, wind_kts, active_str, tacan_str,
-        get_freq("atisVhf"),
-        get_freq("towerUhf"), get_freq("towerVhf"),
-        get_freq("groundUhf"),
-        get_freq("approachUhf"),
-        get_freq("opsUhf"),
-        svg_w, svg_h,
-        svg_content,
-        rwy_table_html,
-    "###,
+"###,
         map_h,
         icao_badge_html, ap_name,
         chart_type_title, elev,
