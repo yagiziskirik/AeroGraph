@@ -32,6 +32,15 @@ pub enum KneeboardPageType {
     RestoreOriginal,
     /// Pass-through: Leave the existing texture in BMS completely untouched
     PassThrough,
+    /// Pilot mission notes and scratchpad (F-16 POH / Checklist style)
+    Notes,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum NotesContent {
+    List(Vec<String>),
+    Text(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,7 +54,56 @@ pub struct SlotConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subtitle: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub header_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page_num: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preset: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stripe_color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stripe_colors: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub header_color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "stripe_spacing")]
+    pub spaced: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<NotesContent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+}
+
+impl SlotConfig {
+    /// Resolves the raw notes text from either inline `notes` or an external `.txt`/`.md` file referenced in `path`.
+    pub fn resolve_notes_text(&self, assets_dir: &std::path::Path) -> Option<String> {
+        if let Some(ref content) = self.notes {
+            match content {
+                NotesContent::List(lines) => return Some(lines.join("\n")),
+                NotesContent::Text(text) => return Some(text.clone()),
+            }
+        }
+
+        if let Some(ref path_str) = self.path {
+            let p = PathBuf::from(path_str);
+            let candidates = [
+                p.clone(),
+                assets_dir.join(&p),
+                assets_dir.join("notes").join(&p),
+            ];
+
+            for candidate in &candidates {
+                if candidate.exists() {
+                    if let Ok(text) = fs::read_to_string(candidate) {
+                        return Some(text);
+                    }
+                }
+            }
+        }
+
+        None
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,7 +117,7 @@ impl KneeboardLayoutConfig {
     /// Returns default JSON text containing all 32 slots (16L, 16R) formatted with clear descriptions.
     pub fn default_json_string() -> &'static str {
         r#"{
-  "_comment": "AeroGraph Kneeboard Slot Configuration. Supports all 32 Falcon BMS slots (F16_1L through F16_16R, textures 7982.dds to 7997.dds). Available types: 'briefing_roster', 'briefing_steerpoints', 'custom_html', 'mission_route', 'mission_target', 'dep_taxi', 'arr_taxi', 'arr_ils_primary', 'arr_ils_secondary', 'blank', 'image', 'restore_original', 'pass_through'.",
+  "_comment": "AeroGraph Kneeboard Slot Configuration. Supports all 32 Falcon BMS slots (F16_1L through F16_16R, textures 7982.dds to 7997.dds). Available types: 'briefing_roster', 'briefing_steerpoints', 'custom_html', 'mission_route', 'mission_target', 'dep_taxi', 'arr_taxi', 'arr_ils_primary', 'arr_ils_secondary', 'blank', 'notes', 'image', 'restore_original', 'pass_through'.",
   "slots": {
     "F16_1L": {
       "type": "briefing_roster",
@@ -221,10 +279,11 @@ impl KneeboardLayoutConfig {
         }
 
         if let Ok(content) = fs::read_to_string(&path) {
-            if let Ok(cfg) = serde_json::from_str::<KneeboardLayoutConfig>(&content) {
-                return cfg;
-            } else {
-                log::warn!("Could not parse {:?}. Falling back to default layout.", path);
+            match serde_json::from_str::<KneeboardLayoutConfig>(&content) {
+                Ok(cfg) => return cfg,
+                Err(e) => {
+                    log::warn!("Could not parse {:?}: {}. Falling back to default layout.", path, e);
+                }
             }
         }
 
@@ -257,5 +316,29 @@ impl KneeboardLayoutConfig {
             (15, "7996.dds", "F16_15L", "F16_15R"),
             (16, "7997.dds", "F16_16L", "F16_16R"),
         ]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_project_kneeboards_json() {
+        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let json_path = manifest_dir.join("kneeboards.json");
+        if json_path.exists() {
+            let content = fs::read_to_string(&json_path).expect("Failed to read kneeboards.json");
+            let cfg: Result<KneeboardLayoutConfig, _> = serde_json::from_str(&content);
+            match cfg {
+                Ok(c) => {
+                    assert!(c.slots.contains_key("F16_1L"));
+                    println!("Successfully parsed kneeboards.json with {} slots", c.slots.len());
+                }
+                Err(e) => {
+                    panic!("Failed to parse kneeboards.json: {}", e);
+                }
+            }
+        }
     }
 }

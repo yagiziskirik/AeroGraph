@@ -57,8 +57,31 @@
       "description": "Departure Airfield Ground Taxi & Parking Chart"
     },
     "F16_7L": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7988.dds Left texture intact"
+      "type": "notes",
+      "title": "MISSION SPINS & RULES OF ENGAGEMENT",
+      "subtitle": "FLIGHT: VIPER 1 • THEATER: KOREA",
+      "header_code": "T.O. BMS1F-16CM-1",
+      "page_num": "SPINS-1",
+      "preset": "caution",
+      "spaced": false,
+      "notes": [
+        "## 1. BVR COMBAT RULES OF ENGAGEMENT",
+        "- Hostile criteria: 2x independent sensor confirmation or AWACS Bogey Dope {yellow: 'HOT/HOSTILE'}",
+        "- Weapons Free beyond {green: 25nm} Bullseye 045/60",
+        "- Primary Laser Code: {green: 1688} / Secondary: {yellow: 1111}",
+        "",
+        "BULLSEYE: {blue: 045 / 60NM}",
+        "PACKAGE VHF: {blue: 138.250}",
+        "RAMROD: {blue: CHARLIE}",
+        "",
+        "## 2. IN-FLIGHT CHECKLIST",
+        "[x] INS Alignment verified & UFC set",
+        "[ ] Master Arm {yellow: ARM} at STPT 4 (Fence In)",
+        "[ ] Laser Arm {green: ON} prior to 5nm to Target",
+        "",
+        "WARNING: {highlight: Active SA-10 Grumble} radar tracking near STPT 6",
+        "CAUTION: Maintain minimum 18,000 FT MSL until IP ingress"
+      ]
     },
     "F16_7R": {
       "type": "arr_ils_primary",
@@ -129,12 +152,12 @@
       "description": "Pass-through: Leave existing BMS 7996.dds Right texture intact"
     },
     "F16_16L": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7997.dds Left texture intact"
+      "type": "blank",
+      "description": "Intentionally left blank"
     },
     "F16_16R": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7997.dds Right texture intact"
+      "type": "blank",
+      "description": "Intentionally left blank"
     }
   }
 }

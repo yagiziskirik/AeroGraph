@@ -447,10 +447,46 @@ impl KneeboardWatcher {
         }
 
         // =========================================================================
-        // 9. Process Custom Image & Blank Card Slots
+        // 9. Process Custom Notes, Image & Blank Card Slots
         // =========================================================================
+        let mut notes_render_jobs: Vec<(String, PathBuf, PathBuf)> = Vec::new();
+
         for (slot, slot_cfg) in &layout_cfg.slots {
             match &slot_cfg.page_type {
+                KneeboardPageType::Notes => {
+                    let title = slot_cfg.title.as_deref().unwrap_or("PILOT MISSION NOTES");
+                    let subtitle = slot_cfg.subtitle.as_deref();
+                    let header_code = slot_cfg.header_code.as_deref();
+                    let page_num = slot_cfg.page_num.as_deref();
+                    let preset = slot_cfg.preset.as_deref();
+                    let stripe_color = slot_cfg.stripe_color.as_deref();
+                    let stripe_colors = slot_cfg.stripe_colors.as_deref();
+                    let header_color = slot_cfg.header_color.as_deref();
+                    let spaced = slot_cfg.spaced.unwrap_or(true);
+                    let raw_text = slot_cfg.resolve_notes_text(&assets_dir).unwrap_or_default();
+
+                    let notes_html_path = work_dir.join(format!("notes_{}.html", slot));
+                    let notes_png_path = images_dir.join(format!("notes_{}.png", slot));
+
+                    let html = crate::kneeboard::notes_html::generate_notes_page_html(
+                        slot,
+                        title,
+                        subtitle,
+                        header_code,
+                        page_num,
+                        preset,
+                        stripe_color,
+                        stripe_colors,
+                        header_color,
+                        spaced,
+                        &raw_text,
+                        &callsign,
+                    );
+
+                    if fs::write(&notes_html_path, html).is_ok() {
+                        notes_render_jobs.push((slot.clone(), notes_html_path, notes_png_path));
+                    }
+                }
                 KneeboardPageType::Image => {
                     if let Some(ref path_str) = slot_cfg.path {
                         let img_path = PathBuf::from(path_str);
@@ -487,9 +523,22 @@ impl KneeboardWatcher {
             }
         }
 
+        if !notes_render_jobs.is_empty() {
+            log::info!("Parallel rendering {} custom notes kneeboard pages...", notes_render_jobs.len());
+            let job_refs: Vec<(&Path, &Path)> = notes_render_jobs.iter().map(|(_, h, p)| (h.as_path(), p.as_path())).collect();
+            render_html_batch_parallel(&wkhtmltoimage_path, &job_refs);
+            for (slot, _, png_path) in notes_render_jobs {
+                if let Ok(img) = image::open(&png_path) {
+                    slot_images.insert(slot, img.to_rgba8());
+                }
+            }
+        }
+
         // =========================================================================
-        // 10. Direct Batched DDS Merging (Left & Right processed together in ONE pass)
+        // 10. Direct Batched DDS Merging in Parallel across CPU threads
         // =========================================================================
+        let mut dds_jobs = Vec::new();
+
         for (_pair_idx, filename, left_slot, right_slot) in KneeboardLayoutConfig::texture_pairs() {
             let left_cfg = layout_cfg.slots.get(*left_slot);
             let right_cfg = layout_cfg.slots.get(*right_slot);
@@ -506,10 +555,33 @@ impl KneeboardWatcher {
             let right_img = slot_images.get(*right_slot);
 
             if left_img.is_some() || right_img.is_some() {
-                if let Err(e) = merge_texture_pair_to_dds(&texture_dir, filename, left_img, right_img) {
-                    log::error!("Failed to merge texture pair {}: {}", filename, e);
-                }
+                dds_jobs.push((*filename, left_img, right_img));
             }
+        }
+
+        if !dds_jobs.is_empty() {
+            let t0 = std::time::Instant::now();
+            log::info!("Starting parallel DDS merge of {} texture pairs...", dds_jobs.len());
+            std::thread::scope(|s| {
+                let handles: Vec<_> = dds_jobs
+                    .into_iter()
+                    .map(|(filename, left_img, right_img)| {
+                        let tex_dir = &texture_dir;
+                        s.spawn(move || {
+                            let job_t0 = std::time::Instant::now();
+                            if let Err(e) = merge_texture_pair_to_dds(tex_dir, filename, left_img, right_img) {
+                                log::error!("Failed to merge texture pair {}: {}", filename, e);
+                            } else {
+                                log::info!("Merged DDS pair {} in {:?}", filename, job_t0.elapsed());
+                            }
+                        })
+                    })
+                    .collect();
+                for h in handles {
+                    let _ = h.join();
+                }
+            });
+            log::info!("All DDS merges completed in parallel in {:?}", t0.elapsed());
         }
 
         // =========================================================================

@@ -10,6 +10,7 @@ pub struct AppTray {
     pub item_listening: MenuItem,
     pub item_gender: MenuItem,
     pub item_auto_kneeboards: MenuItem,
+    pub item_edit_kneeboards: MenuItem,
     pub item_regen_now: MenuItem,
     pub item_open_images: MenuItem,
     pub item_autostart: MenuItem,
@@ -57,7 +58,7 @@ impl AppTray {
         };
 
         let item_auto_kneeboards = MenuItem::new(kneeboards_text, true, None);
-
+        let item_edit_kneeboards = MenuItem::new("📝 Edit Kneeboards", true, None);
         let item_regen_now = MenuItem::new("⚡ Regenerate Kneeboards Now", true, None);
         let item_open_images = MenuItem::new("📁 Open Kneeboard Images", true, None);
 
@@ -87,6 +88,7 @@ impl AppTray {
         let _ = menu.append(&item_reload);
         let _ = menu.append(&PredefinedMenuItem::separator());
         let _ = menu.append(&item_auto_kneeboards);
+        let _ = menu.append(&item_edit_kneeboards);
         let _ = menu.append(&item_regen_now);
         let _ = menu.append(&item_open_images);
         let _ = menu.append(&PredefinedMenuItem::separator());
@@ -115,6 +117,7 @@ impl AppTray {
             item_listening,
             item_gender,
             item_auto_kneeboards,
+            item_edit_kneeboards,
             item_regen_now,
             item_open_images,
             item_autostart,

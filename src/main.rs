@@ -312,6 +312,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     tray.set_auto_kneeboards_enabled(cfg.auto_kneeboards);
                     let _ = cfg.save();
                     log::info!("Auto-kneeboard generation set to: {}", cfg.auto_kneeboards);
+                } else if menu_event.id == tray.item_edit_kneeboards.id() {
+                    let cfg_path = crate::kneeboard::layout::KneeboardLayoutConfig::config_path();
+                    if !cfg_path.exists() {
+                        let _ = crate::kneeboard::layout::KneeboardLayoutConfig::load_or_create_default();
+                    }
+                    log::info!("Opening kneeboard configuration in editor: {:?}", cfg_path);
+                    let _ = std::process::Command::new("notepad.exe").arg(&cfg_path).spawn();
                 } else if menu_event.id == tray.item_regen_now.id() {
                     log::info!("Manual kneeboard regeneration requested from tray menu");
                     let _ = manual_trigger_tx.send(());

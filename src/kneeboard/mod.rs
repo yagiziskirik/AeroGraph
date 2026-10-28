@@ -9,6 +9,7 @@ pub mod layout;
 pub mod database;
 pub mod crop;
 pub mod blank_html;
+pub mod notes_html;
 pub mod ils;
 pub mod taxi_html;
 pub mod mission_html;
