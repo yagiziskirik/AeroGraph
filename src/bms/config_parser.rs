@@ -60,21 +60,38 @@ impl BmsConfig {
 
     /// Loads and parses DeviceSorting.txt, Key file, axismapping.dat, and joystick.cal,
     /// with dynamic enrichment from BMS Alternative Launcher XMLs (Setup.v100.*.xml)
-    pub fn load_from_bms<P: AsRef<Path>>(bms_dir: P, custom_key_file: Option<&str>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load_from_bms<P: AsRef<Path>>(
+        bms_dir: P,
+        custom_key_file: Option<&str>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let bms_path = bms_dir.as_ref();
         let config_dir = bms_path.join("User").join("Config");
 
-        let mut devices = Self::parse_device_sorting(&config_dir.join("DeviceSorting.txt")).unwrap_or_default();
-        
+        let mut devices =
+            Self::parse_device_sorting(&config_dir.join("DeviceSorting.txt")).unwrap_or_default();
+
         let key_file_name = custom_key_file.unwrap_or("BMS - Auto.key");
         let key_file_path = config_dir.join(key_file_name);
-        let (mut ptt_com1, mut ptt_com2) = Self::parse_key_file(&key_file_path, &devices).unwrap_or((None, None));
+        let (mut ptt_com1, mut ptt_com2) =
+            Self::parse_key_file(&key_file_path, &devices).unwrap_or((None, None));
 
-        let axis_calibrations = Self::parse_joystick_cal(&config_dir.join("joystick.cal")).unwrap_or_default();
-        let mut axes = Self::parse_axis_mapping(&config_dir.join("axismapping.dat"), &devices, axis_calibrations).unwrap_or_default();
+        let axis_calibrations =
+            Self::parse_joystick_cal(&config_dir.join("joystick.cal")).unwrap_or_default();
+        let mut axes = Self::parse_axis_mapping(
+            &config_dir.join("axismapping.dat"),
+            &devices,
+            axis_calibrations,
+        )
+        .unwrap_or_default();
 
         // Dynamically enrich/fallback from BMS Alternative Launcher XMLs (Setup.v100.*.xml)
-        let _ = Self::enrich_from_setup_xmls(&config_dir, &mut devices, &mut ptt_com1, &mut ptt_com2, &mut axes);
+        let _ = Self::enrich_from_setup_xmls(
+            &config_dir,
+            &mut devices,
+            &mut ptt_com1,
+            &mut ptt_com2,
+            &mut axes,
+        );
 
         Ok(Self {
             base_dir: bms_path.to_path_buf(),
@@ -116,7 +133,10 @@ impl BmsConfig {
                     let dev_guid = inner[open + 1..close].to_uppercase();
 
                     // Register device if not already present
-                    if !devices.iter().any(|d| d.guid.eq_ignore_ascii_case(&dev_guid) || d.name.eq_ignore_ascii_case(&dev_name)) {
+                    if !devices.iter().any(|d| {
+                        d.guid.eq_ignore_ascii_case(&dev_guid)
+                            || d.name.eq_ignore_ascii_case(&dev_name)
+                    }) {
                         devices.push(DeviceInfo {
                             index: devices.len(),
                             guid: dev_guid.clone(),
@@ -144,7 +164,10 @@ impl BmsConfig {
     ) {
         // Parse <dx> section for PTT button callbacks
         if let Some(dx_start) = content.find("<dx>") {
-            let dx_end = content[dx_start..].find("</dx>").map(|p| dx_start + p).unwrap_or(content.len());
+            let dx_end = content[dx_start..]
+                .find("</dx>")
+                .map(|p| dx_start + p)
+                .unwrap_or(content.len());
             let dx_section = &content[dx_start..dx_end];
 
             let mut btn_idx = 0;
@@ -179,7 +202,10 @@ impl BmsConfig {
 
         // Parse <axis> section for flight controls and brake axes
         if let Some(ax_start) = content.find("<axis>") {
-            let ax_end = content[ax_start..].find("</axis>").map(|p| ax_start + p).unwrap_or(content.len());
+            let ax_end = content[ax_start..]
+                .find("</axis>")
+                .map(|p| ax_start + p)
+                .unwrap_or(content.len());
             let ax_section = &content[ax_start..ax_end];
 
             let mut ax_idx = 0;
@@ -192,23 +218,26 @@ impl BmsConfig {
                 };
                 let block = &ax_section[actual_start..end_ax];
 
-                if let (Some(n_start), Some(n_end)) = (block.find("<AxisName>"), block.find("</AxisName>")) {
+                if let (Some(n_start), Some(n_end)) =
+                    (block.find("<AxisName>"), block.find("</AxisName>"))
+                {
                     let axis_name = block[n_start + "<AxisName>".len()..n_end].trim();
                     if !axis_name.is_empty() {
                         let invert = block.contains("<Invert>true</Invert>");
-                        axes.entry(axis_name.to_string()).or_insert_with(|| AxisBinding {
-                            axis_name: axis_name.to_string(),
-                            device_guid: dev_guid.to_string(),
-                            axis_index: ax_idx,
-                            calibration: Some(AxisCalibration {
-                                center: 32767,
-                                deadzone: 0,
-                                min: 0,
-                                max: 65535,
-                                saturation: 65535,
-                                invert,
-                            }),
-                        });
+                        axes.entry(axis_name.to_string())
+                            .or_insert_with(|| AxisBinding {
+                                axis_name: axis_name.to_string(),
+                                device_guid: dev_guid.to_string(),
+                                axis_index: ax_idx,
+                                calibration: Some(AxisCalibration {
+                                    center: 32767,
+                                    deadzone: 0,
+                                    min: 0,
+                                    max: 65535,
+                                    saturation: 65535,
+                                    invert,
+                                }),
+                            });
                     }
                 }
 
@@ -219,8 +248,10 @@ impl BmsConfig {
     }
 
     /// Parses DeviceSorting.txt into a list of devices indexed by order.
-    /// Lines format: {00091209-0000-0000-0000-504944564944} "F16 Pedals by YGZ"
-    pub fn parse_device_sorting<P: AsRef<Path>>(path: P) -> Result<Vec<DeviceInfo>, Box<dyn std::error::Error>> {
+    /// Lines format: {00091209-0000-0000-0000-504944564944} "F16 Pedals by YGZ" weird flex, but I know. I made my own controllers okay?
+    pub fn parse_device_sorting<P: AsRef<Path>>(
+        path: P,
+    ) -> Result<Vec<DeviceInfo>, Box<dyn std::error::Error>> {
         let content = fs::read_to_string(path)?;
         let mut devices = Vec::new();
 
@@ -252,7 +283,10 @@ impl BmsConfig {
     /// Parses BMS key file to resolve SimTransmitCom1 and SimTransmitCom2 button bindings.
     /// Lines format: CallbackName ButtonID SoundId KeyCode Modifiers ...
     /// ButtonID encoding: device_index * 32 (or 128) + button_num
-    pub fn parse_key_file<P: AsRef<Path>>(path: P, devices: &[DeviceInfo]) -> Result<(Option<ButtonBinding>, Option<ButtonBinding>), Box<dyn std::error::Error>> {
+    pub fn parse_key_file<P: AsRef<Path>>(
+        path: P,
+        devices: &[DeviceInfo],
+    ) -> Result<(Option<ButtonBinding>, Option<ButtonBinding>), Box<dyn std::error::Error>> {
         let content = fs::read_to_string(path)?;
         let mut ptt1 = None;
         let mut ptt2 = None;
@@ -280,7 +314,10 @@ impl BmsConfig {
                                 ((btn_id / 32) as usize, btn_id % 32)
                             };
 
-                            let guid = devices.get(dev_idx).map(|d| d.guid.clone()).unwrap_or_default();
+                            let guid = devices
+                                .get(dev_idx)
+                                .map(|d| d.guid.clone())
+                                .unwrap_or_default();
                             let binding = ButtonBinding {
                                 callback: callback.to_string(),
                                 device_guid: guid,
@@ -302,7 +339,9 @@ impl BmsConfig {
     }
 
     /// Parses joystick.cal (720 bytes, 30 records of 6x int32 = 24 bytes).
-    pub fn parse_joystick_cal<P: AsRef<Path>>(path: P) -> Result<Vec<AxisCalibration>, Box<dyn std::error::Error>> {
+    pub fn parse_joystick_cal<P: AsRef<Path>>(
+        path: P,
+    ) -> Result<Vec<AxisCalibration>, Box<dyn std::error::Error>> {
         let mut file = File::open(path)?;
         let mut bytes = Vec::new();
         file.read_to_end(&mut bytes)?;
@@ -347,10 +386,27 @@ impl BmsConfig {
 
         // Standard BMS Axis Type order
         let axis_names = [
-            "Pitch", "Roll", "Yaw", "Throttle", "Throttle_Right", "Toe_Brake", "Toe_Brake_Right",
-            "Trim_Roll", "Trim_Pitch", "Trim_Yaw", "Radar_Antenna_Elevation", "Cursor_X", "Cursor_Y",
-            "Range_Knob", "HUD_Brightness", "Reticle_Depression", "HMS_Brightness", "FLIR_Brightness",
-            "Intercom", "COMM_Channel_1", "COMM_Channel_2"
+            "Pitch",
+            "Roll",
+            "Yaw",
+            "Throttle",
+            "Throttle_Right",
+            "Toe_Brake",
+            "Toe_Brake_Right",
+            "Trim_Roll",
+            "Trim_Pitch",
+            "Trim_Yaw",
+            "Radar_Antenna_Elevation",
+            "Cursor_X",
+            "Cursor_Y",
+            "Range_Knob",
+            "HUD_Brightness",
+            "Reticle_Depression",
+            "HMS_Brightness",
+            "FLIR_Brightness",
+            "Intercom",
+            "COMM_Channel_1",
+            "COMM_Channel_2",
         ];
 
         let mut axes = HashMap::new();
@@ -378,14 +434,20 @@ impl BmsConfig {
             };
 
             if let Some(dev) = resolved_device {
-                let cal = calibrations.get(cal_idx as usize).or_else(|| calibrations.get(idx)).cloned();
+                let cal = calibrations
+                    .get(cal_idx as usize)
+                    .or_else(|| calibrations.get(idx))
+                    .cloned();
                 let name = axis_names[idx].to_string();
-                axes.insert(name.clone(), AxisBinding {
-                    axis_name: name,
-                    device_guid: dev.guid.clone(),
-                    axis_index: axis_idx,
-                    calibration: cal,
-                });
+                axes.insert(
+                    name.clone(),
+                    AxisBinding {
+                        axis_name: name,
+                        device_guid: dev.guid.clone(),
+                        axis_index: axis_idx,
+                        calibration: cal,
+                    },
+                );
             }
         }
 

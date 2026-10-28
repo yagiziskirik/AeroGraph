@@ -1,13 +1,14 @@
 #![windows_subsystem = "windows"]
 
-pub mod config;
-pub mod fvx;
 pub mod bms;
-pub mod input;
-pub mod speech;
+pub mod config;
 pub mod engine;
+pub mod fvx;
+pub mod input;
 pub mod kneeboard;
+pub mod speech;
 pub mod tray;
+pub mod updater;
 
 #[derive(Debug, Clone, Copy)]
 pub enum AppEvent {
@@ -23,21 +24,21 @@ use tao::event::Event;
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
 use tray_icon::menu::MenuEvent;
 
-use crate::config::AppConfig;
-use crate::fvx::loader::LoadedProfile;
 use crate::bms::config_parser::BmsConfig;
 use crate::bms::shared_memory::BmsSharedMemoryClient;
-use crate::input::axis_sampler::AxisSampler;
-use crate::speech::sapi::SapiEngine;
+use crate::config::AppConfig;
 use crate::engine::state::StateEngine;
+use crate::fvx::loader::LoadedProfile;
+use crate::input::axis_sampler::AxisSampler;
 use crate::kneeboard::watcher::KneeboardWatcher;
+use crate::speech::sapi::SapiEngine;
 use crate::tray::app_tray::AppTray;
 
 use windows::Win32::Foundation::BOOL;
 use windows::Win32::System::Console::{
     AllocConsole, GetConsoleMode, GetConsoleWindow, GetStdHandle, SetConsoleCtrlHandler,
-    SetConsoleMode, CONSOLE_MODE, CTRL_CLOSE_EVENT, ENABLE_EXTENDED_FLAGS,
-    ENABLE_QUICK_EDIT_MODE, STD_INPUT_HANDLE,
+    SetConsoleMode, CONSOLE_MODE, CTRL_CLOSE_EVENT, ENABLE_EXTENDED_FLAGS, ENABLE_QUICK_EDIT_MODE,
+    STD_INPUT_HANDLE,
 };
 use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE, SW_SHOW};
 
@@ -59,7 +60,10 @@ impl log::Log for DualLogger {
             };
             let msg = format!(
                 "[{:02}:{:02}:{:02}.{:03}] [{}] {}: {}\n",
-                h, m, s, ms,
+                h,
+                m,
+                s,
+                ms,
                 record.level(),
                 record.target(),
                 record.args()
@@ -89,7 +93,6 @@ static CONSOLE_IS_VISIBLE: AtomicBool = AtomicBool::new(false);
 
 unsafe extern "system" fn console_ctrl_handler(ctrl_type: u32) -> BOOL {
     if ctrl_type == CTRL_CLOSE_EVENT {
-        // Intercept clicking 'X' on console: do NOT terminate AeroGraph, only hide console!
         set_console_visible(false);
         return BOOL(1);
     }
@@ -108,13 +111,19 @@ fn set_console_visible(visible: bool) {
                 if let Ok(handle) = h_in {
                     let mut mode = CONSOLE_MODE(0);
                     if GetConsoleMode(handle, &mut mode).is_ok() {
-                        let _ = SetConsoleMode(handle, CONSOLE_MODE((mode.0 & !ENABLE_QUICK_EDIT_MODE.0) | ENABLE_EXTENDED_FLAGS.0));
+                        let _ = SetConsoleMode(
+                            handle,
+                            CONSOLE_MODE(
+                                (mode.0 & !ENABLE_QUICK_EDIT_MODE.0) | ENABLE_EXTENDED_FLAGS.0,
+                            ),
+                        );
                     }
                 }
 
                 let cons_hwnd = GetConsoleWindow();
                 if !cons_hwnd.0.is_null() {
-                    let h_menu = windows::Win32::UI::WindowsAndMessaging::GetSystemMenu(cons_hwnd, false);
+                    let h_menu =
+                        windows::Win32::UI::WindowsAndMessaging::GetSystemMenu(cons_hwnd, false);
                     if !h_menu.0.is_null() {
                         let _ = windows::Win32::UI::WindowsAndMessaging::DeleteMenu(
                             h_menu,
@@ -167,8 +176,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Guard against multiple concurrent instances
     let _single_instance_mutex = unsafe {
-        use windows::Win32::System::Threading::CreateMutexW;
         use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
+        use windows::Win32::System::Threading::CreateMutexW;
         use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONWARNING, MB_OK};
 
         let mutex_name = windows::core::w!("AeroGraph_Single_Instance_Mutex");
@@ -188,12 +197,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Set process priority above normal to prevent Windows Efficiency Mode throttling
     unsafe {
-        use windows::Win32::System::Threading::{GetCurrentProcess, SetPriorityClass, ABOVE_NORMAL_PRIORITY_CLASS};
+        use windows::Win32::System::Threading::{
+            GetCurrentProcess, SetPriorityClass, ABOVE_NORMAL_PRIORITY_CLASS,
+        };
         let _ = SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
     }
 
     let mut config = AppConfig::load();
-    log::info!("Configuration loaded (Polling rate: {} Hz | Auto-Kneeboards: {})", config.polling_rate_hz, config.auto_kneeboards);
+    log::info!(
+        "Configuration loaded (Polling rate: {} Hz | Auto-Kneeboards: {})",
+        config.polling_rate_hz,
+        config.auto_kneeboards
+    );
 
     if config.show_console {
         set_console_visible(true);
@@ -228,7 +243,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => None,
     };
 
-    let profile_name = loaded_profile.as_ref().map(|p| p.profile.Name.clone()).unwrap_or_else(|| "None".to_string());
+    let profile_name = loaded_profile
+        .as_ref()
+        .map(|p| p.profile.Name.clone())
+        .unwrap_or_else(|| "None".to_string());
     let autostart_enabled = AppConfig::is_auto_start_enabled();
 
     // 2. Initialize Tao event loop & System Tray
@@ -270,12 +288,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     KneeboardWatcher::spawn_loop(r_watcher, w_config, manual_trigger_rx);
 
-    // 6. Run Tray Event Loop on main thread
+    // 6. Check for updates on startup if enabled (flight-safe, runs in background thread)
+    if config.check_updates_on_startup {
+        crate::updater::spawn_update_check(
+            config.github_repo.clone(),
+            env!("CARGO_PKG_VERSION").to_string(),
+            false,
+        );
+    }
+
+    // 7. Run Tray Event Loop on main thread
     let menu_channel = MenuEvent::receiver();
     let mut last_tray_listening = config.listening_enabled;
 
     event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::WaitUntil(std::time::Instant::now() + Duration::from_millis(50));
+        *control_flow =
+            ControlFlow::WaitUntil(std::time::Instant::now() + Duration::from_millis(50));
 
         if let Event::UserEvent(AppEvent::ListeningChanged(active)) = event {
             tray.set_listening_active(active);
@@ -305,7 +333,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     tray.set_listening_active(cfg.listening_enabled);
                     last_tray_listening = cfg.listening_enabled;
                     let _ = cfg.save();
-                    log::info!("Listening set to: {}", if cfg.listening_enabled { "Active" } else { "Muted" });
+                    log::info!(
+                        "Listening set to: {}",
+                        if cfg.listening_enabled {
+                            "Active"
+                        } else {
+                            "Muted"
+                        }
+                    );
                 } else if menu_event.id == tray.item_auto_kneeboards.id() {
                     let mut cfg = shared_config.lock().unwrap();
                     cfg.auto_kneeboards = !cfg.auto_kneeboards;
@@ -315,17 +350,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } else if menu_event.id == tray.item_edit_kneeboards.id() {
                     let cfg_path = crate::kneeboard::layout::KneeboardLayoutConfig::config_path();
                     if !cfg_path.exists() {
-                        let _ = crate::kneeboard::layout::KneeboardLayoutConfig::load_or_create_default();
+                        let _ =
+                            crate::kneeboard::layout::KneeboardLayoutConfig::load_or_create_default(
+                            );
                     }
                     log::info!("Opening kneeboard configuration in editor: {:?}", cfg_path);
-                    let _ = std::process::Command::new("notepad.exe").arg(&cfg_path).spawn();
+                    let _ = std::process::Command::new("notepad.exe")
+                        .arg(&cfg_path)
+                        .spawn();
                 } else if menu_event.id == tray.item_regen_now.id() {
                     log::info!("Manual kneeboard regeneration requested from tray menu");
                     let _ = manual_trigger_tx.send(());
                 } else if menu_event.id == tray.item_open_images.id() {
                     let images_path = PathBuf::from("images");
                     let _ = std::fs::create_dir_all(&images_path);
-                    let _ = std::process::Command::new("explorer.exe").arg(&images_path).spawn();
+                    let _ = std::process::Command::new("explorer.exe")
+                        .arg(&images_path)
+                        .spawn();
                 } else if menu_event.id == tray.item_autostart.id() {
                     let cur_auto = AppConfig::is_auto_start_enabled();
                     let new_auto = !cur_auto;
@@ -341,15 +382,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     cfg.show_console = new_vis;
                     let _ = cfg.save();
                     log::info!("Console visibility set to: {}", new_vis);
+                } else if menu_event.id == tray.item_check_updates.id() {
+                    let repo = {
+                        let cfg = shared_config.lock().unwrap();
+                        cfg.github_repo.clone()
+                    };
+                    log::info!(
+                        "Manual check for updates requested from tray menu (repo: {})",
+                        repo
+                    );
+                    crate::updater::spawn_update_check(
+                        repo,
+                        env!("CARGO_PKG_VERSION").to_string(),
+                        true,
+                    );
                 } else if menu_event.id == tray.item_open_log.id() {
                     let log_p = AppConfig::log_file_path();
-                    let _ = std::process::Command::new("notepad.exe").arg(&log_p).spawn();
+                    let _ = std::process::Command::new("notepad.exe")
+                        .arg(&log_p)
+                        .spawn();
                 } else if menu_event.id == tray.item_gender.id() {
                     let mut cfg = shared_config.lock().unwrap();
                     cfg.pilot_female = !cfg.pilot_female;
                     tray.set_gender(cfg.pilot_female);
                     let _ = cfg.save();
-                    log::info!("Pilot gender set to: {}", if cfg.pilot_female { "Female" } else { "Male" });
+                    log::info!(
+                        "Pilot gender set to: {}",
+                        if cfg.pilot_female { "Female" } else { "Male" }
+                    );
                     reload_trigger.store(true, Ordering::SeqCst);
                 } else if menu_event.id == tray.item_select.id() {
                     if let Some(path) = AppTray::prompt_select_profile() {
@@ -408,7 +468,10 @@ fn run_voice_worker_loop(
     let mut axis_sampler: Option<AxisSampler> = None;
     let bms_dir = BmsConfig::find_bms_directory();
     log::info!("Falcon BMS directory: {:?}", bms_dir);
-    let cached_bms_cfg = bms_dir.as_ref().and_then(|d| BmsConfig::load_from_bms(d, None).ok()).unwrap_or_default();
+    let cached_bms_cfg = bms_dir
+        .as_ref()
+        .and_then(|d| BmsConfig::load_from_bms(d, None).ok())
+        .unwrap_or_default();
     let mut active_profile_name: Option<String> = None;
     let mut last_compiled_config: Option<Option<String>> = None;
     let mut last_compiled_strings: Option<crate::bms::shared_memory::BmsStringInfo> = None;
@@ -459,35 +522,53 @@ fn run_voice_worker_loop(
 
         if let Some(vibe) = bms_client.read_vibe_data() {
             let in_3d = if vibe.in_3d != 0 { "True" } else { "False" };
-            state_engine.variables.insert("In3D".to_string(), in_3d.to_string());
-            let on_ground = if vibe.is_on_ground != 0 { "True" } else { "False" };
-            state_engine.variables.insert("OnGround".to_string(), on_ground.to_string());
+            state_engine
+                .variables
+                .insert("In3D".to_string(), in_3d.to_string());
+            let on_ground = if vibe.is_on_ground != 0 {
+                "True"
+            } else {
+                "False"
+            };
+            state_engine
+                .variables
+                .insert("OnGround".to_string(), on_ground.to_string());
         }
 
         let strings = bms_client.read_string_info();
         if !strings.awacs.is_empty() {
-            state_engine.variables.insert("Awacs".to_string(), strings.awacs.clone());
+            state_engine
+                .variables
+                .insert("Awacs".to_string(), strings.awacs.clone());
         } else {
             state_engine.variables.remove("Awacs");
         }
         if !strings.tanker.is_empty() {
-            state_engine.variables.insert("Tanker".to_string(), strings.tanker.clone());
+            state_engine
+                .variables
+                .insert("Tanker".to_string(), strings.tanker.clone());
         } else {
             state_engine.variables.remove("Tanker");
         }
         let pkg_size: usize = strings.package_size.trim().parse().unwrap_or(0);
         if pkg_size >= 2 {
-            state_engine.variables.insert("AISeat2".to_string(), "True".to_string());
+            state_engine
+                .variables
+                .insert("AISeat2".to_string(), "True".to_string());
         } else {
             state_engine.variables.remove("AISeat2");
         }
         if pkg_size >= 3 {
-            state_engine.variables.insert("AISeat3".to_string(), "True".to_string());
+            state_engine
+                .variables
+                .insert("AISeat3".to_string(), "True".to_string());
         } else {
             state_engine.variables.remove("AISeat3");
         }
         if pkg_size >= 4 {
-            state_engine.variables.insert("AISeat4".to_string(), "True".to_string());
+            state_engine
+                .variables
+                .insert("AISeat4".to_string(), "True".to_string());
         } else {
             state_engine.variables.remove("AISeat4");
         }
@@ -534,7 +615,8 @@ fn run_voice_worker_loop(
 
             let chief_engaged = state_engine.is_chief_engaged();
             let strings_changed = last_compiled_strings.as_ref() != Some(&strings);
-            let state_changed = last_compiled_config != Some(state_engine.active_configuration.clone())
+            let state_changed = last_compiled_config
+                != Some(state_engine.active_configuration.clone())
                 || last_chief_engaged != chief_engaged
                 || strings_changed;
 
@@ -546,7 +628,11 @@ fn run_voice_worker_loop(
                     let cfg_id = state_engine.active_configuration.as_deref();
                     match engine.compile_and_load_grammar(&loaded.profile, &strings, cfg_id) {
                         Ok(_) => {
-                            log::info!("Windows SAPI Grammar active (Chief: {}, Config: {:?})", chief_engaged, cfg_id);
+                            log::info!(
+                                "Windows SAPI Grammar active (Chief: {}, Config: {:?})",
+                                chief_engaged,
+                                cfg_id
+                            );
                             if !initial_chirp_played || reload {
                                 initial_chirp_played = true;
                                 if let Some(ref player) = state_engine.audio_player {
@@ -576,11 +662,17 @@ fn run_voice_worker_loop(
             }
 
             if ptt_com1 != last_ptt_com1 {
-                log::info!("📻 [PTT COM1 (UHF)] {}", if ptt_com1 { "PRESSED" } else { "RELEASED" });
+                log::info!(
+                    "📻 [PTT COM1 (UHF)] {}",
+                    if ptt_com1 { "PRESSED" } else { "RELEASED" }
+                );
                 last_ptt_com1 = ptt_com1;
             }
             if ptt_com2 != last_ptt_com2 {
-                log::info!("📻 [PTT COM2 (VHF)] {}", if ptt_com2 { "PRESSED" } else { "RELEASED" });
+                log::info!(
+                    "📻 [PTT COM2 (VHF)] {}",
+                    if ptt_com2 { "PRESSED" } else { "RELEASED" }
+                );
                 last_ptt_com2 = ptt_com2;
             }
 
@@ -610,7 +702,10 @@ fn run_voice_worker_loop(
                         }
                         let _ = proxy.send_event(AppEvent::ListeningChanged(false));
                         if let Some(ref player) = state_engine.audio_player {
-                            player.play_system_sound("standing-by.mp3", crate::engine::audio::STANDING_BY_BYTES);
+                            player.play_system_sound(
+                                "standing-by.mp3",
+                                crate::engine::audio::STANDING_BY_BYTES,
+                            );
                         }
                         continue;
                     } else if clean_text == "comms check" || clean_text == "radio check" {
@@ -627,14 +722,23 @@ fn run_voice_worker_loop(
                             }
                             let _ = proxy.send_event(AppEvent::ListeningChanged(true));
                             if let Some(ref player) = state_engine.audio_player {
-                                player.play_system_sound("loud-n-clear.mp3", crate::engine::audio::LOUD_N_CLEAR_BYTES);
+                                player.play_system_sound(
+                                    "loud-n-clear.mp3",
+                                    crate::engine::audio::LOUD_N_CLEAR_BYTES,
+                                );
                             }
                             continue;
                         } else {
                             if !state_engine.is_chief_engaged() {
-                                log::info!("🎙️ [Voice Command] \"{}\" -> Cockpit comms check acknowledged", text);
+                                log::info!(
+                                    "🎙️ [Voice Command] \"{}\" -> Cockpit comms check acknowledged",
+                                    text
+                                );
                                 if let Some(ref player) = state_engine.audio_player {
-                                    player.play_system_sound("loud-n-clear.mp3", crate::engine::audio::LOUD_N_CLEAR_BYTES);
+                                    player.play_system_sound(
+                                        "loud-n-clear.mp3",
+                                        crate::engine::audio::LOUD_N_CLEAR_BYTES,
+                                    );
                                 }
                                 continue;
                             }
@@ -648,7 +752,11 @@ fn run_voice_worker_loop(
                     }
 
                     if confidence < 0.50 && confidence > 0.0 {
-                        log::warn!("🎤 [Low Confidence {:.2}] Discarding ambiguous speech: \"{}\"", confidence, text);
+                        log::warn!(
+                            "🎤 [Low Confidence {:.2}] Discarding ambiguous speech: \"{}\"",
+                            confidence,
+                            text
+                        );
                         continue;
                     }
 
@@ -658,15 +766,21 @@ fn run_voice_worker_loop(
                             log::info!("🚫 [Condition Gated] Command group [{}] is inactive under current conditions. Ignoring \"{}\"", grp_name, text);
                         } else {
                             let requires_ptt1 = group.PushToTalk.as_ref().map_or(false, |ptt| {
-                                ptt.VariableInputs.iter().any(|v| v.Name == "SimTransmitCom1")
+                                ptt.VariableInputs
+                                    .iter()
+                                    .any(|v| v.Name == "SimTransmitCom1")
                             });
                             let requires_ptt2 = group.PushToTalk.as_ref().map_or(false, |ptt| {
-                                ptt.VariableInputs.iter().any(|v| v.Name == "SimTransmitCom2")
+                                ptt.VariableInputs
+                                    .iter()
+                                    .any(|v| v.Name == "SimTransmitCom2")
                             });
 
                             let ptt_grace = Duration::from_millis(1500);
-                            let ptt1_held = ptt_com1 || last_ptt_com1_time.map_or(false, |t| t.elapsed() <= ptt_grace);
-                            let ptt2_held = ptt_com2 || last_ptt_com2_time.map_or(false, |t| t.elapsed() <= ptt_grace);
+                            let ptt1_held = ptt_com1
+                                || last_ptt_com1_time.map_or(false, |t| t.elapsed() <= ptt_grace);
+                            let ptt2_held = ptt_com2
+                                || last_ptt_com2_time.map_or(false, |t| t.elapsed() <= ptt_grace);
 
                             let ptt_allowed = if requires_ptt1 {
                                 ptt1_held
@@ -687,11 +801,21 @@ fn run_voice_worker_loop(
                                             continue;
                                         }
                                     }
-                                    log::info!("🎤 Recognized speech (conf: {:.2}): \"{}\" -> [{} > {}]", confidence, text, grp_name, cmd_name);
+                                    log::info!(
+                                        "🎤 Recognized speech (conf: {:.2}): \"{}\" -> [{} > {}]",
+                                        confidence,
+                                        text,
+                                        grp_name,
+                                        cmd_name
+                                    );
                                     state_engine.execute_command(cmd, loaded);
                                 }
                             } else {
-                                let ptt_btn = if requires_ptt1 { "COM1 (UHF)" } else { "COM2 (VHF)" };
+                                let ptt_btn = if requires_ptt1 {
+                                    "COM1 (UHF)"
+                                } else {
+                                    "COM2 (VHF)"
+                                };
                                 log::info!("📻 [PTT Gated] Speech \"{}\" recognized for [{}], but {} was not held", text, grp_name, ptt_btn);
                             }
                         }

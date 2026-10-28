@@ -1,7 +1,7 @@
+use crate::kneeboard::models::{ActiveRunway, Airport};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use crate::kneeboard::models::{ActiveRunway, Airport};
 
 pub fn map_theater_id(cur_theater: &str) -> &'static str {
     match cur_theater {
@@ -33,21 +33,36 @@ impl TheaterDatabase {
         let idx_val: serde_json::Value = serde_json::from_str(&idx_content).ok()?;
 
         let th_id = map_theater_id(theater_name);
-        let th_entry = idx_val.get("theaters")
+        let th_entry = idx_val
+            .get("theaters")
             .and_then(|t| t.as_array())
-            .and_then(|arr| arr.iter().find(|t| t.get("id").and_then(|id| id.as_str()) == Some(th_id)).cloned())
+            .and_then(|arr| {
+                arr.iter()
+                    .find(|t| t.get("id").and_then(|id| id.as_str()) == Some(th_id))
+                    .cloned()
+            })
             .unwrap_or_else(|| {
-                idx_val.get("theaters")
+                idx_val
+                    .get("theaters")
                     .and_then(|t| t.as_array())
                     .and_then(|arr| arr.first().cloned())
                     .unwrap_or_default()
             });
 
-        let ap_set_id = th_entry.get("airportSet").and_then(|s| s.as_str()).unwrap_or("");
-        let ai_set_id = th_entry.get("airfieldSet").and_then(|s| s.as_str()).unwrap_or("");
+        let ap_set_id = th_entry
+            .get("airportSet")
+            .and_then(|s| s.as_str())
+            .unwrap_or("");
+        let ai_set_id = th_entry
+            .get("airfieldSet")
+            .and_then(|s| s.as_str())
+            .unwrap_or("");
 
         let mut airports = Vec::new();
-        let ap_file = assets_dir.join("data").join("airports").join(format!("{}.json", ap_set_id));
+        let ap_file = assets_dir
+            .join("data")
+            .join("airports")
+            .join(format!("{}.json", ap_set_id));
         if ap_file.exists() {
             if let Ok(ap_text) = fs::read_to_string(&ap_file) {
                 if let Ok(ap_json) = serde_json::from_str::<serde_json::Value>(&ap_text) {
@@ -63,7 +78,10 @@ impl TheaterDatabase {
         }
 
         let mut airfield_map = HashMap::new();
-        let ai_file = assets_dir.join("data").join("airfields").join(format!("{}.json", ai_set_id));
+        let ai_file = assets_dir
+            .join("data")
+            .join("airfields")
+            .join(format!("{}.json", ai_set_id));
         if ai_file.exists() {
             if let Ok(ai_text) = fs::read_to_string(&ai_file) {
                 if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(&ai_text) {
@@ -96,14 +114,21 @@ impl TheaterDatabase {
         })
     }
 
-    pub fn load_airfield_model(&self, assets_dir: &Path, airport_id: &serde_json::Value) -> Option<serde_json::Value> {
+    pub fn load_airfield_model(
+        &self,
+        assets_dir: &Path,
+        airport_id: &serde_json::Value,
+    ) -> Option<serde_json::Value> {
         let id_str = match airport_id {
             serde_json::Value::Number(n) => n.to_string(),
             serde_json::Value::String(s) => s.clone(),
             _ => return None,
         };
         let af_id = self.airfield_map.get(&id_str)?;
-        let af_file = assets_dir.join("data").join("airfields").join(format!("{}.json", af_id));
+        let af_file = assets_dir
+            .join("data")
+            .join("airfields")
+            .join(format!("{}.json", af_id));
         if !af_file.exists() {
             return None;
         }
@@ -153,7 +178,11 @@ pub fn find_airport<'a>(airports: &'a [Airport], query: &str) -> Option<&'a Airp
     None
 }
 
-pub fn calculate_active_runways(airport: &Airport, wind_deg: i32, wind_kts: i32) -> Vec<ActiveRunway> {
+pub fn calculate_active_runways(
+    airport: &Airport,
+    wind_deg: i32,
+    wind_kts: i32,
+) -> Vec<ActiveRunway> {
     let mut candidates = Vec::new();
     let _wind_rad = (wind_deg as f64).to_radians();
 
@@ -179,7 +208,11 @@ pub fn calculate_active_runways(airport: &Airport, wind_deg: i32, wind_kts: i32)
         }
     }
 
-    candidates.sort_by(|a, b| b.headwind.partial_cmp(&a.headwind).unwrap_or(std::cmp::Ordering::Equal));
+    candidates.sort_by(|a, b| {
+        b.headwind
+            .partial_cmp(&a.headwind)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     if candidates.is_empty() {
         return Vec::new();

@@ -3,13 +3,15 @@ use std::ffi::c_void;
 use std::mem;
 use std::ptr;
 use windows::core::{Result, PCWSTR, PWSTR};
-use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED};
 use windows::Win32::Media::Speech::{
-    SpInprocRecognizer, SpObjectTokenCategory, SpObjectToken, ISpRecognizer, ISpRecoContext,
-    ISpRecoGrammar, ISpRecoResult, ISpObjectTokenCategory, ISpObjectToken,
-    SPEVENT, SPEI_RECOGNITION, SPEI_FALSE_RECOGNITION, SPRS_ACTIVE, SPRS_INACTIVE,
-    SPRAF_TopLevel, SPRAF_Active, SPSTATEHANDLE, SPWT_LEXICAL, SPCAT_AUDIOIN,
-    SPET_LPARAM_IS_OBJECT, SPET_LPARAM_IS_POINTER, SPET_LPARAM_IS_STRING,
+    ISpObjectToken, ISpObjectTokenCategory, ISpRecoContext, ISpRecoGrammar, ISpRecoResult,
+    ISpRecognizer, SPRAF_Active, SPRAF_TopLevel, SpInprocRecognizer, SpObjectToken,
+    SpObjectTokenCategory, SPCAT_AUDIOIN, SPEI_FALSE_RECOGNITION, SPEI_RECOGNITION,
+    SPET_LPARAM_IS_OBJECT, SPET_LPARAM_IS_POINTER, SPET_LPARAM_IS_STRING, SPEVENT, SPRS_ACTIVE,
+    SPRS_INACTIVE, SPSTATEHANDLE, SPWT_LEXICAL,
+};
+use windows::Win32::System::Com::{
+    CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
 };
 
 use crate::bms::shared_memory::BmsStringInfo;
@@ -28,11 +30,13 @@ impl SapiEngine {
     pub fn new() -> Result<Self> {
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-            // In-process recognizer: 100% headless, zero Windows UI / floating bar popup!
-            let recognizer: ISpRecognizer = CoCreateInstance(&SpInprocRecognizer, None, CLSCTX_ALL)?;
+            // In-process recognizer
+            let recognizer: ISpRecognizer =
+                CoCreateInstance(&SpInprocRecognizer, None, CLSCTX_ALL)?;
 
             // Bind default system audio input token (microphone)
-            let cat: ISpObjectTokenCategory = CoCreateInstance(&SpObjectTokenCategory, None, CLSCTX_ALL)?;
+            let cat: ISpObjectTokenCategory =
+                CoCreateInstance(&SpObjectTokenCategory, None, CLSCTX_ALL)?;
             cat.SetId(SPCAT_AUDIOIN, false)?;
             let token_id = cat.GetDefaultTokenId()?;
 
@@ -96,10 +100,16 @@ impl SapiEngine {
 
         let hash_input = format!(
             "{}_{:?}_{}_{}_{}_{}_{}_{}_{}_{}",
-            profile.Name, active_config,
-            strings.callsign, strings.departure, strings.arrival,
-            strings.tanker, strings.awacs, strings.seat,
-            strings.package_size, strings.aircraft
+            profile.Name,
+            active_config,
+            strings.callsign,
+            strings.departure,
+            strings.arrival,
+            strings.tanker,
+            strings.awacs,
+            strings.seat,
+            strings.package_size,
+            strings.aircraft
         );
         use std::hash::{Hash, Hasher};
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -111,17 +121,26 @@ impl SapiEngine {
         // 1. Check local storage cache: if unchanged, load binary grammar in milliseconds
         if bin_path.exists() && map_path.exists() {
             let t_load = std::time::Instant::now();
-            if let (Ok(bin_data), Ok(map_str)) = (std::fs::read(&bin_path), std::fs::read_to_string(&map_path)) {
-                if let Ok(phrase_map) = serde_json::from_str::<HashMap<String, (usize, usize)>>(&map_str) {
+            if let (Ok(bin_data), Ok(map_str)) =
+                (std::fs::read(&bin_path), std::fs::read_to_string(&map_path))
+            {
+                if let Ok(phrase_map) =
+                    serde_json::from_str::<HashMap<String, (usize, usize)>>(&map_str)
+                {
                     unsafe {
                         if let Ok(grammar) = self.context.CreateGrammar(0) {
                             let root_rule: Vec<u16> = "RootRule\0".encode_utf16().collect();
                             let load_res = grammar.LoadCmdFromMemory(
-                                bin_data.as_ptr() as *const windows::Win32::Media::Speech::SPBINARYGRAMMAR,
+                                bin_data.as_ptr()
+                                    as *const windows::Win32::Media::Speech::SPBINARYGRAMMAR,
                                 windows::Win32::Media::Speech::SPLOADOPTIONS(0),
                             );
                             if load_res.is_ok() {
-                                let _ = grammar.SetRuleState(PCWSTR(root_rule.as_ptr()), ptr::null_mut(), SPRS_ACTIVE);
+                                let _ = grammar.SetRuleState(
+                                    PCWSTR(root_rule.as_ptr()),
+                                    ptr::null_mut(),
+                                    SPRS_ACTIVE,
+                                );
                                 log::info!(
                                     "⚡ [Cache Hit] Loaded SAPI grammar from local storage in {:.2}ms ({} phrases | Mode: {})",
                                     t_load.elapsed().as_secs_f64() * 1000.0,
@@ -141,7 +160,11 @@ impl SapiEngine {
         // 2. Cache miss or first compile: build grammar, commit, and cache to local storage
         log::info!(
             "Building SAPI grammar for mode: {} (saving to local storage cache)...",
-            if is_chief_mode { "Chief" } else { "Cockpit Comms" }
+            if is_chief_mode {
+                "Chief"
+            } else {
+                "Cockpit Comms"
+            }
         );
 
         let mut phrase_map = HashMap::new();
@@ -204,7 +227,9 @@ impl SapiEngine {
                 let grp_segments = if is_chief_group {
                     &[][..]
                 } else {
-                    group.GroupCommand.as_ref()
+                    group
+                        .GroupCommand
+                        .as_ref()
                         .map(|gc| &gc.VoiceCommandKeys[..])
                         .unwrap_or(&[])
                 };
@@ -214,10 +239,13 @@ impl SapiEngine {
                     // This reduces SAPI transitions from 37,000+ to ~1,000, slashing load time from 68s to 3ms!
                     let mut h_grp = SPSTATEHANDLE::default();
                     if grammar.CreateNewState(h_rule, &mut h_grp).is_ok() {
-                        let prefix_variants = Self::expand_segments(grp_segments, strings, false, grp_name);
+                        let prefix_variants =
+                            Self::expand_segments(grp_segments, strings, false, grp_name);
                         for p in &prefix_variants {
                             let clean_p = p.trim().to_lowercase();
-                            if clean_p.len() < 2 { continue; }
+                            if clean_p.len() < 2 {
+                                continue;
+                            }
                             let wide: Vec<u16> = format!("{}\0", clean_p).encode_utf16().collect();
                             let _ = grammar.AddWordTransition(
                                 h_rule,
@@ -234,11 +262,15 @@ impl SapiEngine {
                         for (c_idx, cmd) in group.Commands.iter().enumerate() {
                             let cmd_name = cmd.Name.as_deref().unwrap_or("");
                             if let Some(cmd_segments) = &cmd.VoiceCommandKeys {
-                                let cmd_variants = Self::expand_segments(cmd_segments, strings, false, cmd_name);
+                                let cmd_variants =
+                                    Self::expand_segments(cmd_segments, strings, false, cmd_name);
                                 for c in &cmd_variants {
                                     let clean_c = c.trim().to_lowercase();
-                                    if clean_c.len() < 2 { continue; }
-                                    let wide: Vec<u16> = format!("{}\0", clean_c).encode_utf16().collect();
+                                    if clean_c.len() < 2 {
+                                        continue;
+                                    }
+                                    let wide: Vec<u16> =
+                                        format!("{}\0", clean_c).encode_utf16().collect();
                                     let _ = grammar.AddWordTransition(
                                         h_grp,
                                         SPSTATEHANDLE::default(),
@@ -252,7 +284,8 @@ impl SapiEngine {
 
                                     // Map all valid combined phrases
                                     for p in &prefix_variants {
-                                        let full = format!("{} {}", p.trim().to_lowercase(), clean_c);
+                                        let full =
+                                            format!("{} {}", p.trim().to_lowercase(), clean_c);
                                         phrase_map.insert(full, (g_idx, c_idx));
                                     }
                                 }
@@ -267,7 +300,8 @@ impl SapiEngine {
 
                         if is_chief_group {
                             if let Some(cmd_segments) = &cmd.VoiceCommandKeys {
-                                let base_phrases = Self::expand_segments(cmd_segments, strings, true, cmd_name);
+                                let base_phrases =
+                                    Self::expand_segments(cmd_segments, strings, true, cmd_name);
                                 for bp in &base_phrases {
                                     phrases.push(bp.clone());
                                     phrases.push(format!("chief {}", bp));
@@ -301,7 +335,12 @@ impl SapiEngine {
                             }
                         } else {
                             if let Some(cmd_segments) = &cmd.VoiceCommandKeys {
-                                phrases.extend(Self::expand_segments(cmd_segments, strings, false, cmd_name));
+                                phrases.extend(Self::expand_segments(
+                                    cmd_segments,
+                                    strings,
+                                    false,
+                                    cmd_name,
+                                ));
                             }
                             if grp_name == "Engage Crew Chief" {
                                 phrases.push("engage chief".to_string());
@@ -316,9 +355,15 @@ impl SapiEngine {
                             if clean.is_empty() || clean.len() < 2 {
                                 continue;
                             }
-                            if clean == "doing" || clean == "going" || clean == "how" || clean == "tonight"
-                                || clean == "morning" || clean == "today" || clean == "how going"
-                                || clean == "how doing" || clean == "whats doing"
+                            if clean == "doing"
+                                || clean == "going"
+                                || clean == "how"
+                                || clean == "tonight"
+                                || clean == "morning"
+                                || clean == "today"
+                                || clean == "how going"
+                                || clean == "how doing"
+                                || clean == "whats doing"
                             {
                                 continue;
                             }
@@ -342,9 +387,11 @@ impl SapiEngine {
             }
 
             grammar.Commit(0)?;
-            let stream = windows::Win32::System::Com::StructuredStorage::CreateStreamOnHGlobal(None, true)?;
+            let stream =
+                windows::Win32::System::Com::StructuredStorage::CreateStreamOnHGlobal(None, true)?;
             grammar.SaveCmd(&stream, None)?;
-            let hglobal = windows::Win32::System::Com::StructuredStorage::GetHGlobalFromStream(&stream)?;
+            let hglobal =
+                windows::Win32::System::Com::StructuredStorage::GetHGlobalFromStream(&stream)?;
             let ptr = windows::Win32::System::Memory::GlobalLock(hglobal);
             let size = windows::Win32::System::Memory::GlobalSize(hglobal);
             if !ptr.is_null() && size > 0 {
@@ -354,14 +401,21 @@ impl SapiEngine {
                 if let Ok(json) = serde_json::to_string(&phrase_map) {
                     let _ = std::fs::write(&map_path, json);
                 }
-                log::info!("💾 Cached compiled SAPI grammar to local storage ({} bytes)", size);
+                log::info!(
+                    "💾 Cached compiled SAPI grammar to local storage ({} bytes)",
+                    size
+                );
             }
             grammar.SetRuleState(PCWSTR(root_rule.as_ptr()), ptr::null_mut(), SPRS_ACTIVE)?;
 
             log::info!(
                 "Windows SAPI Grammar active: compiled {} phrases (Mode: {})",
                 count,
-                if is_chief_mode { "Chief" } else { "Cockpit Comms" }
+                if is_chief_mode {
+                    "Chief"
+                } else {
+                    "Cockpit Comms"
+                }
             );
             self.grammar = Some(grammar);
             self.phrase_map = phrase_map;
@@ -378,8 +432,15 @@ impl SapiEngine {
         }
         let mut variants = vec![clean.to_string()];
         let digits = [
-            ('1', "One"), ('2', "Two"), ('3', "Three"), ('4', "Four"),
-            ('5', "Five"), ('6', "Six"), ('7', "Seven"), ('8', "Eight"), ('9', "Nine"),
+            ('1', "One"),
+            ('2', "Two"),
+            ('3', "Three"),
+            ('4', "Four"),
+            ('5', "Five"),
+            ('6', "Six"),
+            ('7', "Seven"),
+            ('8', "Eight"),
+            ('9', "Nine"),
         ];
         for (d, word) in digits {
             if clean.ends_with(d) {
@@ -400,15 +461,51 @@ impl SapiEngine {
     ) -> Vec<String> {
         let mut results = vec![String::new()];
 
-        let callsign = if strings.callsign.is_empty() { "Goblin2" } else { &strings.callsign };
-        let departure = if strings.departure.is_empty() { "Gunsan" } else { &strings.departure };
-        let arrival = if strings.arrival.is_empty() { "Gunsan" } else { &strings.arrival };
-        let alternate = if strings.alternate.is_empty() { "Osan" } else { &strings.alternate };
-        let tanker = if strings.tanker.is_empty() { "Texaco1" } else { &strings.tanker };
-        let awacs = if strings.awacs.is_empty() { "Sentry7" } else { &strings.awacs };
-        let seat = if strings.seat.is_empty() { "1" } else { &strings.seat };
-        let pkg_size = if strings.package_size.is_empty() { "Singleton" } else { &strings.package_size };
-        let aircraft = if strings.aircraft.is_empty() { "F16" } else { &strings.aircraft };
+        let callsign = if strings.callsign.is_empty() {
+            "Goblin2"
+        } else {
+            &strings.callsign
+        };
+        let departure = if strings.departure.is_empty() {
+            "Gunsan"
+        } else {
+            &strings.departure
+        };
+        let arrival = if strings.arrival.is_empty() {
+            "Gunsan"
+        } else {
+            &strings.arrival
+        };
+        let alternate = if strings.alternate.is_empty() {
+            "Osan"
+        } else {
+            &strings.alternate
+        };
+        let tanker = if strings.tanker.is_empty() {
+            "Texaco1"
+        } else {
+            &strings.tanker
+        };
+        let awacs = if strings.awacs.is_empty() {
+            "Sentry7"
+        } else {
+            &strings.awacs
+        };
+        let seat = if strings.seat.is_empty() {
+            "1"
+        } else {
+            &strings.seat
+        };
+        let pkg_size = if strings.package_size.is_empty() {
+            "Singleton"
+        } else {
+            &strings.package_size
+        };
+        let aircraft = if strings.aircraft.is_empty() {
+            "F16"
+        } else {
+            &strings.aircraft
+        };
 
         for (idx, seg) in segments.iter().enumerate() {
             // For How's Chief, Seg 0 ("How", "Whats", "How are") must NOT be optional,
@@ -532,7 +629,9 @@ impl SapiEngine {
             loop {
                 let mut event: SPEVENT = mem::zeroed();
                 let mut fetched: u32 = 0;
-                let hr = self.context.GetEvents(1, &mut event, &mut fetched as *mut u32);
+                let hr = self
+                    .context
+                    .GetEvents(1, &mut event, &mut fetched as *mut u32);
 
                 if hr.is_err() || fetched == 0 {
                     break;
@@ -543,10 +642,11 @@ impl SapiEngine {
                     let p_result = event.lParam.0 as *mut c_void;
                     if !p_result.is_null() {
                         let reco_result: ISpRecoResult = mem::transmute(p_result);
-                        
+
                         // Extract confidence from SPPHRASE
                         let mut confidence: f32 = 1.0;
-                        let mut phrase_ptr: *mut windows::Win32::Media::Speech::SPPHRASE = ptr::null_mut();
+                        let mut phrase_ptr: *mut windows::Win32::Media::Speech::SPPHRASE =
+                            ptr::null_mut();
                         if let Ok(p) = reco_result.GetPhrase() {
                             phrase_ptr = p;
                             if !phrase_ptr.is_null() {
@@ -556,18 +656,27 @@ impl SapiEngine {
                         }
 
                         let mut text_ptr: PWSTR = PWSTR(ptr::null_mut());
-                        let _ = reco_result.GetText(0xFFFFFFFF, 0xFFFFFFFF, true, &mut text_ptr, None);
+                        let _ =
+                            reco_result.GetText(0xFFFFFFFF, 0xFFFFFFFF, true, &mut text_ptr, None);
 
                         if !text_ptr.0.is_null() {
-                            let text = text_ptr.to_string().unwrap_or_default().trim().to_lowercase();
+                            let text = text_ptr
+                                .to_string()
+                                .unwrap_or_default()
+                                .trim()
+                                .to_lowercase();
                             if let Some(&(g_idx, c_idx)) = self.phrase_map.get(&text) {
                                 result = Some((g_idx, c_idx, text, confidence));
                             }
-                            windows::Win32::System::Com::CoTaskMemFree(Some(text_ptr.0 as *const c_void));
+                            windows::Win32::System::Com::CoTaskMemFree(Some(
+                                text_ptr.0 as *const c_void,
+                            ));
                         }
 
                         if !phrase_ptr.is_null() {
-                            windows::Win32::System::Com::CoTaskMemFree(Some(phrase_ptr as *const c_void));
+                            windows::Win32::System::Com::CoTaskMemFree(Some(
+                                phrase_ptr as *const c_void,
+                            ));
                         }
                     }
                     if result.is_some() {
@@ -581,9 +690,13 @@ impl SapiEngine {
                         if !obj_ptr.is_null() {
                             let _: windows::core::IUnknown = mem::transmute(obj_ptr);
                         }
-                    } else if param_type == SPET_LPARAM_IS_POINTER.0 as i32 || param_type == SPET_LPARAM_IS_STRING.0 as i32 {
+                    } else if param_type == SPET_LPARAM_IS_POINTER.0 as i32
+                        || param_type == SPET_LPARAM_IS_STRING.0 as i32
+                    {
                         if event.lParam.0 != 0 {
-                            windows::Win32::System::Com::CoTaskMemFree(Some(event.lParam.0 as *const c_void));
+                            windows::Win32::System::Com::CoTaskMemFree(Some(
+                                event.lParam.0 as *const c_void,
+                            ));
                         }
                     }
                 }
@@ -593,7 +706,10 @@ impl SapiEngine {
     }
 
     /// Generates W3C SRGS XML grammar string from .fvx profile and current BMS strings.
-    pub fn generate_srgs_xml(profile: &FvxProfile, strings: &BmsStringInfo) -> (String, HashMap<String, (usize, usize)>) {
+    pub fn generate_srgs_xml(
+        profile: &FvxProfile,
+        strings: &BmsStringInfo,
+    ) -> (String, HashMap<String, (usize, usize)>) {
         let mut rule_map = HashMap::new();
         let mut xml = String::from(
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
@@ -603,13 +719,21 @@ impl SapiEngine {
 
         // Dynamic token rules
         let mut sub_rules = String::new();
-        let callsign = if strings.callsign.is_empty() { "Goblin Two" } else { &strings.callsign };
+        let callsign = if strings.callsign.is_empty() {
+            "Goblin Two"
+        } else {
+            &strings.callsign
+        };
         sub_rules.push_str(&format!(
             "<rule id=\"DynamicCallsign\"><one-of><item>{}</item></one-of></rule>\n",
             Self::xml_escape(callsign)
         ));
 
-        let departure = if strings.departure.is_empty() { "Gunsan" } else { &strings.departure };
+        let departure = if strings.departure.is_empty() {
+            "Gunsan"
+        } else {
+            &strings.departure
+        };
         sub_rules.push_str(&format!(
             "<rule id=\"DynamicDeparture\"><one-of><item>{}</item><item>{} Approach</item><item>{} Tower</item></one-of></rule>\n",
             Self::xml_escape(departure), Self::xml_escape(departure), Self::xml_escape(departure)
@@ -642,12 +766,18 @@ impl SapiEngine {
                             }
                             let text = &key_item.Key;
                             if text.starts_with("#Callsign") {
-                                sub_rules.push_str("<item><ruleref uri=\"#DynamicCallsign\"/></item>\n");
+                                sub_rules
+                                    .push_str("<item><ruleref uri=\"#DynamicCallsign\"/></item>\n");
                             } else if text.starts_with("#Departure") {
-                                sub_rules.push_str("<item><ruleref uri=\"#DynamicDeparture\"/></item>\n");
+                                sub_rules.push_str(
+                                    "<item><ruleref uri=\"#DynamicDeparture\"/></item>\n",
+                                );
                             } else {
                                 let clean = text.trim_end_matches('*');
-                                sub_rules.push_str(&format!("<item>{}</item>\n", Self::xml_escape(clean)));
+                                sub_rules.push_str(&format!(
+                                    "<item>{}</item>\n",
+                                    Self::xml_escape(clean)
+                                ));
                             }
                         }
 

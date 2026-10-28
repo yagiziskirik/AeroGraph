@@ -74,25 +74,47 @@ pub fn parse_notes_to_html(raw_text: &str) -> String {
 
         // Section Headers
         if trimmed.starts_with("### ") {
-            if in_list { html.push_str("</ul>\n"); in_list = false; }
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
             let title = parse_inline_formatting(&trimmed[4..]);
             html.push_str(&format!("<h3 class=\"section-h3\">{}</h3>\n", title));
         } else if trimmed.starts_with("## ") {
-            if in_list { html.push_str("</ul>\n"); in_list = false; }
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
             let title = parse_inline_formatting(&trimmed[3..]);
             html.push_str(&format!("<h2 class=\"section-h2\">{}</h2>\n", title));
         } else if trimmed.starts_with("# ") {
-            if in_list { html.push_str("</ul>\n"); in_list = false; }
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
             let title = parse_inline_formatting(&trimmed[2..]);
             html.push_str(&format!("<h1 class=\"section-h1\">{}</h1>\n", title));
-        } else if trimmed.starts_with('[') && trimmed.ends_with(']') && !trimmed.starts_with("[ ]") && !trimmed.starts_with("[x]") && !trimmed.starts_with("[X]") {
-            if in_list { html.push_str("</ul>\n"); in_list = false; }
-            let title = parse_inline_formatting(&trimmed[1..trimmed.len()-1]);
+        } else if trimmed.starts_with('[')
+            && trimmed.ends_with(']')
+            && !trimmed.starts_with("[ ]")
+            && !trimmed.starts_with("[x]")
+            && !trimmed.starts_with("[X]")
+        {
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
+            let title = parse_inline_formatting(&trimmed[1..trimmed.len() - 1]);
             html.push_str(&format!("<div class=\"section-badge\">{}</div>\n", title));
         }
         // Warning alerts (WebKit safe table)
-        else if trimmed.to_uppercase().starts_with("WARNING:") || trimmed.to_uppercase().starts_with("[WARNING]") {
-            if in_list { html.push_str("</ul>\n"); in_list = false; }
+        else if trimmed.to_uppercase().starts_with("WARNING:")
+            || trimmed.to_uppercase().starts_with("[WARNING]")
+        {
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
             let content = if trimmed.to_uppercase().starts_with("WARNING:") {
                 &trimmed[8..]
             } else {
@@ -104,8 +126,13 @@ pub fn parse_notes_to_html(raw_text: &str) -> String {
             ));
         }
         // Caution alerts (WebKit safe table)
-        else if trimmed.to_uppercase().starts_with("CAUTION:") || trimmed.to_uppercase().starts_with("[CAUTION]") {
-            if in_list { html.push_str("</ul>\n"); in_list = false; }
+        else if trimmed.to_uppercase().starts_with("CAUTION:")
+            || trimmed.to_uppercase().starts_with("[CAUTION]")
+        {
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
             let content = if trimmed.to_uppercase().starts_with("CAUTION:") {
                 &trimmed[8..]
             } else {
@@ -118,15 +145,33 @@ pub fn parse_notes_to_html(raw_text: &str) -> String {
         }
         // Checkboxes (WebKit safe table)
         else if trimmed.starts_with("[ ] ") || trimmed.starts_with("- [ ] ") {
-            if in_list { html.push_str("</ul>\n"); in_list = false; }
-            let text = if trimmed.starts_with("- ") { &trimmed[6..] } else { &trimmed[4..] };
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
+            let text = if trimmed.starts_with("- ") {
+                &trimmed[6..]
+            } else {
+                &trimmed[4..]
+            };
             html.push_str(&format!(
                 "<table class=\"check-table\" cellpadding=\"0\" cellspacing=\"0\"><tr><td class=\"check-box-cell\"><div class=\"check-box\"></div></td><td class=\"check-text-cell\">{}</td></tr></table>\n",
                 parse_inline_formatting(text.trim())
             ));
-        } else if trimmed.starts_with("[x] ") || trimmed.starts_with("[X] ") || trimmed.starts_with("- [x] ") || trimmed.starts_with("- [X] ") {
-            if in_list { html.push_str("</ul>\n"); in_list = false; }
-            let text = if trimmed.starts_with("- ") { &trimmed[6..] } else { &trimmed[4..] };
+        } else if trimmed.starts_with("[x] ")
+            || trimmed.starts_with("[X] ")
+            || trimmed.starts_with("- [x] ")
+            || trimmed.starts_with("- [X] ")
+        {
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
+            let text = if trimmed.starts_with("- ") {
+                &trimmed[6..]
+            } else {
+                &trimmed[4..]
+            };
             html.push_str(&format!(
                 "<table class=\"check-table checked\" cellpadding=\"0\" cellspacing=\"0\"><tr><td class=\"check-box-cell\"><div class=\"check-box checked\">&#x2714;</div></td><td class=\"check-text-cell\">{}</td></tr></table>\n",
                 parse_inline_formatting(text.trim())
@@ -145,22 +190,43 @@ pub fn parse_notes_to_html(raw_text: &str) -> String {
         else if let Some(colon_idx) = trimmed.find(':') {
             let key = trimmed[..colon_idx].trim();
             let val = trimmed[colon_idx + 1..].trim();
-            if !key.is_empty() && key.len() <= 28 && !val.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || c == ' ' || c == '/' || c == '-' || c == '_') {
-                if in_list { html.push_str("</ul>\n"); in_list = false; }
+            if !key.is_empty()
+                && key.len() <= 28
+                && !val.is_empty()
+                && key.chars().all(|c| {
+                    c.is_ascii_alphanumeric() || c == ' ' || c == '/' || c == '-' || c == '_'
+                })
+            {
+                if in_list {
+                    html.push_str("</ul>\n");
+                    in_list = false;
+                }
                 html.push_str(&format!(
                     "<table class=\"kv-table\" cellpadding=\"0\" cellspacing=\"0\"><tr><td class=\"kv-key\">{}</td><td class=\"kv-val\">{}</td></tr></table>\n",
                     parse_inline_formatting(key),
                     parse_inline_formatting(val)
                 ));
             } else {
-                if in_list { html.push_str("</ul>\n"); in_list = false; }
-                html.push_str(&format!("<p class=\"note-line\">{}</p>\n", parse_inline_formatting(line)));
+                if in_list {
+                    html.push_str("</ul>\n");
+                    in_list = false;
+                }
+                html.push_str(&format!(
+                    "<p class=\"note-line\">{}</p>\n",
+                    parse_inline_formatting(line)
+                ));
             }
         }
         // Plain text line
         else {
-            if in_list { html.push_str("</ul>\n"); in_list = false; }
-            html.push_str(&format!("<p class=\"note-line\">{}</p>\n", parse_inline_formatting(line)));
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
+            html.push_str(&format!(
+                "<p class=\"note-line\">{}</p>\n",
+                parse_inline_formatting(line)
+            ));
         }
     }
 
@@ -187,11 +253,23 @@ pub fn resolve_stripe_and_header_colors(
         }
     } else if let Some(p) = preset {
         match p.to_lowercase().as_str() {
-            "caution" => (vec!["#111111".to_string(), "#F5D742".to_string()], "#111111".to_string()),
-            "warning" => (vec!["#111111".to_string(), "#D32F2F".to_string()], "#D32F2F".to_string()),
+            "caution" => (
+                vec!["#111111".to_string(), "#F5D742".to_string()],
+                "#111111".to_string(),
+            ),
+            "warning" => (
+                vec!["#111111".to_string(), "#D32F2F".to_string()],
+                "#D32F2F".to_string(),
+            ),
             "emergency" => (vec!["#D32F2F".to_string()], "#D32F2F".to_string()),
-            "tactical" | "blue" => (vec!["#0D47A1".to_string(), "#0288D1".to_string()], "#0D47A1".to_string()),
-            "green" => (vec!["#1B5E20".to_string(), "#388E3C".to_string()], "#1B5E20".to_string()),
+            "tactical" | "blue" => (
+                vec!["#0D47A1".to_string(), "#0288D1".to_string()],
+                "#0D47A1".to_string(),
+            ),
+            "green" => (
+                vec!["#1B5E20".to_string(), "#388E3C".to_string()],
+                "#1B5E20".to_string(),
+            ),
             "standard" | "black" | _ => (vec!["#111111".to_string()], "#111111".to_string()),
         }
     } else if let Some(c) = stripe_color {
@@ -223,7 +301,8 @@ pub fn generate_notes_page_html(
     let is_left = slot_name.to_uppercase().ends_with('L');
     let effective_header_code = header_code.unwrap_or("AEROGRAPH // F-16 PILOT NOTES");
 
-    let (colors, effective_header_color) = resolve_stripe_and_header_colors(preset, stripe_color, stripe_colors, header_color);
+    let (colors, effective_header_color) =
+        resolve_stripe_and_header_colors(preset, stripe_color, stripe_colors, header_color);
 
     // Build vector SVG stripe pattern
     let (pattern_width, rects_svg) = if spaced {
@@ -267,23 +346,33 @@ pub fn generate_notes_page_html(
 
     let notch_class = if is_left { "notch-left" } else { "notch-right" };
     let title_html = match title {
-        Some(t) if !t.trim().is_empty() => format!("<div class=\"main-title\">{}</div>\n", escape_html(t.trim())),
+        Some(t) if !t.trim().is_empty() => format!(
+            "<div class=\"main-title\">{}</div>\n",
+            escape_html(t.trim())
+        ),
         _ => String::new(),
     };
 
     let subtitle_html = match subtitle {
-        Some(s) if !s.trim().is_empty() => format!("<div class=\"subtitle\">{}</div>\n", parse_inline_formatting(s.trim())),
+        Some(s) if !s.trim().is_empty() => format!(
+            "<div class=\"subtitle\">{}</div>\n",
+            parse_inline_formatting(s.trim())
+        ),
         _ => String::new(),
     };
 
     let page_badge_html = match page_num {
-        Some(p) if !p.trim().is_empty() => format!("<span class=\"footer-page-badge\">{}</span>", escape_html(p.trim())),
+        Some(p) if !p.trim().is_empty() => format!(
+            "<span class=\"footer-page-badge\">{}</span>",
+            escape_html(p.trim())
+        ),
         _ => String::new(),
     };
 
     let parsed_content = parse_notes_to_html(notes_raw);
 
-    format!(r##"<!DOCTYPE html>
+    format!(
+        r##"<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -767,7 +856,12 @@ CAUTION: Low fuel state upon egress
         assert_eq!(colors, vec!["#D32F2F"]);
         assert_eq!(hdr, "#D32F2F");
 
-        let (colors, hdr) = resolve_stripe_and_header_colors(None, None, Some(&["#111111".into(), "#D32F2F".into(), "#F5D742".into()]), Some("#FFFFFF"));
+        let (colors, hdr) = resolve_stripe_and_header_colors(
+            None,
+            None,
+            Some(&["#111111".into(), "#D32F2F".into(), "#F5D742".into()]),
+            Some("#FFFFFF"),
+        );
         assert_eq!(colors.len(), 3);
         assert_eq!(hdr, "#FFFFFF");
     }
@@ -839,8 +933,16 @@ CAUTION: Maintain minimum 18,000 FT MSL until IP ingress
         if bin_path.exists() {
             let left_png_path = images_dir.join("test_notes_L.png");
             let right_png_path = images_dir.join("test_notes_R.png");
-            let _ = crate::kneeboard::renderer::render_html_to_png(&bin_path, &left_html_path, &left_png_path);
-            let _ = crate::kneeboard::renderer::render_html_to_png(&bin_path, &right_html_path, &right_png_path);
+            let _ = crate::kneeboard::renderer::render_html_to_png(
+                &bin_path,
+                &left_html_path,
+                &left_png_path,
+            );
+            let _ = crate::kneeboard::renderer::render_html_to_png(
+                &bin_path,
+                &right_html_path,
+                &right_png_path,
+            );
             assert!(left_png_path.exists(), "Left PNG was not rendered");
             assert!(right_png_path.exists(), "Right PNG was not rendered");
         }

@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build & Package Windows Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Extract Version from Tag
+        id: get_version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart('v')
+          Write-Host "Tag: $tag -> Version: $version"
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Build Release Binary
+        run: cargo build --release --verbose
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            Write-Error "ISCC.exe not found after chocolatey install"
+          }
+          Write-Host "Inno Setup compiler ready: $iscc"
+
+      - name: Compile Graphical Setup Installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          $version = "${{ steps.get_version.outputs.version }}"
+          & $iscc "/DMyAppVersion=$version" installer/setup.iss
+          $installerPath = "installer/output/AeroGraph_Setup_v$version.exe"
+          if (-not (Test-Path $installerPath)) {
+            Write-Error "Setup executable was not generated at $installerPath"
+          }
+          Write-Host "Setup installer created: $installerPath"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            installer/output/AeroGraph_Setup_v${{ steps.get_version.outputs.version }}.exe
+          draft: false
+          prerelease: false
+          generate_release_notes: true

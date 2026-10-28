@@ -1,7 +1,7 @@
+use super::models::Airport;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use super::models::Airport;
 
 pub struct TheaterEntry {
     pub id: String,
@@ -15,7 +15,15 @@ pub struct TheaterEntry {
 pub fn load_theater_database(
     data_dir: &Path,
     theater_id: &str,
-) -> Result<(Vec<Airport>, HashMap<String, String>, serde_json::Value, TheaterEntry), String> {
+) -> Result<
+    (
+        Vec<Airport>,
+        HashMap<String, String>,
+        serde_json::Value,
+        TheaterEntry,
+    ),
+    String,
+> {
     let index_file = data_dir.join("index.json");
     if !index_file.exists() {
         return Err(format!("index.json not found at {:?}", index_file));
@@ -24,21 +32,55 @@ pub fn load_theater_database(
     let index_content = fs::read_to_string(&index_file).map_err(|e| e.to_string())?;
     let idx: serde_json::Value = serde_json::from_str(&index_content).map_err(|e| e.to_string())?;
 
-    let theaters = idx.get("theaters").and_then(|v| v.as_array()).ok_or("No theaters in index.json")?;
-    let th_obj = theaters.iter().find(|t| {
-        t.get("id").and_then(|v| v.as_str()).map(|s| s == theater_id).unwrap_or(false)
-    }).unwrap_or_else(|| &theaters[0]);
+    let theaters = idx
+        .get("theaters")
+        .and_then(|v| v.as_array())
+        .ok_or("No theaters in index.json")?;
+    let th_obj = theaters
+        .iter()
+        .find(|t| {
+            t.get("id")
+                .and_then(|v| v.as_str())
+                .map(|s| s == theater_id)
+                .unwrap_or(false)
+        })
+        .unwrap_or_else(|| &theaters[0]);
 
     let th_entry = TheaterEntry {
-        id: th_obj.get("id").and_then(|v| v.as_str()).unwrap_or("korea-kto").to_string(),
-        name: th_obj.get("name").and_then(|v| v.as_str()).unwrap_or("Korea KTO").to_string(),
-        map_id: th_obj.get("mapId").and_then(|v| v.as_str()).unwrap_or("korea").to_string(),
-        size_ft: th_obj.get("sizeFt").and_then(|v| v.as_f64()).unwrap_or(3358700.0),
-        airport_set: th_obj.get("airportSet").and_then(|v| v.as_str()).unwrap_or("korea").to_string(),
-        airfield_set: th_obj.get("airfieldSet").and_then(|v| v.as_str()).unwrap_or("korea").to_string(),
+        id: th_obj
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("korea-kto")
+            .to_string(),
+        name: th_obj
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Korea KTO")
+            .to_string(),
+        map_id: th_obj
+            .get("mapId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("korea")
+            .to_string(),
+        size_ft: th_obj
+            .get("sizeFt")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(3358700.0),
+        airport_set: th_obj
+            .get("airportSet")
+            .and_then(|v| v.as_str())
+            .unwrap_or("korea")
+            .to_string(),
+        airfield_set: th_obj
+            .get("airfieldSet")
+            .and_then(|v| v.as_str())
+            .unwrap_or("korea")
+            .to_string(),
     };
 
-    let ap_file = data_dir.join("airports").join(format!("{}.json", th_entry.airport_set));
+    let ap_file = data_dir
+        .join("airports")
+        .join(format!("{}.json", th_entry.airport_set));
     let mut airports: Vec<Airport> = Vec::new();
     if ap_file.exists() {
         if let Ok(content) = fs::read_to_string(&ap_file) {
@@ -52,7 +94,9 @@ pub fn load_theater_database(
         }
     }
 
-    let ai_file = data_dir.join("airfields").join(format!("{}.json", th_entry.airfield_set));
+    let ai_file = data_dir
+        .join("airfields")
+        .join(format!("{}.json", th_entry.airfield_set));
     let mut airfield_map: HashMap<String, String> = HashMap::new();
     if ai_file.exists() {
         if let Ok(content) = fs::read_to_string(&ai_file) {
@@ -67,7 +111,10 @@ pub fn load_theater_database(
     if charts_file.exists() {
         if let Ok(content) = fs::read_to_string(&charts_file) {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                charts_index = json.get(&th_entry.airport_set).cloned().unwrap_or(serde_json::Value::Null);
+                charts_index = json
+                    .get(&th_entry.airport_set)
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
             }
         }
     }
@@ -117,7 +164,11 @@ pub fn find_airport<'a>(airports: &'a [Airport], query: &str) -> Option<&'a Airp
     None
 }
 
-pub fn load_airfield_model(data_dir: &Path, airfield_map: &HashMap<String, String>, airport_id: &serde_json::Value) -> Option<serde_json::Value> {
+pub fn load_airfield_model(
+    data_dir: &Path,
+    airfield_map: &HashMap<String, String>,
+    airport_id: &serde_json::Value,
+) -> Option<serde_json::Value> {
     let id_str = match airport_id {
         serde_json::Value::Number(n) => n.to_string(),
         serde_json::Value::String(s) => s.clone(),

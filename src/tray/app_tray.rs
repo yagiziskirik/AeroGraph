@@ -15,6 +15,7 @@ pub struct AppTray {
     pub item_open_images: MenuItem,
     pub item_autostart: MenuItem,
     pub item_console: MenuItem,
+    pub item_check_updates: MenuItem,
     pub item_open_log: MenuItem,
     pub item_exit: MenuItem,
 }
@@ -77,6 +78,7 @@ impl AppTray {
         };
         let item_console = MenuItem::new(console_text, true, None);
 
+        let item_check_updates = MenuItem::new("🔄 Check for Updates...", true, None);
         let item_open_log = MenuItem::new("Open Log File", true, None);
         let item_exit = MenuItem::new("Exit AeroGraph", true, None);
 
@@ -94,6 +96,7 @@ impl AppTray {
         let _ = menu.append(&PredefinedMenuItem::separator());
         let _ = menu.append(&item_autostart);
         let _ = menu.append(&item_console);
+        let _ = menu.append(&item_check_updates);
         let _ = menu.append(&item_open_log);
         let _ = menu.append(&PredefinedMenuItem::separator());
         let _ = menu.append(&item_exit);
@@ -122,6 +125,7 @@ impl AppTray {
             item_open_images,
             item_autostart,
             item_console,
+            item_check_updates,
             item_open_log,
             item_exit,
         })

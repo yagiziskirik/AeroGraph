@@ -1,8 +1,7 @@
 use std::thread;
 use std::time::Duration;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
-    KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE,
+    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE,
 };
 use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW};
 
@@ -21,18 +20,20 @@ impl KeyboardDispatcher {
             if len > 0 {
                 let title = String::from_utf16_lossy(&title_buf[..len as usize]);
                 let lower = title.to_lowercase();
-                
+
                 // Never inject into developer tools, editors, or shells
-                if lower.contains("powershell") 
-                    || lower.contains("cmd.exe") 
-                    || lower.contains("terminal") 
+                if lower.contains("powershell")
+                    || lower.contains("cmd.exe")
+                    || lower.contains("terminal")
                     || lower.contains("code")
                     || lower.contains("visual studio")
                 {
                     return false;
                 }
 
-                return lower.starts_with("falcon bms") || lower.contains("falcon bms") || lower.starts_with("bms");
+                return lower.starts_with("falcon bms")
+                    || lower.contains("falcon bms")
+                    || lower.starts_with("bms");
             }
             false
         }
@@ -152,16 +153,16 @@ impl KeyboardDispatcher {
             3 => Some(0x0F),  // Tab
 
             // Function keys F1..F12 (WPF Key 90..101)
-            90 => Some(0x3B), // F1
-            91 => Some(0x3C), // F2
-            92 => Some(0x3D), // F3
-            93 => Some(0x3E), // F4
-            94 => Some(0x3F), // F5
-            95 => Some(0x40), // F6
-            96 => Some(0x41), // F7
-            97 => Some(0x42), // F8
-            98 => Some(0x43), // F9
-            99 => Some(0x44), // F10
+            90 => Some(0x3B),  // F1
+            91 => Some(0x3C),  // F2
+            92 => Some(0x3D),  // F3
+            93 => Some(0x3E),  // F4
+            94 => Some(0x3F),  // F5
+            95 => Some(0x40),  // F6
+            96 => Some(0x41),  // F7
+            97 => Some(0x42),  // F8
+            98 => Some(0x43),  // F9
+            99 => Some(0x44),  // F10
             100 => Some(0x57), // F11
             101 => Some(0x58), // F12
 

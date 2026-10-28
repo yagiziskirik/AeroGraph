@@ -1,5 +1,6 @@
 pub fn generate_blank_chart_html(airport_name: &str, reason: &str) -> String {
-    format!(r#"<!DOCTYPE html>
+    format!(
+        r#"<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -75,5 +76,8 @@ pub fn generate_blank_chart_html(airport_name: &str, reason: &str) -> String {
     </div>
 </body>
 </html>
-"#, airport_name.to_uppercase(), reason)
+"#,
+        airport_name.to_uppercase(),
+        reason
+    )
 }

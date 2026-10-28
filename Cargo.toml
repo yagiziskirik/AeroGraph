@@ -25,7 +25,11 @@ windows = { version = "0.58", features = [
     "Win32_System_Console",
     "Win32_System_SystemInformation",
     "Win32_Security",
+    "Win32_System_Diagnostics_ToolHelp",
 ] }
+
+# HTTP & Auto-Update
+ureq = { version = "2.10", default-features = false, features = ["tls", "gzip", "json"] }
 
 # Audio Playback
 rodio = { version = "0.19", default-features = false, features = ["symphonia-mp3", "symphonia-wav"] }

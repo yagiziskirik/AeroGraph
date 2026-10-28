@@ -1,8 +1,8 @@
+use rand::seq::SliceRandom;
+use rodio::{Decoder, OutputStream, Sink};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
-use rand::seq::SliceRandom;
-use rodio::{Decoder, OutputStream, Sink};
 
 use std::sync::Mutex;
 
@@ -60,7 +60,10 @@ impl AudioPlayer {
 
                 if let Some(ref sink) = *guard {
                     sink.append(source);
-                    log::info!("Playing audio: {:?}", chosen.file_name().unwrap_or_default());
+                    log::info!(
+                        "Playing audio: {:?}",
+                        chosen.file_name().unwrap_or_default()
+                    );
                     if await_audio {
                         sink.sleep_until_end();
                     }
@@ -112,5 +115,3 @@ pub const CHIRP_BYTES: &[u8] = include_bytes!("../../assets/sounds/chirp.mp3");
 pub const LOUD_N_CLEAR_BYTES: &[u8] = include_bytes!("../../assets/sounds/loud-n-clear.mp3");
 pub const STANDING_BY_BYTES: &[u8] = include_bytes!("../../assets/sounds/standing-by.mp3");
 pub const INIT_SOUND_BYTES: &[u8] = include_bytes!("../../assets/sounds/init.mp3");
-
-

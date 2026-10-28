@@ -1,8 +1,10 @@
-use std::fs;
-use std::path::{Path, PathBuf};
-use super::briefing_html::{generate_briefing_page_1_html, generate_briefing_page_2_html, inject_comments_into_briefing};
+use super::briefing_html::{
+    generate_briefing_page_1_html, generate_briefing_page_2_html, inject_comments_into_briefing,
+};
 use super::models::BriefingData;
 use super::renderer::render_html_batch_parallel;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 pub struct BriefingRenderResult {
     pub page_1_png: PathBuf,
@@ -67,7 +69,11 @@ fn chrono_or_simple_time() -> String {
         let mut year = 1970;
         let mut d = days;
         loop {
-            let leap = if (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0) { 1 } else { 0 };
+            let leap = if (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0) {
+                1
+            } else {
+                0
+            };
             let days_in_year = 365 + leap;
             if d >= days_in_year {
                 d -= days_in_year;
@@ -76,7 +82,11 @@ fn chrono_or_simple_time() -> String {
                 break;
             }
         }
-        let leap = if (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0) { 1 } else { 0 };
+        let leap = if (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0) {
+            1
+        } else {
+            0
+        };
         let days_in_months = [31, 28 + leap, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
         let mut month = 1;
         for &dim in &days_in_months {
@@ -88,7 +98,10 @@ fn chrono_or_simple_time() -> String {
             }
         }
         let day = d + 1;
-        format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", year, month, day, hours, mins, s)
+        format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+            year, month, day, hours, mins, s
+        )
     } else {
         "now".to_string()
     }

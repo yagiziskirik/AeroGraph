@@ -1,5 +1,25 @@
+# Rust build targets
 /target/
-/assets/work/
-/assets/images/
+*.pdb
+
+# Binaries in project root
+/AeroGraph.exe
+*.exe
+!assets/bin/wkhtmltoimage.exe
+
+# Dynamic runtime render output & intermediate caches
+/assets/images/*.png
+!assets/images/.gitkeep
+/assets/work/*
+!assets/work/.gitkeep
+/assets/briefing/*.html
 *.tmp
 *.log
+aerograph.log
+
+# Local user configuration (dynamically created by AeroGraph at runtime)
+kneeboards.json
+aerograph.toml
+
+# Installer build output
+/installer/output/

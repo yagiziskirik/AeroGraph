@@ -1,9 +1,9 @@
+use image::GenericImageView;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use image::GenericImageView;
-use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 struct MapCacheMeta {
@@ -14,7 +14,12 @@ struct MapCacheMeta {
     height: u32,
 }
 
-pub fn find_theater_base_map(theater_id: &str, base_dir: &Path, data_dir: &Path, map_id: &str) -> Option<PathBuf> {
+pub fn find_theater_base_map(
+    theater_id: &str,
+    base_dir: &Path,
+    data_dir: &Path,
+    map_id: &str,
+) -> Option<PathBuf> {
     let th_lower = theater_id.to_lowercase();
 
     // 1. KTO / Korea Maps in base_dir / "Docs" / "05 Maps"
@@ -42,7 +47,11 @@ pub fn find_theater_base_map(theater_id: &str, base_dir: &Path, data_dir: &Path,
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.is_dir() {
-                    let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase();
+                    let dir_name = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
                     if dir_name.starts_with("add-on") {
                         let is_match = (th_lower.contains("balkan") && dir_name.contains("balkan"))
                             || (th_lower.contains("hellas") && dir_name.contains("hellas"))
@@ -62,12 +71,20 @@ pub fn find_theater_base_map(theater_id: &str, base_dir: &Path, data_dir: &Path,
                                         let mut matches = Vec::new();
                                         for mf in mfiles.flatten() {
                                             let p = mf.path();
-                                            let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                                            let ext = p
+                                                .extension()
+                                                .and_then(|e| e.to_str())
+                                                .unwrap_or("")
+                                                .to_lowercase();
                                             if ext == "png" || ext == "jpg" || ext == "jpeg" {
                                                 matches.push(p);
                                             }
                                         }
-                                        matches.sort_by_key(|p| std::cmp::Reverse(p.metadata().map(|m| m.len()).unwrap_or(0)));
+                                        matches.sort_by_key(|p| {
+                                            std::cmp::Reverse(
+                                                p.metadata().map(|m| m.len()).unwrap_or(0),
+                                            )
+                                        });
                                         if let Some(best) = matches.into_iter().next() {
                                             return Some(best);
                                         }
@@ -100,13 +117,23 @@ pub fn find_theater_base_map(theater_id: &str, base_dir: &Path, data_dir: &Path,
 }
 
 /// Loads the base map into an RGB buffer, using a fast raw uncompressed cache on disk if available.
-fn load_or_cache_theater_map(base_map_path: &Path, work_dir: &Path) -> Result<image::RgbImage, String> {
-    let stem = base_map_path.file_stem().and_then(|s| s.to_str()).unwrap_or("map");
+fn load_or_cache_theater_map(
+    base_map_path: &Path,
+    work_dir: &Path,
+) -> Result<image::RgbImage, String> {
+    let stem = base_map_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("map");
     let cache_raw_path = work_dir.join(format!("cache_{}.raw", stem));
     let cache_meta_path = work_dir.join(format!("cache_{}.meta.json", stem));
 
-    let src_meta = fs::metadata(base_map_path)
-        .map_err(|e| format!("Failed to read source map metadata {:?}: {}", base_map_path, e))?;
+    let src_meta = fs::metadata(base_map_path).map_err(|e| {
+        format!(
+            "Failed to read source map metadata {:?}: {}",
+            base_map_path, e
+        )
+    })?;
     let src_size = src_meta.len();
     let src_modified_secs = src_meta
         .modified()
@@ -125,8 +152,13 @@ fn load_or_cache_theater_map(base_map_path: &Path, work_dir: &Path) -> Result<im
                         let t0 = Instant::now();
                         let mut buf = Vec::with_capacity(expected_bytes);
                         if f.read_to_end(&mut buf).is_ok() && buf.len() == expected_bytes {
-                            log::info!("Loaded theater map from fast disk cache in {:?}", t0.elapsed());
-                            if let Some(img) = image::RgbImage::from_raw(meta.width, meta.height, buf) {
+                            log::info!(
+                                "Loaded theater map from fast disk cache in {:?}",
+                                t0.elapsed()
+                            );
+                            if let Some(img) =
+                                image::RgbImage::from_raw(meta.width, meta.height, buf)
+                            {
                                 return Ok(img);
                             }
                         }
@@ -137,7 +169,10 @@ fn load_or_cache_theater_map(base_map_path: &Path, work_dir: &Path) -> Result<im
     }
 
     // Otherwise, decode source image (once) and write the fast raw cache
-    log::info!("Decoding source theater map {:?} (one-time initialization)...", base_map_path);
+    log::info!(
+        "Decoding source theater map {:?} (one-time initialization)...",
+        base_map_path
+    );
     let t0 = Instant::now();
 
     let mut reader = image::ImageReader::open(base_map_path)
@@ -148,7 +183,8 @@ fn load_or_cache_theater_map(base_map_path: &Path, work_dir: &Path) -> Result<im
     limits.max_image_height = None;
     reader.limits(limits);
 
-    let dyn_img = reader.decode()
+    let dyn_img = reader
+        .decode()
         .map_err(|e| format!("Failed to decode base map {:?}: {}", base_map_path, e))?;
     let (w, h) = dyn_img.dimensions();
     let rgb_img = dyn_img.to_rgb8();
@@ -200,7 +236,8 @@ fn crop_box_to_file(
         let _ = fs::create_dir_all(parent);
     }
 
-    cropped.save(out_path)
+    cropped
+        .save(out_path)
         .map_err(|e| format!("Failed to save cropped map to {:?}: {}", out_path, e))?;
 
     Ok(())
@@ -232,7 +269,10 @@ pub fn crop_theater_map_dual(
 
     // Immediately drop map buffer to keep RAM usage minimal
     drop(map_img);
-    log::info!("Dual map cropping complete and map unloaded from RAM in {:?}", t0.elapsed());
+    log::info!(
+        "Dual map cropping complete and map unloaded from RAM in {:?}",
+        t0.elapsed()
+    );
 
     Ok(())
 }
@@ -245,5 +285,11 @@ pub fn crop_theater_map(
     out_path: &Path,
 ) -> Result<(), String> {
     let parent = out_path.parent().unwrap_or(Path::new("."));
-    crop_theater_map_dual(base_map_path, theater_size_ft, parent, Some((crop_box, out_path)), None)
+    crop_theater_map_dual(
+        base_map_path,
+        theater_size_ft,
+        parent,
+        Some((crop_box, out_path)),
+        None,
+    )
 }

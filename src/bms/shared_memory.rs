@@ -5,9 +5,8 @@ use std::ptr;
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::Memory::{
-    OpenFileMappingW, MapViewOfFile, UnmapViewOfFile, FILE_MAP_READ,
+    MapViewOfFile, OpenFileMappingW, UnmapViewOfFile, FILE_MAP_READ,
 };
-
 
 pub const BMS_MUTEX_NAME: &str = "FALCONBMS-9B416580-DE23-11B2-A386-000C6E135DDE\0";
 pub const PRIMARY_SHARED_MEMORY_NAME: &str = "FalconSharedMemoryArea\0";
@@ -149,7 +148,10 @@ impl Drop for MappedArea {
     fn drop(&mut self) {
         unsafe {
             if !self.view.is_null() {
-                let _ = UnmapViewOfFile(windows::Win32::System::Memory::MEMORY_MAPPED_VIEW_ADDRESS { Value: self.view });
+                let _ =
+                    UnmapViewOfFile(windows::Win32::System::Memory::MEMORY_MAPPED_VIEW_ADDRESS {
+                        Value: self.view,
+                    });
             }
             if !self.handle.is_invalid() {
                 let _ = CloseHandle(self.handle);
@@ -239,7 +241,8 @@ impl BmsSharedMemoryClient {
                     break;
                 }
                 let str_id = ptr::read_unaligned(base_bytes.add(offset) as *const u32);
-                let str_len = ptr::read_unaligned(base_bytes.add(offset + 4) as *const u32) as usize;
+                let str_len =
+                    ptr::read_unaligned(base_bytes.add(offset + 4) as *const u32) as usize;
                 offset += 8;
 
                 if offset + str_len > data_size + 12 {
@@ -248,7 +251,10 @@ impl BmsSharedMemoryClient {
 
                 let slice = std::slice::from_raw_parts(base_bytes.add(offset), str_len);
                 // Null-terminated or raw string
-                let text = String::from_utf8_lossy(slice).trim_matches('\0').trim().to_string();
+                let text = String::from_utf8_lossy(slice)
+                    .trim_matches('\0')
+                    .trim()
+                    .to_string();
                 offset += str_len;
 
                 // Match known string IDs from Falcon BMS Headers:

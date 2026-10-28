@@ -1,0 +1,90 @@
+AeroGraph Licensing, Attribution & Third-Party Asset Policy
+============================================================
+
+1. AeroGraph Core Application & Source Code (MIT License)
+---------------------------------------------------------
+Copyright (c) 2026 Yağız Işkırık (yagiziskirik)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+IMPORTANT LIMITATION ON LICENSE SCOPE:
+The MIT License granted above applies SOLELY and STRICTLY to the original
+Rust source code, custom algorithms, utilities, and original documentation
+authored by Yağız Işkırık. The MIT License DOES NOT extend to, grant commercial
+rights for, or permit the commercial redistribution of any third-party
+community assets, voice files, profiles, or templates described in Section 2.
+
+
+2. Third-Party Community Assets & Strict Non-Commercial Terms
+-------------------------------------------------------------
+AeroGraph bundles and executes community-created simulation assets with immense
+gratitude. All third-party assets remain under the exclusive copyright,
+intellectual property, and distribution terms of their original creators:
+
+* FoxVox Application, Falcon BMS Profile & Audio Recordings:
+  - FoxVox application and the Falcon BMS 4.38 v1.3.1 VCC profile (.fvx)
+    are created and authored by "foxster" (https://foxster.itch.io/foxvox).
+  - Original pilot response audio, ground crew recordings, and sound design
+    were created and performed by "Bogey Dope" (https://www.youtube.com/@BogeyDope)
+    and distributed with permission for non-commercial flight sim use.
+  - Startup procedure contribution by "Tomcattwo".
+  - FoxVox is NOT replaced by AeroGraph; profile editing and authoring belong
+    exclusively to FoxVox.
+
+* EZBoards / EZCharts:
+  - Foundational concept of automated briefing.txt extraction and initial
+    kneeboard layout/checklist designs are created by "Logic"
+    (Falcon BMS Community: https://forum.falcon-bms.com/topic/19901/ezboards-instant-single-click-briefing-to-kneeboards-conversion).
+  - Note: Airfield vector geometry databases, dynamic wind calculation engines,
+    and map cropping pipelines in AeroGraph are original creations by
+    Yağız Işkırık and were not part of original EZBoards.
+
+* STRICT NON-COMMERCIAL RESTRICTION ON THIRD-PARTY ASSETS:
+  - Bundled third-party community assets (including but not limited to .fvx
+    profile files, audio cues/recordings, HTML/CSS checklist templates, and
+    airfield database files) are strictly prohibited from being sold, monetized,
+    paywalled, or incorporated into commercial products or services.
+  - In compliance with Benchmark Sims (BMS) policies and the non-commercial
+    nature of Falcon BMS community modifications, these assets are distributed
+    exclusively for personal, non-commercial simulation use by community pilots.
+  - Sublicensing of third-party assets under the MIT License is explicitly
+    prohibited.
+
+
+3. Community Good-Faith Notice & Author Removal Policy
+------------------------------------------------------
+AeroGraph is developed in good faith by a passionate simulation enthusiast to
+serve the Falcon BMS community.
+
+If any original author or copyright holder (foxster, Bogey Dope, Logic, or
+Benchmark Sims) objects to the inclusion, bundling, or distribution of their
+assets within AeroGraph:
+  1. The author or contributor may request the unbundling or removal of their
+     assets at any time.
+  2. The maintainer will immediately comply and remove the bundled assets from
+     the repository and installer releases.
+  3. AeroGraph will transition to a decoupled mode where users provide their own
+     installed profile or assets from their existing sim installations.
+
+
+4. Third-Party Binaries & Libraries
+-----------------------------------
+* wkhtmltoimage (assets/bin/wkhtmltoimage.exe):
+  - Standalone headless WebKit image rendering utility, licensed under GNU LGPLv3.
+  - Source code available at: https://github.com/wkhtmltopdf/wkhtmltopdf

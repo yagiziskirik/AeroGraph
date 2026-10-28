@@ -91,11 +91,23 @@ pub struct DIDATAFORMAT {
 // DirectInput COM Interfaces vtables
 #[repr(C)]
 pub struct IDirectInput8WVtbl {
-    pub QueryInterface: unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
+    pub QueryInterface:
+        unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
     pub AddRef: unsafe extern "system" fn(*mut c_void) -> u32,
     pub Release: unsafe extern "system" fn(*mut c_void) -> u32,
-    pub CreateDevice: unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void, *mut c_void) -> HRESULT,
-    pub EnumDevices: unsafe extern "system" fn(*mut c_void, u32, LPDIENUMDEVICESCALLBACKW, *mut c_void, u32) -> HRESULT,
+    pub CreateDevice: unsafe extern "system" fn(
+        *mut c_void,
+        *const GUID,
+        *mut *mut c_void,
+        *mut c_void,
+    ) -> HRESULT,
+    pub EnumDevices: unsafe extern "system" fn(
+        *mut c_void,
+        u32,
+        LPDIENUMDEVICESCALLBACKW,
+        *mut c_void,
+        u32,
+    ) -> HRESULT,
 }
 
 #[repr(C)]
@@ -118,15 +130,22 @@ pub struct DIDEVICEOBJECTINSTANCEW {
     pub wReportId: u16,
 }
 
-pub type LPDIENUMDEVICEOBJECTSCALLBACKW = unsafe extern "system" fn(*const DIDEVICEOBJECTINSTANCEW, *mut c_void) -> BOOL;
+pub type LPDIENUMDEVICEOBJECTSCALLBACKW =
+    unsafe extern "system" fn(*const DIDEVICEOBJECTINSTANCEW, *mut c_void) -> BOOL;
 
 #[repr(C)]
 pub struct IDirectInputDevice8WVtbl {
-    pub QueryInterface: unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
+    pub QueryInterface:
+        unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
     pub AddRef: unsafe extern "system" fn(*mut c_void) -> u32,
     pub Release: unsafe extern "system" fn(*mut c_void) -> u32,
     pub GetCapabilities: *const c_void,
-    pub EnumObjects: unsafe extern "system" fn(*mut c_void, LPDIENUMDEVICEOBJECTSCALLBACKW, *mut c_void, u32) -> HRESULT,
+    pub EnumObjects: unsafe extern "system" fn(
+        *mut c_void,
+        LPDIENUMDEVICEOBJECTSCALLBACKW,
+        *mut c_void,
+        u32,
+    ) -> HRESULT,
     pub GetProperty: *const c_void,
     pub SetProperty: *const c_void,
     pub Acquire: unsafe extern "system" fn(*mut c_void) -> HRESULT,
@@ -156,15 +175,21 @@ pub struct IDirectInputDevice8WVtbl {
     pub GetImageInfo: *const c_void,
 }
 
-pub type LPDIENUMDEVICESCALLBACKW = unsafe extern "system" fn(*const DIDEVICEINSTANCEW, *mut c_void) -> BOOL;
-type DirectInput8CreateFn = unsafe extern "system" fn(HINSTANCE, u32, *const GUID, *mut *mut c_void, *mut c_void) -> HRESULT;
+pub type LPDIENUMDEVICESCALLBACKW =
+    unsafe extern "system" fn(*const DIDEVICEINSTANCEW, *mut c_void) -> BOOL;
+type DirectInput8CreateFn = unsafe extern "system" fn(
+    HINSTANCE,
+    u32,
+    *const GUID,
+    *mut *mut c_void,
+    *mut c_void,
+) -> HRESULT;
 
 // DIDATAFORMAT definition for standard joystick (c_dfDIJoystick)
 // DIDFT_AXIS = 0x00000003, DIDFT_BUTTON = 0x0000000C, DIDFT_POV = 0x00000010, DIDFT_ANYINSTANCE = 0x00FFFF00
 const DIDFT_AXIS: u32 = 0x00000003 | 0x00FFFF00;
 const DIDFT_BUTTON: u32 = 0x0000000C | 0x00FFFF00;
 const DIDFT_POV: u32 = 0x00000010 | 0x00FFFF00;
-
 
 // Standard GUIDs for axis data
 // GUID_XAxis: A36D02E0-C9F3-11CF-BFC7-444553540000
@@ -195,17 +220,27 @@ impl DirectInputManager {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let dll_name: Vec<u16> = "dinput8.dll\0".encode_utf16().collect();
         let hmodule = unsafe { LoadLibraryW(windows::core::PCWSTR(dll_name.as_ptr())) }?;
-        let proc = unsafe { GetProcAddress(hmodule, windows::core::PCSTR(b"DirectInput8Create\0".as_ptr())) }
-            .ok_or("Failed to find DirectInput8Create in dinput8.dll")?;
+        let proc = unsafe {
+            GetProcAddress(
+                hmodule,
+                windows::core::PCSTR(b"DirectInput8Create\0".as_ptr()),
+            )
+        }
+        .ok_or("Failed to find DirectInput8Create in dinput8.dll")?;
 
         // Build standard joystick format (DIJOYSTATE2: 164 objects)
         let mut df_objects = Vec::with_capacity(164);
 
         // Axes (8): X, Y, Z, Rx, Ry, Rz, Slider0, Slider1
         let axis_guids = [
-            &GUID_XAXIS, &GUID_YAXIS, &GUID_ZAXIS,
-            &GUID_RXAXIS, &GUID_RYAXIS, &GUID_RZAXIS,
-            &GUID_SLIDER, &GUID_SLIDER,
+            &GUID_XAXIS,
+            &GUID_YAXIS,
+            &GUID_ZAXIS,
+            &GUID_RXAXIS,
+            &GUID_RYAXIS,
+            &GUID_RZAXIS,
+            &GUID_SLIDER,
+            &GUID_SLIDER,
         ];
         for (i, guid) in axis_guids.iter().enumerate() {
             df_objects.push(DIOBJECTDATAFORMAT {
@@ -295,7 +330,9 @@ impl DirectInputManager {
         let vtbl = unsafe { *(self.dinput as *mut *mut IDirectInput8WVtbl) };
         let mut dev_ptr: *mut c_void = ptr::null_mut();
 
-        let hr = unsafe { ((*vtbl).CreateDevice)(self.dinput, &parsed_guid, &mut dev_ptr, ptr::null_mut()) };
+        let hr = unsafe {
+            ((*vtbl).CreateDevice)(self.dinput, &parsed_guid, &mut dev_ptr, ptr::null_mut())
+        };
         if hr != DI_OK || dev_ptr.is_null() {
             return Err(format!("CreateDevice failed for {}: {:?}", guid_str, hr).into());
         }
@@ -305,9 +342,16 @@ impl DirectInputManager {
         unsafe {
             let hr_df = ((*dev_vtbl).SetDataFormat)(dev_ptr, &*self.data_format);
             let hwnd = windows::Win32::UI::WindowsAndMessaging::GetDesktopWindow();
-            let hr_cl = ((*dev_vtbl).SetCooperativeLevel)(dev_ptr, hwnd, DISCL_BACKGROUND | DISCL_NONEXCLUSIVE);
+            let hr_cl = ((*dev_vtbl).SetCooperativeLevel)(
+                dev_ptr,
+                hwnd,
+                DISCL_BACKGROUND | DISCL_NONEXCLUSIVE,
+            );
             let hr_acq = ((*dev_vtbl).Acquire)(dev_ptr);
-            println!("open_device {}: hr_df={:#x}, hr_cl={:#x}, hr_acq={:#x}", clean_guid, hr_df.0, hr_cl.0, hr_acq.0);
+            println!(
+                "open_device {}: hr_df={:#x}, hr_cl={:#x}, hr_acq={:#x}",
+                clean_guid, hr_df.0, hr_cl.0, hr_acq.0
+            );
         }
 
         self.devices.insert(clean_guid.to_uppercase(), dev_ptr);
@@ -338,7 +382,10 @@ impl DirectInputManager {
             return list;
         }
 
-        unsafe extern "system" fn enum_cb(instance: *const DIDEVICEINSTANCEW, context: *mut c_void) -> BOOL {
+        unsafe extern "system" fn enum_cb(
+            instance: *const DIDEVICEINSTANCEW,
+            context: *mut c_void,
+        ) -> BOOL {
             if instance.is_null() || context.is_null() {
                 return BOOL(1);
             }
@@ -348,9 +395,17 @@ impl DirectInputManager {
             let fmt_guid = |g: &GUID| {
                 format!(
                     "{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
-                    g.data1, g.data2, g.data3,
-                    g.data4[0], g.data4[1],
-                    g.data4[2], g.data4[3], g.data4[4], g.data4[5], g.data4[6], g.data4[7]
+                    g.data1,
+                    g.data2,
+                    g.data3,
+                    g.data4[0],
+                    g.data4[1],
+                    g.data4[2],
+                    g.data4[3],
+                    g.data4[4],
+                    g.data4[5],
+                    g.data4[6],
+                    g.data4[7]
                 )
             };
 
@@ -453,9 +508,14 @@ impl DirectInputManager {
         if let Some(&dev_ptr) = self.devices.get(&clean) {
             unsafe {
                 let dev_vtbl = *(dev_ptr as *mut *mut IDirectInputDevice8WVtbl);
-                unsafe extern "system" fn cb(obj: *const DIDEVICEOBJECTINSTANCEW, _: *mut c_void) -> BOOL {
+                unsafe extern "system" fn cb(
+                    obj: *const DIDEVICEOBJECTINSTANCEW,
+                    _: *mut c_void,
+                ) -> BOOL {
                     let o = &*obj;
-                    let name = String::from_utf16_lossy(&o.tszName).trim_matches('\0').to_string();
+                    let name = String::from_utf16_lossy(&o.tszName)
+                        .trim_matches('\0')
+                        .to_string();
                     let is_axis = (o.dwType & 0x03) != 0;
                     if is_axis {
                         println!("    Axis Object: name='{}', type={:#x}, ofs={}, usagePage={:#x}, usage={:#x}, guid={:?}",
@@ -468,7 +528,6 @@ impl DirectInputManager {
         }
     }
 }
-
 
 impl Drop for DirectInputManager {
     fn drop(&mut self) {

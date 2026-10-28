@@ -1,7 +1,7 @@
-use std::fs;
-use std::path::{Path, PathBuf};
 use image::{imageops, RgbaImage};
 use image_dds::{dds_from_image, ImageFormat, Mipmaps, Quality};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 pub struct KneeboardSlotMap;
 
@@ -103,18 +103,30 @@ pub fn restore_original_texture(
 
     let candidates = [
         assets_dir.join("data").join("DDS_Backup").join(filename),
-        bms_dir.join("Docs").join("07 Kneeboard Templates").join("F-16").join("DDS_Backup").join(filename),
+        bms_dir
+            .join("Docs")
+            .join("07 Kneeboard Templates")
+            .join("F-16")
+            .join("DDS_Backup")
+            .join(filename),
     ];
 
     for candidate in &candidates {
         if candidate.exists() {
             fs::copy(candidate, &dest_path)?;
-            log::info!("Restored stock BMS original texture for {}: from {:?}", filename, candidate);
+            log::info!(
+                "Restored stock BMS original texture for {}: from {:?}",
+                filename,
+                candidate
+            );
             return Ok(true);
         }
     }
 
-    log::warn!("Stock original texture for {} not found in DDS_Backup", filename);
+    log::warn!(
+        "Stock original texture for {} not found in DDS_Backup",
+        filename
+    );
     Ok(false)
 }
 
@@ -131,7 +143,12 @@ pub fn merge_texture_pair_to_dds(
     }
 
     let dest_path = texture_dir.join(filename);
-    log::info!("Merging texture pair into {}: Left={} | Right={}", filename, left_img.is_some(), right_img.is_some());
+    log::info!(
+        "Merging texture pair into {}: Left={} | Right={}",
+        filename,
+        left_img.is_some(),
+        right_img.is_some()
+    );
 
     // Prepare 2048x2048 RGBA canvas
     let mut canvas = if dest_path.exists() {
@@ -144,14 +161,22 @@ pub fn merge_texture_pair_to_dds(
                         loaded = Some(img);
                     }
                     Err(e) => {
-                        log::warn!("Could not decode existing DDS {} ({:?}), creating clean canvas", filename, e);
+                        log::warn!(
+                            "Could not decode existing DDS {} ({:?}), creating clean canvas",
+                            filename,
+                            e
+                        );
                     }
                 }
             } else {
-                log::warn!("ddsfile could not parse {}, creating clean canvas", filename);
+                log::warn!(
+                    "ddsfile could not parse {}, creating clean canvas",
+                    filename
+                );
             }
         }
-        loaded.unwrap_or_else(|| RgbaImage::from_pixel(2048, 2048, image::Rgba([250, 250, 248, 255])))
+        loaded
+            .unwrap_or_else(|| RgbaImage::from_pixel(2048, 2048, image::Rgba([250, 250, 248, 255])))
     } else {
         RgbaImage::from_pixel(2048, 2048, image::Rgba([250, 250, 248, 255]))
     };
@@ -183,7 +208,10 @@ pub fn merge_texture_pair_to_dds(
     drop(writer);
 
     fs::rename(&temp_path, &dest_path)?;
-    log::info!("Successfully written batched texture: {}", dest_path.display());
+    log::info!(
+        "Successfully written batched texture: {}",
+        dest_path.display()
+    );
 
     Ok(())
 }

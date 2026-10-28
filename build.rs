@@ -49,7 +49,9 @@ fn main() {
             match status {
                 Ok(s) if s.success() => {
                     println!("cargo:rustc-link-arg={}", res_file.display());
-                    println!("cargo:warning=Successfully compiled and linked app.res into executable!");
+                    println!(
+                        "cargo:warning=Successfully compiled and linked app.res into executable!"
+                    );
                 }
                 other => {
                     println!("cargo:warning=rc.exe execution failed: {:?}", other);

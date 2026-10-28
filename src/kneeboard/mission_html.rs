@@ -1,29 +1,55 @@
-use std::collections::HashMap;
-use std::fs;
-use std::path::{Path, PathBuf};
 use crate::kneeboard::crop::crop_theater_map;
 use crate::kneeboard::models::{BriefingData, Steerpoint, TargetSteerpoint, Threat};
 use crate::kneeboard::renderer::render_html_to_png;
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 const NM_TO_FT: f64 = 6076.12;
 
 pub fn get_sam_range(system_name: &str) -> f64 {
     let low = system_name.to_lowercase();
     let ranges: [(&str, f64); 25] = [
-        ("sa-2", 18.0), ("sa-3", 10.0), ("sa-4", 24.0), ("sa-5", 135.0), ("sa-6", 13.0),
-        ("sa-8", 6.5), ("sa-10", 40.0), ("sa-11", 17.0), ("sa-12", 54.0), ("sa-13", 2.7),
-        ("sa-15", 6.5), ("sa-17", 17.0), ("sa-19", 4.5), ("sa-20", 65.0), ("sa-21", 100.0),
-        ("sa-22", 9.0), ("hq-2", 18.0), ("hq-9", 54.0), ("hq-16", 22.0), ("hq-7", 6.5),
-        ("tunguska", 4.5), ("pantsir", 9.0), ("tor", 6.5), ("buk", 17.0), ("kub", 13.0),
+        ("sa-2", 18.0),
+        ("sa-3", 10.0),
+        ("sa-4", 24.0),
+        ("sa-5", 135.0),
+        ("sa-6", 13.0),
+        ("sa-8", 6.5),
+        ("sa-10", 40.0),
+        ("sa-11", 17.0),
+        ("sa-12", 54.0),
+        ("sa-13", 2.7),
+        ("sa-15", 6.5),
+        ("sa-17", 17.0),
+        ("sa-19", 4.5),
+        ("sa-20", 65.0),
+        ("sa-21", 100.0),
+        ("sa-22", 9.0),
+        ("hq-2", 18.0),
+        ("hq-9", 54.0),
+        ("hq-16", 22.0),
+        ("hq-7", 6.5),
+        ("tunguska", 4.5),
+        ("pantsir", 9.0),
+        ("tor", 6.5),
+        ("buk", 17.0),
+        ("kub", 13.0),
     ];
     for (name, r) in ranges {
         if low.contains(name) {
             return r;
         }
     }
-    if low.contains("ks-19") { return 3.5; }
-    if low.contains("zsu-23") { return 1.5; }
-    if low.contains("2s6") { return 4.5; }
+    if low.contains("ks-19") {
+        return 3.5;
+    }
+    if low.contains("zsu-23") {
+        return 1.5;
+    }
+    if low.contains("2s6") {
+        return 4.5;
+    }
     8.0
 }
 
@@ -60,8 +86,18 @@ pub fn resolve_threat_coords(threats: &[Threat], geo_path: &Path) -> Vec<Threat>
 
     let mut place_map = HashMap::new();
     for p in places {
-        if let (Some(n), Some(x), Some(y)) = (p.get("n").and_then(|s| s.as_str()), p.get("x").and_then(|v| v.as_f64()), p.get("y").and_then(|v| v.as_f64())) {
-            let name_clean = n.to_lowercase().replace("village", "").replace("town", "").replace("city", "").trim().to_string();
+        if let (Some(n), Some(x), Some(y)) = (
+            p.get("n").and_then(|s| s.as_str()),
+            p.get("x").and_then(|v| v.as_f64()),
+            p.get("y").and_then(|v| v.as_f64()),
+        ) {
+            let name_clean = n
+                .to_lowercase()
+                .replace("village", "")
+                .replace("town", "")
+                .replace("city", "")
+                .trim()
+                .to_string();
             place_map.insert(name_clean, (x, y, n.to_string()));
             place_map.insert(n.to_lowercase().trim().to_string(), (x, y, n.to_string()));
         }
@@ -69,8 +105,16 @@ pub fn resolve_threat_coords(threats: &[Threat], geo_path: &Path) -> Vec<Threat>
 
     let mut resolved = Vec::new();
     for t in threats {
-        let p_name = t.place.to_lowercase().replace("village", "").replace("town", "").replace("city", "").trim().to_string();
-        let target_p = place_map.get(&p_name)
+        let p_name = t
+            .place
+            .to_lowercase()
+            .replace("village", "")
+            .replace("town", "")
+            .replace("city", "")
+            .trim()
+            .to_string();
+        let target_p = place_map
+            .get(&p_name)
             .or_else(|| place_map.get(t.place.to_lowercase().trim()))
             .or_else(|| {
                 for (k, v) in &place_map {
@@ -151,11 +195,21 @@ pub fn compute_mission_route_coords(
         valid: bool,
     }
 
-    let mut coords: Vec<CoordPt> = (0..n).map(|_| CoordPt { x: 0.0, y: 0.0, valid: false }).collect();
+    let mut coords: Vec<CoordPt> = (0..n)
+        .map(|_| CoordPt {
+            x: 0.0,
+            y: 0.0,
+            valid: false,
+        })
+        .collect();
 
     // STPT 1 at departure airbase
     if let Some(dep) = dep_coords {
-        coords[0] = CoordPt { x: dep.0, y: dep.1, valid: true };
+        coords[0] = CoordPt {
+            x: dep.0,
+            y: dep.1,
+            valid: true,
+        };
     }
 
     // Find Land steerpoint to anchor to arrival airbase
@@ -204,7 +258,11 @@ pub fn compute_mission_route_coords(
         // Backward pass from Landing steerpoint
         if let Some(arr) = arr_coords {
             if land_idx >= 0 && !coords[land_idx as usize].valid {
-                coords[land_idx as usize] = CoordPt { x: arr.0, y: arr.1, valid: true };
+                coords[land_idx as usize] = CoordPt {
+                    x: arr.0,
+                    y: arr.1,
+                    valid: true,
+                };
             }
         }
 
@@ -233,10 +291,21 @@ pub fn compute_mission_route_coords(
         s.x = c.x;
         s.y = c.y;
         let desc_l = s.desc.to_lowercase();
-        let is_tgt = desc_l.contains("tgt") || desc_l.contains("target") || desc_l.contains("strike") || desc_l.contains("attack");
+        let is_tgt = desc_l.contains("tgt")
+            || desc_l.contains("target")
+            || desc_l.contains("strike")
+            || desc_l.contains("attack");
         let is_ip = desc_l.contains("ip") || desc_l.contains("initial point");
         let is_refuel = desc_l.contains("refuel") || desc_l.contains("tanker");
-        s.action_code = if is_tgt { 20 } else if is_ip { 13 } else if is_refuel { 2 } else { 0 };
+        s.action_code = if is_tgt {
+            20
+        } else if is_ip {
+            13
+        } else if is_refuel {
+            2
+        } else {
+            0
+        };
         merged.push(s);
     }
 
@@ -275,13 +344,28 @@ fn solve_waypoint_tag_placements(
 ) -> HashMap<u32, [f64; 4]> {
     let mut sorted_wps: Vec<&WaypointPlacementInput> = waypoints.iter().collect();
     sorted_wps.sort_by_key(|w| {
-        let prio = if w.is_tgt { 0 } else if w.is_ip { 1 } else { 2 };
+        let prio = if w.is_tgt {
+            0
+        } else if w.is_ip {
+            1
+        } else {
+            2
+        };
         (prio, w.num)
     });
 
-    let all_markers: Vec<[f64; 5]> = waypoints.iter().map(|w| {
-        [w.sx - 22.0, w.sy - 22.0, w.sx + 22.0, w.sy + 22.0, w.num as f64]
-    }).collect();
+    let all_markers: Vec<[f64; 5]> = waypoints
+        .iter()
+        .map(|w| {
+            [
+                w.sx - 22.0,
+                w.sy - 22.0,
+                w.sx + 22.0,
+                w.sy + 22.0,
+                w.num as f64,
+            ]
+        })
+        .collect();
 
     let mut placed_tags: Vec<(u32, [f64; 4])> = Vec::new();
     let mut results: HashMap<u32, [f64; 4]> = HashMap::new();
@@ -295,14 +379,14 @@ fn solve_waypoint_tag_placements(
         let gap = 8.0;
 
         let candidates: [(f64, f64, f64); 14] = [
-            (sx + r_val + gap, sy - th / 2.0, 0.0),                     // 0: Right / East
-            (sx + r_val + gap, sy - th - 4.0, 2.0),                    // 1: Top-Right / North-East
-            (sx + r_val + gap, sy + 4.0, 3.0),                         // 2: Bottom-Right / South-East
-            (sx - tw / 2.0, sy - r_val - gap - th, 5.0),               // 3: Top / North
-            (sx - tw / 2.0, sy + r_val + gap, 6.0),                    // 4: Bottom / South
-            (sx - tw - r_val - gap, sy - th / 2.0, 8.0),               // 5: Left / West
-            (sx - tw - r_val - gap, sy - th - 4.0, 9.0),               // 6: Top-Left / North-West
-            (sx - tw - r_val - gap, sy + 4.0, 10.0),                   // 7: Bottom-Left / South-West
+            (sx + r_val + gap, sy - th / 2.0, 0.0),      // 0: Right / East
+            (sx + r_val + gap, sy - th - 4.0, 2.0),      // 1: Top-Right / North-East
+            (sx + r_val + gap, sy + 4.0, 3.0),           // 2: Bottom-Right / South-East
+            (sx - tw / 2.0, sy - r_val - gap - th, 5.0), // 3: Top / North
+            (sx - tw / 2.0, sy + r_val + gap, 6.0),      // 4: Bottom / South
+            (sx - tw - r_val - gap, sy - th / 2.0, 8.0), // 5: Left / West
+            (sx - tw - r_val - gap, sy - th - 4.0, 9.0), // 6: Top-Left / North-West
+            (sx - tw - r_val - gap, sy + 4.0, 10.0),     // 7: Bottom-Left / South-West
             (sx + r_val + gap + 28.0, sy - th / 2.0, 15.0),
             (sx - tw - r_val - gap - 28.0, sy - th / 2.0, 18.0),
             (sx - tw / 2.0, sy - r_val - gap - th - 28.0, 20.0),
@@ -404,7 +488,10 @@ pub fn compute_route_crop_box(
     resolved_threats: &[Threat],
     theater_size_ft: f64,
 ) -> Option<(f64, f64, f64, f64)> {
-    let valid_pts: Vec<&Steerpoint> = merged_stpts.iter().filter(|p| p.x != 0.0 || p.y != 0.0).collect();
+    let valid_pts: Vec<&Steerpoint> = merged_stpts
+        .iter()
+        .filter(|p| p.x != 0.0 || p.y != 0.0)
+        .collect();
     if valid_pts.is_empty() {
         return None;
     }
@@ -443,12 +530,17 @@ pub fn compute_target_crop_box(
     merged_stpts: &[Steerpoint],
     theater_size_ft: f64,
 ) -> Option<(f64, f64, f64, f64)> {
-    let valid_pts: Vec<&Steerpoint> = merged_stpts.iter().filter(|p| p.x != 0.0 || p.y != 0.0).collect();
+    let valid_pts: Vec<&Steerpoint> = merged_stpts
+        .iter()
+        .filter(|p| p.x != 0.0 || p.y != 0.0)
+        .collect();
     if valid_pts.is_empty() {
         return None;
     }
 
-    let tgt_pt = valid_pts.iter().find(|p| p.action_code == 20 || p.desc.to_uppercase().contains("TGT"))
+    let tgt_pt = valid_pts
+        .iter()
+        .find(|p| p.action_code == 20 || p.desc.to_uppercase().contains("TGT"))
         .copied()
         .unwrap_or(valid_pts[valid_pts.len() / 2]);
 
@@ -476,7 +568,14 @@ pub fn generate_mission_overview_page(
     out_png: &Path,
     wkhtmltoimage_path: &Path,
 ) -> Result<(), String> {
-    let html_file = generate_mission_overview_html(b_data, merged_stpts, resolved_threats, theater_size_ft, base_map_path, work_dir)?;
+    let html_file = generate_mission_overview_html(
+        b_data,
+        merged_stpts,
+        resolved_threats,
+        theater_size_ft,
+        base_map_path,
+        work_dir,
+    )?;
     render_html_to_png(wkhtmltoimage_path, &html_file, out_png)
 }
 
@@ -488,12 +587,19 @@ pub fn generate_mission_overview_html(
     base_map_path: &Path,
     work_dir: &Path,
 ) -> Result<PathBuf, String> {
-    let (crop_min_x, crop_max_x, crop_min_y, crop_max_y) = compute_route_crop_box(merged_stpts, resolved_threats, theater_size_ft)
-        .ok_or_else(|| "No valid coordinates in steerpoints for mission overview".to_string())?;
+    let (crop_min_x, crop_max_x, crop_min_y, crop_max_y) =
+        compute_route_crop_box(merged_stpts, resolved_threats, theater_size_ft).ok_or_else(
+            || "No valid coordinates in steerpoints for mission overview".to_string(),
+        )?;
 
     let crop_jpg = work_dir.join("crop_route_overview.jpg");
     if !crop_jpg.exists() {
-        crop_theater_map(base_map_path, theater_size_ft, (crop_min_x, crop_max_x, crop_min_y, crop_max_y), &crop_jpg)?;
+        crop_theater_map(
+            base_map_path,
+            theater_size_ft,
+            (crop_min_x, crop_max_x, crop_min_y, crop_max_y),
+            &crop_jpg,
+        )?;
     }
 
     let w_svg = 992.0f64;
@@ -505,7 +611,10 @@ pub fn generate_mission_overview_html(
         (sx, sy)
     };
 
-    let valid_pts: Vec<&Steerpoint> = merged_stpts.iter().filter(|p| p.x != 0.0 || p.y != 0.0).collect();
+    let valid_pts: Vec<&Steerpoint> = merged_stpts
+        .iter()
+        .filter(|p| p.x != 0.0 || p.y != 0.0)
+        .collect();
 
     struct SvgPt<'a> {
         num: u32,
@@ -531,21 +640,33 @@ pub fn generate_mission_overview_html(
         });
     }
 
-    let polyline_d = svg_pts.iter().map(|p| format!("{:.1},{:.1}", p.sx, p.sy)).collect::<Vec<String>>().join(" ");
+    let polyline_d = svg_pts
+        .iter()
+        .map(|p| format!("{:.1},{:.1}", p.sx, p.sy))
+        .collect::<Vec<String>>()
+        .join(" ");
 
     let crop_nm_width = (crop_max_y - crop_min_y) / NM_TO_FT;
-    let scale_nm = if crop_nm_width > 60.0 { 20 } else if crop_nm_width > 30.0 { 10 } else { 5 };
+    let scale_nm = if crop_nm_width > 60.0 {
+        20
+    } else if crop_nm_width > 30.0 {
+        10
+    } else {
+        5
+    };
     let scale_px = (scale_nm as f64 / crop_nm_width) * w_svg;
 
     // Reserved UI zones on Route Overview
     let reserved_overview = [
-        [w_svg - 110.0, 15.0, w_svg - 10.0, 120.0],                          // North arrow (top-right)
-        [20.0, h_svg - 85.0, 35.0 + scale_px + 45.0, h_svg - 10.0],          // Scale bar (bottom-left)
+        [w_svg - 110.0, 15.0, w_svg - 10.0, 120.0], // North arrow (top-right)
+        [20.0, h_svg - 85.0, 35.0 + scale_px + 45.0, h_svg - 10.0], // Scale bar (bottom-left)
     ];
 
     let mut wp_placement_inputs = Vec::new();
     for p in &svg_pts {
-        let is_tgt = p.action_code == 20 || p.desc.to_uppercase().contains("TGT") || p.desc.to_uppercase().contains("TARGET");
+        let is_tgt = p.action_code == 20
+            || p.desc.to_uppercase().contains("TGT")
+            || p.desc.to_uppercase().contains("TARGET");
         let is_ip = p.action_code == 13 || p.desc.to_uppercase().contains("IP");
         let tw = if is_tgt { 210.0 } else { 190.0 };
         let th = if is_tgt { 56.0 } else { 50.0 };
@@ -560,7 +681,8 @@ pub fn generate_mission_overview_html(
         });
     }
 
-    let tag_boxes = solve_waypoint_tag_placements(&wp_placement_inputs, w_svg, h_svg, &reserved_overview);
+    let tag_boxes =
+        solve_waypoint_tag_placements(&wp_placement_inputs, w_svg, h_svg, &reserved_overview);
 
     let mut svg_elements = Vec::new();
 
@@ -591,7 +713,9 @@ pub fn generate_mission_overview_html(
 
     // Waypoints
     for p in &svg_pts {
-        let is_tgt = p.action_code == 20 || p.desc.to_uppercase().contains("TGT") || p.desc.to_uppercase().contains("TARGET");
+        let is_tgt = p.action_code == 20
+            || p.desc.to_uppercase().contains("TGT")
+            || p.desc.to_uppercase().contains("TARGET");
         let is_ip = p.action_code == 13 || p.desc.to_uppercase().contains("IP");
         let is_refuel = p.action_code == 2 || p.desc.to_uppercase().contains("REFUEL");
 
@@ -626,9 +750,19 @@ pub fn generate_mission_overview_html(
             ));
         }
 
-        let lbl_col = if is_tgt { "#DC2626" } else if is_ip { "#D97706" } else { "#0369A1" };
+        let lbl_col = if is_tgt {
+            "#DC2626"
+        } else if is_ip {
+            "#D97706"
+        } else {
+            "#0369A1"
+        };
         let border_col = lbl_col;
-        let d_sub = if p.desc.len() > 10 { &p.desc[..10] } else { p.desc };
+        let d_sub = if p.desc.len() > 10 {
+            &p.desc[..10]
+        } else {
+            p.desc
+        };
         let title_text = if is_tgt {
             format!("TGT {}: {}", p.num, d_sub)
         } else if is_ip {
@@ -656,7 +790,13 @@ pub fn generate_mission_overview_html(
         let tcx = (bx + br) / 2.0;
         let tcy = (by + bb) / 2.0;
         let dist_to_center = (tcx - p.sx).hypot(tcy - p.sy);
-        let r_marker = if is_tgt { 26.0 } else if is_ip { 20.0 } else { 18.0 };
+        let r_marker = if is_tgt {
+            26.0
+        } else if is_ip {
+            20.0
+        } else {
+            18.0
+        };
         if dist_to_center > (r_marker + 16.0) {
             let p1x = p.sx + ((tcx - p.sx) / dist_to_center) * r_marker;
             let p1y = p.sy + ((tcy - p.sy) / dist_to_center) * r_marker;
@@ -706,9 +846,17 @@ pub fn generate_mission_overview_html(
     } else {
         "NONE DETECTED".to_string()
     };
-    let threat_cls = if !resolved_threats.is_empty() { "threat-alert" } else { "threat-clear" };
+    let threat_cls = if !resolved_threats.is_empty() {
+        "threat-alert"
+    } else {
+        "threat-clear"
+    };
 
-    let crop_path_str = crop_jpg.display().to_string().replace(r"\\?\", "").replace('\\', "/");
+    let crop_path_str = crop_jpg
+        .display()
+        .to_string()
+        .replace(r"\\?\", "")
+        .replace('\\', "/");
     let crop_jpg_uri = format!("file:///{}", crop_path_str.trim_start_matches('/'));
 
     let html = format!(
@@ -848,14 +996,18 @@ pub fn generate_mission_overview_html(
   </div>
 </body>
 </html>"#,
-        b_data.callsign, b_data.pkg_num, b_data.aircraft, b_data.task,
+        b_data.callsign,
+        b_data.pkg_num,
+        b_data.aircraft,
+        b_data.task,
         b_data.to_time,
         b_data.tgt_time,
         svg_elements.join("\n")
     );
 
     let html_file = work_dir.join("mission_route.html");
-    fs::write(&html_file, html).map_err(|e| format!("Failed to write mission_route.html: {}", e))?;
+    fs::write(&html_file, html)
+        .map_err(|e| format!("Failed to write mission_route.html: {}", e))?;
 
     Ok(html_file)
 }
@@ -870,7 +1022,14 @@ pub fn generate_tactical_target_page(
     out_png: &Path,
     wkhtmltoimage_path: &Path,
 ) -> Result<(), String> {
-    let html_file = generate_tactical_target_html(b_data, merged_stpts, resolved_threats, theater_size_ft, base_map_path, work_dir)?;
+    let html_file = generate_tactical_target_html(
+        b_data,
+        merged_stpts,
+        resolved_threats,
+        theater_size_ft,
+        base_map_path,
+        work_dir,
+    )?;
     render_html_to_png(wkhtmltoimage_path, &html_file, out_png)
 }
 
@@ -882,16 +1041,25 @@ pub fn generate_tactical_target_html(
     base_map_path: &Path,
     work_dir: &Path,
 ) -> Result<PathBuf, String> {
-    let (crop_min_x, crop_max_x, crop_min_y, crop_max_y) = compute_target_crop_box(merged_stpts, theater_size_ft)
-        .ok_or_else(|| "No valid coordinates in steerpoints for tactical target".to_string())?;
+    let (crop_min_x, crop_max_x, crop_min_y, crop_max_y) =
+        compute_target_crop_box(merged_stpts, theater_size_ft)
+            .ok_or_else(|| "No valid coordinates in steerpoints for tactical target".to_string())?;
 
-    let valid_pts: Vec<&Steerpoint> = merged_stpts.iter().filter(|p| p.x != 0.0 || p.y != 0.0).collect();
-    let tgt_pt = valid_pts.iter().find(|p| p.action_code == 20 || p.desc.to_uppercase().contains("TGT"))
+    let valid_pts: Vec<&Steerpoint> = merged_stpts
+        .iter()
+        .filter(|p| p.x != 0.0 || p.y != 0.0)
+        .collect();
+    let tgt_pt = valid_pts
+        .iter()
+        .find(|p| p.action_code == 20 || p.desc.to_uppercase().contains("TGT"))
         .copied()
         .unwrap_or(valid_pts[valid_pts.len() / 2]);
 
     let tgt_num = tgt_pt.num;
-    let ip_pt = valid_pts.iter().find(|p| p.num == tgt_num.saturating_sub(1)).copied();
+    let ip_pt = valid_pts
+        .iter()
+        .find(|p| p.num == tgt_num.saturating_sub(1))
+        .copied();
     let egress_pt = valid_pts.iter().find(|p| p.num == tgt_num + 1).copied();
 
     let tgt_x = tgt_pt.x;
@@ -899,7 +1067,12 @@ pub fn generate_tactical_target_html(
 
     let crop_jpg = work_dir.join("crop_target_zoom.jpg");
     if !crop_jpg.exists() {
-        crop_theater_map(base_map_path, theater_size_ft, (crop_min_x, crop_max_x, crop_min_y, crop_max_y), &crop_jpg)?;
+        crop_theater_map(
+            base_map_path,
+            theater_size_ft,
+            (crop_min_x, crop_max_x, crop_min_y, crop_max_y),
+            &crop_jpg,
+        )?;
     }
 
     let w_svg = 992.0f64;
@@ -935,8 +1108,10 @@ pub fn generate_tactical_target_html(
     // Local threats
     for t in resolved_threats {
         let margin_threat = 15.0 * NM_TO_FT;
-        if t.x >= crop_min_x - margin_threat && t.x <= crop_max_x + margin_threat
-            && t.y >= crop_min_y - margin_threat && t.y <= crop_max_y + margin_threat
+        if t.x >= crop_min_x - margin_threat
+            && t.x <= crop_max_x + margin_threat
+            && t.y >= crop_min_y - margin_threat
+            && t.y <= crop_max_y + margin_threat
         {
             let (thx, thy) = to_svg(t.x, t.y);
             let r_px = ((t.range_nm * NM_TO_FT) / (crop_max_x - crop_min_x)) * h_svg;
@@ -958,10 +1133,10 @@ pub fn generate_tactical_target_html(
 
     // Reserved UI zones on Tactical Target Map
     let mut reserved_target = vec![
-        [20.0, 25.0, 35.0 + scale_5nm_px + 35.0, 115.0],    // Scale bar (top-left)
-        [w_svg - 110.0, 15.0, w_svg - 10.0, 120.0],          // North arrow (top-right)
-        [12.0, h_svg - 250.0, 480.0, h_svg - 10.0],          // Bottom-left corner card
-        [484.0, h_svg - 250.0, w_svg - 12.0, h_svg - 10.0],  // Bottom-right corner card
+        [20.0, 25.0, 35.0 + scale_5nm_px + 35.0, 115.0], // Scale bar (top-left)
+        [w_svg - 110.0, 15.0, w_svg - 10.0, 120.0],      // North arrow (top-right)
+        [12.0, h_svg - 250.0, 480.0, h_svg - 10.0],      // Bottom-left corner card
+        [484.0, h_svg - 250.0, w_svg - 12.0, h_svg - 10.0], // Bottom-right corner card
     ];
 
     let mut raw_ip_x = 0.0f64;
@@ -971,9 +1146,12 @@ pub fn generate_tactical_target_html(
         let (ix, iy) = to_svg(ip.x, ip.y);
         raw_ip_x = ix;
         raw_ip_y = iy;
-        is_ip_visible = (50.0..=w_svg - 50.0).contains(&raw_ip_x) && (110.0..=h_svg - 260.0).contains(&raw_ip_y);
+        is_ip_visible = (50.0..=w_svg - 50.0).contains(&raw_ip_x)
+            && (110.0..=h_svg - 260.0).contains(&raw_ip_y);
         if !is_ip_visible {
-            let (edge_x, edge_y) = get_edge_point(tx, ty, raw_ip_x, raw_ip_y, 230.0, 44.0, 16.0, 115.0, 265.0, w_svg, h_svg);
+            let (edge_x, edge_y) = get_edge_point(
+                tx, ty, raw_ip_x, raw_ip_y, 230.0, 44.0, 16.0, 115.0, 265.0, w_svg, h_svg,
+            );
             reserved_target.push([edge_x - 120.0, edge_y - 25.0, edge_x + 120.0, edge_y + 25.0]);
         }
     }
@@ -985,9 +1163,12 @@ pub fn generate_tactical_target_html(
         let (ex, ey) = to_svg(eg.x, eg.y);
         raw_eg_x = ex;
         raw_eg_y = ey;
-        is_eg_visible = (50.0..=w_svg - 50.0).contains(&raw_eg_x) && (110.0..=h_svg - 260.0).contains(&raw_eg_y);
+        is_eg_visible = (50.0..=w_svg - 50.0).contains(&raw_eg_x)
+            && (110.0..=h_svg - 260.0).contains(&raw_eg_y);
         if !is_eg_visible {
-            let (edge_x, edge_y) = get_edge_point(tx, ty, raw_eg_x, raw_eg_y, 220.0, 44.0, 16.0, 115.0, 265.0, w_svg, h_svg);
+            let (edge_x, edge_y) = get_edge_point(
+                tx, ty, raw_eg_x, raw_eg_y, 220.0, 44.0, 16.0, 115.0, 265.0, w_svg, h_svg,
+            );
             reserved_target.push([edge_x - 115.0, edge_y - 25.0, edge_x + 115.0, edge_y + 25.0]);
         }
     }
@@ -1038,7 +1219,12 @@ pub fn generate_tactical_target_html(
         ));
 
         if is_ip_visible {
-            let def_box = [raw_ip_x + 24.0, raw_ip_y - 16.0, raw_ip_x + 214.0, raw_ip_y + 34.0];
+            let def_box = [
+                raw_ip_x + 24.0,
+                raw_ip_y - 16.0,
+                raw_ip_x + 214.0,
+                raw_ip_y + 34.0,
+            ];
             let ip_box = tgt_tag_boxes.get(&ip.num).unwrap_or(&def_box);
             let ibx = ip_box[0];
             let iby = ip_box[1];
@@ -1058,7 +1244,11 @@ pub fn generate_tactical_target_html(
                     r#"<line x1='{p1x:.1}' y1='{p1y:.1}' x2='{p2x:.1}' y2='{p2y:.1}' stroke='#D97706' stroke-width='2.5' stroke-dasharray='4,3' opacity='0.85' />"#
                 ));
             }
-            let d_sub = if ip.desc.len() > 10 { &ip.desc[..10] } else { &ip.desc };
+            let d_sub = if ip.desc.len() > 10 {
+                &ip.desc[..10]
+            } else {
+                &ip.desc
+            };
             svg_elements.push(format!(
                 r#"<rect x='{:.1}' y='{:.1}' width='36' height='36' fill='#D97706' stroke='#FFFFFF' stroke-width='3.5' />
                 <text x='{raw_ip_x:.1}' y='{:.1}' font-size='19' font-family='monospace' font-weight='900' fill='#FFFFFF' text-anchor='middle'>IP</text>
@@ -1073,7 +1263,9 @@ pub fn generate_tactical_target_html(
                 ip.time, ip.alt
             ));
         } else {
-            let (edge_x, edge_y) = get_edge_point(tx, ty, raw_ip_x, raw_ip_y, 230.0, 44.0, 16.0, 115.0, 265.0, w_svg, h_svg);
+            let (edge_x, edge_y) = get_edge_point(
+                tx, ty, raw_ip_x, raw_ip_y, 230.0, 44.0, 16.0, 115.0, 265.0, w_svg, h_svg,
+            );
             svg_elements.push(format!(
                 r#"<!-- Ingress Inbound Edge Indicator -->
                 <g transform='translate({edge_x:.1}, {edge_y:.1})'>
@@ -1093,7 +1285,12 @@ pub fn generate_tactical_target_html(
         ));
 
         if is_eg_visible {
-            let def_box = [raw_eg_x + 24.0, raw_eg_y - 16.0, raw_eg_x + 214.0, raw_eg_y + 34.0];
+            let def_box = [
+                raw_eg_x + 24.0,
+                raw_eg_y - 16.0,
+                raw_eg_x + 214.0,
+                raw_eg_y + 34.0,
+            ];
             let eg_box = tgt_tag_boxes.get(&eg.num).unwrap_or(&def_box);
             let ebx = eg_box[0];
             let eby = eg_box[1];
@@ -1126,7 +1323,9 @@ pub fn generate_tactical_target_html(
                 eg.time, eg.alt
             ));
         } else {
-            let (edge_x, edge_y) = get_edge_point(tx, ty, raw_eg_x, raw_eg_y, 220.0, 44.0, 16.0, 115.0, 265.0, w_svg, h_svg);
+            let (edge_x, edge_y) = get_edge_point(
+                tx, ty, raw_eg_x, raw_eg_y, 220.0, 44.0, 16.0, 115.0, 265.0, w_svg, h_svg,
+            );
             svg_elements.push(format!(
                 r#"<!-- Egress Outbound Edge Indicator -->
                 <g transform='translate({edge_x:.1}, {edge_y:.1})'>
@@ -1162,7 +1361,11 @@ pub fn generate_tactical_target_html(
         ));
     }
 
-    let tgt_desc_sub = if tgt_pt.desc.len() > 11 { &tgt_pt.desc[..11] } else { &tgt_pt.desc };
+    let tgt_desc_sub = if tgt_pt.desc.len() > 11 {
+        &tgt_pt.desc[..11]
+    } else {
+        &tgt_pt.desc
+    };
 
     svg_elements.push(format!(
         r#"<!-- Target Marker Reticle -->
@@ -1218,13 +1421,37 @@ pub fn generate_tactical_target_html(
     } else {
         "NONE DETECTED".to_string()
     };
-    let threat_cls = if !resolved_threats.is_empty() { "threat-alert" } else { "threat-clear" };
+    let threat_cls = if !resolved_threats.is_empty() {
+        "threat-alert"
+    } else {
+        "threat-clear"
+    };
 
-    let crop_path_str = crop_jpg.display().to_string().replace(r"\\?\", "").replace('\\', "/");
+    let crop_path_str = crop_jpg
+        .display()
+        .to_string()
+        .replace(r"\\?\", "")
+        .replace('\\', "/");
     let crop_jpg_uri = format!("file:///{}", crop_path_str.trim_start_matches('/'));
 
-    let ip_desc_sub = ip_pt.map(|ip| if ip.desc.len() > 10 { &ip.desc[..10] } else { &ip.desc }).unwrap_or("--");
-    let eg_desc_sub = egress_pt.map(|eg| if eg.desc.len() > 10 { &eg.desc[..10] } else { &eg.desc }).unwrap_or("EGRESS");
+    let ip_desc_sub = ip_pt
+        .map(|ip| {
+            if ip.desc.len() > 10 {
+                &ip.desc[..10]
+            } else {
+                &ip.desc
+            }
+        })
+        .unwrap_or("--");
+    let eg_desc_sub = egress_pt
+        .map(|eg| {
+            if eg.desc.len() > 10 {
+                &eg.desc[..10]
+            } else {
+                &eg.desc
+            }
+        })
+        .unwrap_or("EGRESS");
     let arr_name_str = b_data.arr_name.as_deref().unwrap_or("Homeplate");
 
     let html = format!(
@@ -1426,23 +1653,34 @@ pub fn generate_tactical_target_html(
   </div>
 </body>
 </html>"#,
-        tgt_pt.desc, tgt_pt.time, tgt_pt.alt,
+        tgt_pt.desc,
+        tgt_pt.time,
+        tgt_pt.alt,
         b_data.to_time,
         b_data.tgt_time,
         svg_elements.join("\n"),
-        ip_pt.map(|ip| ip.num.to_string()).unwrap_or_else(|| "--".to_string()),
+        ip_pt
+            .map(|ip| ip.num.to_string())
+            .unwrap_or_else(|| "--".to_string()),
         ip_desc_sub,
         tgt_pt.head,
         tgt_pt.dist,
-        if !tgt_pt.cas.is_empty() && tgt_pt.cas != "--" { &tgt_pt.cas } else { "390" },
+        if !tgt_pt.cas.is_empty() && tgt_pt.cas != "--" {
+            &tgt_pt.cas
+        } else {
+            "390"
+        },
         tgt_pt.z,
-        egress_pt.map(|eg| eg.num.to_string()).unwrap_or_else(|| "--".to_string()),
+        egress_pt
+            .map(|eg| eg.num.to_string())
+            .unwrap_or_else(|| "--".to_string()),
         eg_desc_sub,
         egress_pt.map(|eg| eg.head.as_str()).unwrap_or("--")
     );
 
     let html_file = work_dir.join("mission_target.html");
-    fs::write(&html_file, html).map_err(|e| format!("Failed to write mission_target.html: {}", e))?;
+    fs::write(&html_file, html)
+        .map_err(|e| format!("Failed to write mission_target.html: {}", e))?;
 
     Ok(html_file)
 }

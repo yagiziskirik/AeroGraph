@@ -1,10 +1,10 @@
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
+use flate2::read::GzDecoder;
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::{Read, Cursor};
+use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD as BASE64;
-use flate2::read::GzDecoder;
 
 use crate::fvx::models::FvxProfile;
 
@@ -35,7 +35,10 @@ impl LoadedProfile {
 
         let profile: FvxProfile = serde_json::from_str(&json_str)?;
         let profile_path = path_ref.to_path_buf();
-        let base_dir = profile_path.parent().unwrap_or_else(|| Path::new(".")).to_path_buf();
+        let base_dir = profile_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf();
 
         Ok(Self {
             profile,
@@ -89,7 +92,7 @@ impl LoadedProfile {
     /// Dynamically extracts all unique axis variable names referenced in `VariableInputs` across all commands.
     pub fn extract_required_axes(&self) -> HashSet<String> {
         let mut axes = HashSet::new();
-        
+
         // Scan standard command groups
         for cg in &self.profile.CommandGroups {
             for cmd in &cg.Commands {

@@ -15,7 +15,10 @@ pub fn generate_taxi_chart_html(
     let freqs = airport.freqs.as_ref();
     let tacan = airport.tacan.as_ref();
 
-    let active_desigs: Vec<String> = active_runways.iter().map(|a| a.designator.clone()).collect();
+    let active_desigs: Vec<String> = active_runways
+        .iter()
+        .map(|a| a.designator.clone())
+        .collect();
     let active_str = if active_desigs.is_empty() {
         "CALM".to_string()
     } else {
@@ -23,19 +26,35 @@ pub fn generate_taxi_chart_html(
     };
 
     let empty_arr = Vec::new();
-    let paved_rings: Vec<Vec<f64>> = airfield.get("paved")
+    let paved_rings: Vec<Vec<f64>> = airfield
+        .get("paved")
         .and_then(|v| v.as_array())
         .map(|arr| {
-            arr.iter().filter_map(|ring| {
-                ring.as_array().map(|coords| {
-                    coords.iter().filter_map(|c| c.as_f64()).collect::<Vec<f64>>()
+            arr.iter()
+                .filter_map(|ring| {
+                    ring.as_array().map(|coords| {
+                        coords
+                            .iter()
+                            .filter_map(|c| c.as_f64())
+                            .collect::<Vec<f64>>()
+                    })
                 })
-            }).collect()
-        }).unwrap_or_else(|| Vec::new());
+                .collect()
+        })
+        .unwrap_or_else(|| Vec::new());
 
-    let routes_list = airfield.get("routes").and_then(|v| v.as_array()).unwrap_or(&empty_arr);
-    let features_list = airfield.get("features").and_then(|v| v.as_array()).unwrap_or(&empty_arr);
-    let runways_list = airfield.get("runways").and_then(|v| v.as_array()).unwrap_or(&empty_arr);
+    let routes_list = airfield
+        .get("routes")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty_arr);
+    let features_list = airfield
+        .get("features")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty_arr);
+    let runways_list = airfield
+        .get("runways")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty_arr);
 
     // Step 0: Check airport orientation.
     let mut raw_e0 = f64::INFINITY;
@@ -48,8 +67,10 @@ pub fn generate_taxi_chart_html(
             for c in corners {
                 let ce = c.get("e").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let cn = c.get("n").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                raw_e0 = raw_e0.min(ce); raw_e1 = raw_e1.max(ce);
-                raw_n0 = raw_n0.min(cn); raw_n1 = raw_n1.max(cn);
+                raw_e0 = raw_e0.min(ce);
+                raw_e1 = raw_e1.max(ce);
+                raw_n0 = raw_n0.min(cn);
+                raw_n1 = raw_n1.max(cn);
             }
         }
     }
@@ -58,15 +79,19 @@ pub fn generate_taxi_chart_html(
             for nd in nodes {
                 let ne = nd.get("e").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let nn = nd.get("n").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                raw_e0 = raw_e0.min(ne); raw_e1 = raw_e1.max(ne);
-                raw_n0 = raw_n0.min(nn); raw_n1 = raw_n1.max(nn);
+                raw_e0 = raw_e0.min(ne);
+                raw_e1 = raw_e1.max(ne);
+                raw_n0 = raw_n0.min(nn);
+                raw_n1 = raw_n1.max(nn);
             }
         }
     }
 
     if raw_e0.is_infinite() {
-        raw_e0 = -1000.0; raw_e1 = 1000.0;
-        raw_n0 = -1000.0; raw_n1 = 1000.0;
+        raw_e0 = -1000.0;
+        raw_e1 = 1000.0;
+        raw_n0 = -1000.0;
+        raw_n1 = 1000.0;
     }
 
     let raw_ew_span = raw_e1 - raw_e0;
@@ -85,8 +110,14 @@ pub fn generate_taxi_chart_html(
 
     // Parking spots info
     let route_0 = routes_list.first();
-    let parking_spots = route_0.and_then(|r| r.get("parking")).and_then(|v| v.as_array()).unwrap_or(&empty_arr);
-    let r0_nodes = route_0.and_then(|r| r.get("nodes")).and_then(|v| v.as_array()).unwrap_or(&empty_arr);
+    let parking_spots = route_0
+        .and_then(|r| r.get("parking"))
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty_arr);
+    let r0_nodes = route_0
+        .and_then(|r| r.get("nodes"))
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty_arr);
 
     struct SpotRot {
         n: i64,
@@ -132,8 +163,10 @@ pub fn generate_taxi_chart_html(
 
     let see = |e: f64, n: f64, e0: &mut f64, e1: &mut f64, n0: &mut f64, n1: &mut f64| {
         let (te, tn) = rot_coord(e, n);
-        *e0 = (*e0).min(te); *e1 = (*e1).max(te);
-        *n0 = (*n0).min(tn); *n1 = (*n1).max(tn);
+        *e0 = (*e0).min(te);
+        *e1 = (*e1).max(te);
+        *n0 = (*n0).min(tn);
+        *n1 = (*n1).max(tn);
     };
 
     for r in runways_list {
@@ -165,7 +198,11 @@ pub fn generate_taxi_chart_html(
                 let pe = ring[i];
                 let pn = ring[i + 1];
                 let (te, tn) = rot_coord(pe, pn);
-                if (e0 - op_margin) <= te && te <= (e1 + op_margin) && (n0 - op_margin) <= tn && tn <= (n1 + op_margin) {
+                if (e0 - op_margin) <= te
+                    && te <= (e1 + op_margin)
+                    && (n0 - op_margin) <= tn
+                    && tn <= (n1 + op_margin)
+                {
                     see(pe, pn, &mut e0, &mut e1, &mut n0, &mut n1);
                 }
             }
@@ -179,12 +216,16 @@ pub fn generate_taxi_chart_html(
     }
 
     if e0.is_infinite() {
-        e0 = -1000.0; e1 = 1000.0;
-        n0 = -1000.0; n1 = 1000.0;
+        e0 = -1000.0;
+        e1 = 1000.0;
+        n0 = -1000.0;
+        n1 = 1000.0;
     }
 
-    e0 -= pad; e1 += pad;
-    n0 -= pad; n1 += pad;
+    e0 -= pad;
+    e1 += pad;
+    n0 -= pad;
+    n1 += pad;
 
     let dx = e1 - e0;
     let dy = n1 - n0;
@@ -195,7 +236,9 @@ pub fn generate_taxi_chart_html(
         let mut min_dist = f64::INFINITY;
         for j in 0..spots_rot.len() {
             if i != j {
-                let d = ((spots_rot[i].te - spots_rot[j].te).hypot(spots_rot[i].tn - spots_rot[j].tn)) * scale_full;
+                let d = ((spots_rot[i].te - spots_rot[j].te)
+                    .hypot(spots_rot[i].tn - spots_rot[j].tn))
+                    * scale_full;
                 min_dist = min_dist.min(d);
             }
         }
@@ -203,7 +246,11 @@ pub fn generate_taxi_chart_html(
             ol_count += 1;
         }
     }
-    let ol_ratio = if !spots_rot.is_empty() { ol_count as f64 / spots_rot.len() as f64 } else { 0.0 };
+    let ol_ratio = if !spots_rot.is_empty() {
+        ol_count as f64 / spots_rot.len() as f64
+    } else {
+        0.0
+    };
     let has_inset = spots_rot.len() >= 12 && !(spots_rot.len() < 42 && ol_ratio < 0.35);
 
     let (scale, ox, oy) = if has_inset {
@@ -245,12 +292,23 @@ pub fn generate_taxi_chart_html(
         if ring.len() < 6 {
             continue;
         }
-        let mut d = format!("M {:.1} {:.1}", coord_x(ring[0], ring[1]), coord_y(ring[0], ring[1]));
+        let mut d = format!(
+            "M {:.1} {:.1}",
+            coord_x(ring[0], ring[1]),
+            coord_y(ring[0], ring[1])
+        );
         for i in (2..ring.len()).step_by(2) {
-            d.push_str(&format!(" L {:.1} {:.1}", coord_x(ring[i], ring[i + 1]), coord_y(ring[i], ring[i + 1])));
+            d.push_str(&format!(
+                " L {:.1} {:.1}",
+                coord_x(ring[i], ring[i + 1]),
+                coord_y(ring[i], ring[i + 1])
+            ));
         }
         d.push_str(" Z");
-        svg_parts.push(format!("<path d='{}' fill='#CBD3DA' fill-rule='evenodd' stroke='#8A96A0' stroke-width='1.2'/>", d));
+        svg_parts.push(format!(
+            "<path d='{}' fill='#CBD3DA' fill-rule='evenodd' stroke='#8A96A0' stroke-width='1.2'/>",
+            d
+        ));
     }
 
     // 2. Features / Buildings
@@ -268,15 +326,19 @@ pub fn generate_taxi_chart_html(
         let rot_h = (h + chart_rot_deg as f64).rem_euclid(360.0);
 
         if k == "tower" {
-        svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='11' fill='#673AB7' stroke='#311B92' stroke-width='2'/>", cx, cy));
-        svg_parts.push(format!("<rect x='{:.1}' y='{:.1}' width='32' height='15' rx='3' fill='#311B92'/>", cx - 16.0, cy - 22.0));
-        svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='11' fill='#FFFFFF' text-anchor='middle'>TWR</text>", cx, cy - 11.0));
+            svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='11' fill='#673AB7' stroke='#311B92' stroke-width='2'/>", cx, cy));
+            svg_parts.push(format!(
+                "<rect x='{:.1}' y='{:.1}' width='32' height='15' rx='3' fill='#311B92'/>",
+                cx - 16.0,
+                cy - 22.0
+            ));
+            svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='11' fill='#FFFFFF' text-anchor='middle'>TWR</text>", cx, cy - 11.0));
         } else if k == "shelter" {
-        svg_parts.push(format!("<rect x='{:.1}' y='{:.1}' width='{:.1}' height='{:.1}' fill='#78909C' stroke='#37474F' stroke-width='0.8' transform='rotate({:.1} {:.1} {:.1})'/>", cx - fw / 2.0, cy - fl / 2.0, fw, fl, rot_h, cx, cy));
+            svg_parts.push(format!("<rect x='{:.1}' y='{:.1}' width='{:.1}' height='{:.1}' fill='#78909C' stroke='#37474F' stroke-width='0.8' transform='rotate({:.1} {:.1} {:.1})'/>", cx - fw / 2.0, cy - fl / 2.0, fw, fl, rot_h, cx, cy));
         } else if k == "hangar" {
-        svg_parts.push(format!("<rect x='{:.1}' y='{:.1}' width='{:.1}' height='{:.1}' fill='#8D6E63' stroke='#3E2723' stroke-width='0.8' transform='rotate({:.1} {:.1} {:.1})'/>", cx - fw / 2.0, cy - fl / 2.0, fw, fl, rot_h, cx, cy));
+            svg_parts.push(format!("<rect x='{:.1}' y='{:.1}' width='{:.1}' height='{:.1}' fill='#8D6E63' stroke='#3E2723' stroke-width='0.8' transform='rotate({:.1} {:.1} {:.1})'/>", cx - fw / 2.0, cy - fl / 2.0, fw, fl, rot_h, cx, cy));
         } else if k != "pavement" {
-        svg_parts.push(format!("<rect x='{:.1}' y='{:.1}' width='{:.1}' height='{:.1}' fill='#B0BEC5' stroke='#546E7A' stroke-width='0.6' transform='rotate({:.1} {:.1} {:.1})'/>", cx - fw / 2.0, cy - fl / 2.0, fw, fl, rot_h, cx, cy));
+            svg_parts.push(format!("<rect x='{:.1}' y='{:.1}' width='{:.1}' height='{:.1}' fill='#B0BEC5' stroke='#546E7A' stroke-width='0.6' transform='rotate({:.1} {:.1} {:.1})'/>", cx - fw / 2.0, cy - fl / 2.0, fw, fl, rot_h, cx, cy));
         }
     }
 
@@ -285,13 +347,19 @@ pub fn generate_taxi_chart_html(
     for r in runways_list {
         if let Some(corners) = r.get("corners").and_then(|v| v.as_array()) {
             if corners.len() >= 4 {
-                let pts: Vec<String> = corners.iter().map(|c| {
-                    let ce = c.get("e").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                    let cn = c.get("n").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                    format!("{:.1} {:.1}", coord_x(ce, cn), coord_y(ce, cn))
-                }).collect();
+                let pts: Vec<String> = corners
+                    .iter()
+                    .map(|c| {
+                        let ce = c.get("e").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                        let cn = c.get("n").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                        format!("{:.1} {:.1}", coord_x(ce, cn), coord_y(ce, cn))
+                    })
+                    .collect();
                 let d = format!("M {} Z", pts.join(" L "));
-        svg_parts.push(format!("<path d='{}' fill='#1E2328' stroke='#FFFFFF' stroke-width='2'/>", d));
+                svg_parts.push(format!(
+                    "<path d='{}' fill='#1E2328' stroke='#FFFFFF' stroke-width='2'/>",
+                    d
+                ));
             }
         }
 
@@ -299,7 +367,10 @@ pub fn generate_taxi_chart_html(
             for end in ends {
                 let desig = end.get("designator").and_then(|v| v.as_str()).unwrap_or("");
                 if let Some(at) = end.get("at") {
-                    if let (Some(ae), Some(an)) = (at.get("e").and_then(|v| v.as_f64()), at.get("n").and_then(|v| v.as_f64())) {
+                    if let (Some(ae), Some(an)) = (
+                        at.get("e").and_then(|v| v.as_f64()),
+                        at.get("n").and_then(|v| v.as_f64()),
+                    ) {
                         runway_ends_to_draw.push((ae, an, desig.to_string()));
                     }
                 }
@@ -310,7 +381,7 @@ pub fn generate_taxi_chart_html(
             for cab in cables {
                 let ce = cab.get("e").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let cn = cab.get("n").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='5' fill='#FFC107' stroke='#FF6F00' stroke-width='1.5'/>", coord_x(ce, cn), coord_y(ce, cn)));
+                svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='5' fill='#FFC107' stroke='#FF6F00' stroke-width='1.5'/>", coord_x(ce, cn), coord_y(ce, cn)));
             }
         }
     }
@@ -318,8 +389,14 @@ pub fn generate_taxi_chart_html(
     // 4. Taxiways: yellow centerlines
     let mut drawn_segments = std::collections::HashSet::new();
     for route in routes_list {
-        let r_nodes = route.get("nodes").and_then(|v| v.as_array()).unwrap_or(&empty_arr);
-        let r_ed = route.get("ed").and_then(|v| v.as_array()).unwrap_or(&empty_arr);
+        let r_nodes = route
+            .get("nodes")
+            .and_then(|v| v.as_array())
+            .unwrap_or(&empty_arr);
+        let r_ed = route
+            .get("ed")
+            .and_then(|v| v.as_array())
+            .unwrap_or(&empty_arr);
         for i in (0..r_ed.len()).step_by(2) {
             let idx1 = r_ed[i].as_u64().unwrap_or(0) as usize;
             let idx2 = r_ed[i + 1].as_u64().unwrap_or(0) as usize;
@@ -331,8 +408,14 @@ pub fn generate_taxi_chart_html(
                 let nb_e = nb.get("e").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let nb_n = nb.get("n").and_then(|v| v.as_f64()).unwrap_or(0.0);
 
-                let p1 = (((na_e / 8.0).round() * 8.0) as i64, ((na_n / 8.0).round() * 8.0) as i64);
-                let p2 = (((nb_e / 8.0).round() * 8.0) as i64, ((nb_n / 8.0).round() * 8.0) as i64);
+                let p1 = (
+                    ((na_e / 8.0).round() * 8.0) as i64,
+                    ((na_n / 8.0).round() * 8.0) as i64,
+                );
+                let p2 = (
+                    ((nb_e / 8.0).round() * 8.0) as i64,
+                    ((nb_n / 8.0).round() * 8.0) as i64,
+                );
                 if p1 != p2 {
                     let seg_key = (p1.min(p2), p1.max(p2));
                     if drawn_segments.insert(seg_key) {
@@ -347,20 +430,27 @@ pub fn generate_taxi_chart_html(
     }
 
     // 5. Taxiway Letters: Yellow badges
-    let mut all_taxi_letters: std::collections::BTreeMap<String, Vec<(f64, f64)>> = std::collections::BTreeMap::new();
+    let mut all_taxi_letters: std::collections::BTreeMap<String, Vec<(f64, f64)>> =
+        std::collections::BTreeMap::new();
     for r in routes_list {
         if let Some(nodes) = r.get("nodes").and_then(|v| v.as_array()) {
             for nd in nodes {
                 if let Some(l) = nd.get("l").and_then(|v| v.as_str()) {
                     let ne = nd.get("e").and_then(|v| v.as_f64()).unwrap_or(0.0);
                     let nn = nd.get("n").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                    all_taxi_letters.entry(l.to_string()).or_default().push((ne, nn));
+                    all_taxi_letters
+                        .entry(l.to_string())
+                        .or_default()
+                        .push((ne, nn));
                 }
             }
         }
     }
 
-    let screen_rwy_ends: Vec<(f64, f64)> = runway_ends_to_draw.iter().map(|(re_e, re_n, _)| (coord_x(*re_e, *re_n), coord_y(*re_e, *re_n))).collect();
+    let screen_rwy_ends: Vec<(f64, f64)> = runway_ends_to_draw
+        .iter()
+        .map(|(re_e, re_n, _)| (coord_x(*re_e, *re_n), coord_y(*re_e, *re_n)))
+        .collect();
     let mut placed_signs: Vec<(f64, f64)> = Vec::new();
 
     for (l, pts) in &all_taxi_letters {
@@ -402,12 +492,15 @@ pub fn generate_taxi_chart_html(
                 }
             }
 
-            if placed_signs.iter().any(|(sx, sy)| (px - *sx).hypot(py - *sy) < 46.0) {
+            if placed_signs
+                .iter()
+                .any(|(sx, sy)| (px - *sx).hypot(py - *sy) < 46.0)
+            {
                 continue;
             }
             placed_signs.push((px, py));
-        svg_parts.push(format!("<rect x='{:.1}' y='{:.1}' width='46' height='42' rx='6' fill='#FFEB3B' stroke='#000000' stroke-width='3'/>", px - 23.0, py - 21.0));
-        svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='28' fill='#000000' text-anchor='middle'>{}</text>", px, py + 11.0, l));
+            svg_parts.push(format!("<rect x='{:.1}' y='{:.1}' width='46' height='42' rx='6' fill='#FFEB3B' stroke='#000000' stroke-width='3'/>", px - 23.0, py - 21.0));
+            svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='28' fill='#000000' text-anchor='middle'>{}</text>", px, py + 11.0, l));
         }
     }
 
@@ -422,7 +515,10 @@ pub fn generate_taxi_chart_html(
         let stroke_w = if is_active { 4.0 } else { 2.6 };
         let font_size = if is_active { 22 } else { 19 };
 
-        svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='{:.1}' fill='{}' stroke='{}' stroke-width='{:.1}'/>", ex, ey, r_size, badge_bg, badge_border, stroke_w));
+        svg_parts.push(format!(
+            "<circle cx='{:.1}' cy='{:.1}' r='{:.1}' fill='{}' stroke='{}' stroke-width='{:.1}'/>",
+            ex, ey, r_size, badge_bg, badge_border, stroke_w
+        ));
         svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='{}' fill='#FFFFFF' text-anchor='middle'>{}</text>", ex, ey + 8.5, font_size, desig));
     }
 
@@ -433,7 +529,7 @@ pub fn generate_taxi_chart_html(
                 if nd.get("t").and_then(|v| v.as_i64()) == Some(21) {
                     let ne = nd.get("e").and_then(|v| v.as_f64()).unwrap_or(0.0);
                     let nn = nd.get("n").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='6' fill='#D32F2F' stroke='#FFFFFF' stroke-width='2'/>", coord_x(ne, nn), coord_y(ne, nn)));
+                    svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='6' fill='#D32F2F' stroke='#FFFFFF' stroke-width='2'/>", coord_x(ne, nn), coord_y(ne, nn)));
                 }
             }
         }
@@ -453,12 +549,15 @@ pub fn generate_taxi_chart_html(
 
         if sp.is_alert {
             placed_spot_labels.push((px, py));
-        svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='12' fill='#D32F2F' stroke='#FFFFFF' stroke-width='2'/>", px, py));
-        svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='13' fill='#FFFFFF' text-anchor='middle'>Q</text>", px, py + 5.0));
+            svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='12' fill='#D32F2F' stroke='#FFFFFF' stroke-width='2'/>", px, py));
+            svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='13' fill='#FFFFFF' text-anchor='middle'>Q</text>", px, py + 5.0));
             continue;
         }
 
-        if placed_spot_labels.iter().any(|(sx, sy)| (px - *sx).hypot(py - *sy) < 32.0) {
+        if placed_spot_labels
+            .iter()
+            .any(|(sx, sy)| (px - *sx).hypot(py - *sy) < 32.0)
+        {
             continue;
         }
 
@@ -472,7 +571,11 @@ pub fn generate_taxi_chart_html(
     if has_inset && !spots_rot.is_empty() && (svg_w - airport_screen_right) > 260.0 {
         let mut apron_items = Vec::new();
         for s in &spots_rot {
-            let mut dists: Vec<f64> = spots_rot.iter().filter(|o| o.n != s.n).map(|o| (s.te - o.te).hypot(s.tn - o.tn)).collect();
+            let mut dists: Vec<f64> = spots_rot
+                .iter()
+                .filter(|o| o.n != s.n)
+                .map(|o| (s.te - o.te).hypot(s.tn - o.tn))
+                .collect();
             dists.sort_by(|a, b| a.partial_cmp(b).unwrap());
             if dists.len() >= 2 && dists[1] > 2000.0 {
                 // remote
@@ -484,10 +587,22 @@ pub fn generate_taxi_chart_html(
             apron_items = spots_rot.iter().collect();
         }
 
-        let apron_min_e = apron_items.iter().map(|s| s.te).fold(f64::INFINITY, f64::min);
-        let apron_max_e = apron_items.iter().map(|s| s.te).fold(f64::NEG_INFINITY, f64::max);
-        let apron_min_n = apron_items.iter().map(|s| s.tn).fold(f64::INFINITY, f64::min);
-        let apron_max_n = apron_items.iter().map(|s| s.tn).fold(f64::NEG_INFINITY, f64::max);
+        let apron_min_e = apron_items
+            .iter()
+            .map(|s| s.te)
+            .fold(f64::INFINITY, f64::min);
+        let apron_max_e = apron_items
+            .iter()
+            .map(|s| s.te)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let apron_min_n = apron_items
+            .iter()
+            .map(|s| s.tn)
+            .fold(f64::INFINITY, f64::min);
+        let apron_max_n = apron_items
+            .iter()
+            .map(|s| s.tn)
+            .fold(f64::NEG_INFINITY, f64::max);
 
         let apron_dx = apron_max_e - apron_min_e;
         let apron_dy = apron_max_n - apron_min_n;
@@ -509,14 +624,15 @@ pub fn generate_taxi_chart_html(
         }
 
         let panels_config = if apron_aspect >= 1.6 {
-            vec![
-                PanelConfig {
-                    p_id: "inset_single",
-                    p_title: "APRON PARKING STANDS (MAGNIFIED)",
-                    p_spots: apron_items,
-                    px: inset_x, py: inset_y, pw: inset_w, ph: inset_h,
-                }
-            ]
+            vec![PanelConfig {
+                p_id: "inset_single",
+                p_title: "APRON PARKING STANDS (MAGNIFIED)",
+                p_spots: apron_items,
+                px: inset_x,
+                py: inset_y,
+                pw: inset_w,
+                ph: inset_h,
+            }]
         } else if apron_items.len() >= 60 {
             let gap = 10.0;
             let panel_h = (inset_h - 2.0 * gap) / 3.0;
@@ -526,9 +642,33 @@ pub fn generate_taxi_chart_html(
             let s1 = n_tot / 3;
             let s2 = 2 * n_tot / 3;
             vec![
-                PanelConfig { p_id: "inset_north", p_title: "APRON STANDS - NORTH", p_spots: sorted_spots[..s1].to_vec(), px: inset_x, py: inset_y, pw: inset_w, ph: panel_h },
-                PanelConfig { p_id: "inset_central", p_title: "APRON STANDS - CENTRAL", p_spots: sorted_spots[s1..s2].to_vec(), px: inset_x, py: inset_y + panel_h + gap, pw: inset_w, ph: panel_h },
-                PanelConfig { p_id: "inset_south", p_title: "APRON STANDS - SOUTH", p_spots: sorted_spots[s2..].to_vec(), px: inset_x, py: inset_y + 2.0 * (panel_h + gap), pw: inset_w, ph: panel_h },
+                PanelConfig {
+                    p_id: "inset_north",
+                    p_title: "APRON STANDS - NORTH",
+                    p_spots: sorted_spots[..s1].to_vec(),
+                    px: inset_x,
+                    py: inset_y,
+                    pw: inset_w,
+                    ph: panel_h,
+                },
+                PanelConfig {
+                    p_id: "inset_central",
+                    p_title: "APRON STANDS - CENTRAL",
+                    p_spots: sorted_spots[s1..s2].to_vec(),
+                    px: inset_x,
+                    py: inset_y + panel_h + gap,
+                    pw: inset_w,
+                    ph: panel_h,
+                },
+                PanelConfig {
+                    p_id: "inset_south",
+                    p_title: "APRON STANDS - SOUTH",
+                    p_spots: sorted_spots[s2..].to_vec(),
+                    px: inset_x,
+                    py: inset_y + 2.0 * (panel_h + gap),
+                    pw: inset_w,
+                    ph: panel_h,
+                },
             ]
         } else {
             let gap = 12.0;
@@ -538,7 +678,8 @@ pub fn generate_taxi_chart_html(
             let mut best_split = sorted_spots.len() / 2;
             let mut max_gap = -1.0;
             let min_split = 1.max((sorted_spots.len() as f64 * 0.25) as usize);
-            let max_split = (sorted_spots.len().saturating_sub(1)).min((sorted_spots.len() as f64 * 0.75) as usize);
+            let max_split = (sorted_spots.len().saturating_sub(1))
+                .min((sorted_spots.len() as f64 * 0.75) as usize);
             for i in min_split..max_split {
                 let gap_val = sorted_spots[i - 1].tn - sorted_spots[i].tn;
                 if gap_val > max_gap {
@@ -547,8 +688,24 @@ pub fn generate_taxi_chart_html(
                 }
             }
             vec![
-                PanelConfig { p_id: "inset_north", p_title: "APRON STANDS - NORTH", p_spots: sorted_spots[..best_split].to_vec(), px: inset_x, py: inset_y, pw: inset_w, ph: panel_h },
-                PanelConfig { p_id: "inset_south", p_title: "APRON STANDS - SOUTH", p_spots: sorted_spots[best_split..].to_vec(), px: inset_x, py: inset_y + panel_h + gap, pw: inset_w, ph: panel_h },
+                PanelConfig {
+                    p_id: "inset_north",
+                    p_title: "APRON STANDS - NORTH",
+                    p_spots: sorted_spots[..best_split].to_vec(),
+                    px: inset_x,
+                    py: inset_y,
+                    pw: inset_w,
+                    ph: panel_h,
+                },
+                PanelConfig {
+                    p_id: "inset_south",
+                    p_title: "APRON STANDS - SOUTH",
+                    p_spots: sorted_spots[best_split..].to_vec(),
+                    px: inset_x,
+                    py: inset_y + panel_h + gap,
+                    pw: inset_w,
+                    ph: panel_h,
+                },
             ]
         };
 
@@ -562,9 +719,19 @@ pub fn generate_taxi_chart_html(
             let header_text_y = p.py + if num_panels >= 3 { 18.0 } else { 22.0 };
 
             let p_min_e = p.p_spots.iter().map(|s| s.te).fold(f64::INFINITY, f64::min) - 130.0;
-            let p_max_e = p.p_spots.iter().map(|s| s.te).fold(f64::NEG_INFINITY, f64::max) + 130.0;
+            let p_max_e = p
+                .p_spots
+                .iter()
+                .map(|s| s.te)
+                .fold(f64::NEG_INFINITY, f64::max)
+                + 130.0;
             let p_min_n = p.p_spots.iter().map(|s| s.tn).fold(f64::INFINITY, f64::min) - 130.0;
-            let p_max_n = p.p_spots.iter().map(|s| s.tn).fold(f64::NEG_INFINITY, f64::max) + 130.0;
+            let p_max_n = p
+                .p_spots
+                .iter()
+                .map(|s| s.tn)
+                .fold(f64::NEG_INFINITY, f64::max)
+                + 130.0;
             let p_dx = (p_max_e - p_min_e).max(10.0);
             let p_dy = (p_max_n - p_min_n).max(10.0);
 
@@ -587,36 +754,71 @@ pub fn generate_taxi_chart_html(
             let clip_id = format!("clip_{}", p.p_id);
             svg_parts.push(format!("<defs><clipPath id='{}'><rect x='{:.1}' y='{:.1}' width='{:.1}' height='{:.1}' rx='4'/></clipPath></defs>", clip_id, p.px + 2.0, p.py + header_h, p.pw - 4.0, p.ph - header_h - 2.0));
 
-        svg_parts.push(format!("<rect x='{:.1}' y='{:.1}' width='{:.1}' height='{:.1}' rx='6' fill='#F8FAFC' stroke='#1A237E' stroke-width='2.5' filter='drop-shadow(2px 2px 5px rgba(0,0,0,0.2))'/>", p.px, p.py, p.pw, p.ph));
-        svg_parts.push(format!("<rect x='{:.1}' y='{:.1}' width='{:.1}' height='{:.1}' rx='4' fill='#1A237E'/>", p.px, p.py, p.pw, header_h));
-        svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='{}' fill='#FFFFFF' text-anchor='middle'>{}</text>", p.px + p.pw / 2.0, header_text_y, font_size, p.p_title));
-        svg_parts.push(format!("<g clip-path='url(#{})'>", clip_id));
+            svg_parts.push(format!("<rect x='{:.1}' y='{:.1}' width='{:.1}' height='{:.1}' rx='6' fill='#F8FAFC' stroke='#1A237E' stroke-width='2.5' filter='drop-shadow(2px 2px 5px rgba(0,0,0,0.2))'/>", p.px, p.py, p.pw, p.ph));
+            svg_parts.push(format!(
+                "<rect x='{:.1}' y='{:.1}' width='{:.1}' height='{:.1}' rx='4' fill='#1A237E'/>",
+                p.px, p.py, p.pw, header_h
+            ));
+            svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='{}' fill='#FFFFFF' text-anchor='middle'>{}</text>", p.px + p.pw / 2.0, header_text_y, font_size, p.p_title));
+            svg_parts.push(format!("<g clip-path='url(#{})'>", clip_id));
 
             // Paved inside panel
             for ring in &paved_rings {
-                if ring.len() < 6 { continue; }
-                let rot_pts: Vec<(f64, f64)> = (0..ring.len()).step_by(2).map(|i| rot_coord(ring[i], ring[i + 1])).collect();
-                let ring_te_min = rot_pts.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
-                let ring_te_max = rot_pts.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max);
-                let ring_tn_min = rot_pts.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
-                let ring_tn_max = rot_pts.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max);
-
-                if ring_te_max < p_min_e || ring_te_min > p_max_e || ring_tn_max < p_min_n || ring_tn_min > p_max_n {
+                if ring.len() < 6 {
                     continue;
                 }
-                let mut d = format!("M {:.1} {:.1}", ix_coord(ring[0], ring[1]), iy_coord(ring[0], ring[1]));
+                let rot_pts: Vec<(f64, f64)> = (0..ring.len())
+                    .step_by(2)
+                    .map(|i| rot_coord(ring[i], ring[i + 1]))
+                    .collect();
+                let ring_te_min = rot_pts.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
+                let ring_te_max = rot_pts
+                    .iter()
+                    .map(|p| p.0)
+                    .fold(f64::NEG_INFINITY, f64::max);
+                let ring_tn_min = rot_pts.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
+                let ring_tn_max = rot_pts
+                    .iter()
+                    .map(|p| p.1)
+                    .fold(f64::NEG_INFINITY, f64::max);
+
+                if ring_te_max < p_min_e
+                    || ring_te_min > p_max_e
+                    || ring_tn_max < p_min_n
+                    || ring_tn_min > p_max_n
+                {
+                    continue;
+                }
+                let mut d = format!(
+                    "M {:.1} {:.1}",
+                    ix_coord(ring[0], ring[1]),
+                    iy_coord(ring[0], ring[1])
+                );
                 for i in (2..ring.len()).step_by(2) {
-                    d.push_str(&format!(" L {:.1} {:.1}", ix_coord(ring[i], ring[i + 1]), iy_coord(ring[i], ring[i + 1])));
+                    d.push_str(&format!(
+                        " L {:.1} {:.1}",
+                        ix_coord(ring[i], ring[i + 1]),
+                        iy_coord(ring[i], ring[i + 1])
+                    ));
                 }
                 d.push_str(" Z");
-        svg_parts.push(format!("<path d='{}' fill='#E2E8F0' stroke='#94A3B8' stroke-width='1.2'/>", d));
+                svg_parts.push(format!(
+                    "<path d='{}' fill='#E2E8F0' stroke='#94A3B8' stroke-width='1.2'/>",
+                    d
+                ));
             }
 
             // Taxiways inside panel
             let mut inset_drawn_segs = std::collections::HashSet::new();
             for route in routes_list {
-                let r_nodes = route.get("nodes").and_then(|v| v.as_array()).unwrap_or(&empty_arr);
-                let r_ed = route.get("ed").and_then(|v| v.as_array()).unwrap_or(&empty_arr);
+                let r_nodes = route
+                    .get("nodes")
+                    .and_then(|v| v.as_array())
+                    .unwrap_or(&empty_arr);
+                let r_ed = route
+                    .get("ed")
+                    .and_then(|v| v.as_array())
+                    .unwrap_or(&empty_arr);
                 for i in (0..r_ed.len()).step_by(2) {
                     let idx1 = r_ed[i].as_u64().unwrap_or(0) as usize;
                     let idx2 = r_ed[i + 1].as_u64().unwrap_or(0) as usize;
@@ -630,10 +832,23 @@ pub fn generate_taxi_chart_html(
                         let (nate, natn) = rot_coord(na_e, na_n);
                         let (nbte, nbtn) = rot_coord(nb_e, nb_n);
 
-                        if (p_min_e <= nate && nate <= p_max_e && p_min_n <= natn && natn <= p_max_n) ||
-                            (p_min_e <= nbte && nbte <= p_max_e && p_min_n <= nbtn && nbtn <= p_max_n) {
-                            let p1 = (((nate / 10.0).round() * 10.0) as i64, ((natn / 10.0).round() * 10.0) as i64);
-                            let p2 = (((nbte / 10.0).round() * 10.0) as i64, ((nbtn / 10.0).round() * 10.0) as i64);
+                        if (p_min_e <= nate
+                            && nate <= p_max_e
+                            && p_min_n <= natn
+                            && natn <= p_max_n)
+                            || (p_min_e <= nbte
+                                && nbte <= p_max_e
+                                && p_min_n <= nbtn
+                                && nbtn <= p_max_n)
+                        {
+                            let p1 = (
+                                ((nate / 10.0).round() * 10.0) as i64,
+                                ((natn / 10.0).round() * 10.0) as i64,
+                            );
+                            let p2 = (
+                                ((nbte / 10.0).round() * 10.0) as i64,
+                                ((nbtn / 10.0).round() * 10.0) as i64,
+                            );
                             if p1 != p2 {
                                 let seg_key = (p1.min(p2), p1.max(p2));
                                 if inset_drawn_segs.insert(seg_key) {
@@ -654,16 +869,21 @@ pub fn generate_taxi_chart_html(
                 by: f64,
             }
 
-            let panel_valid: Vec<ValidItem> = p.p_spots.iter().map(|s| ValidItem {
-                spot: s,
-                bx: ix_coord(s.e, s.n_coord),
-                by: iy_coord(s.e, s.n_coord),
-            }).collect();
+            let panel_valid: Vec<ValidItem> = p
+                .p_spots
+                .iter()
+                .map(|s| ValidItem {
+                    spot: s,
+                    bx: ix_coord(s.e, s.n_coord),
+                    by: iy_coord(s.e, s.n_coord),
+                })
+                .collect();
 
             let mut adj: Vec<Vec<usize>> = vec![Vec::new(); panel_valid.len()];
             for i in 0..panel_valid.len() {
                 for j in (i + 1)..panel_valid.len() {
-                    let d = (panel_valid[i].bx - panel_valid[j].bx).hypot(panel_valid[i].by - panel_valid[j].by);
+                    let d = (panel_valid[i].bx - panel_valid[j].bx)
+                        .hypot(panel_valid[i].by - panel_valid[j].by);
                     if d < 38.0 {
                         adj[i].push(j);
                         adj[j].push(i);
@@ -699,17 +919,23 @@ pub fn generate_taxi_chart_html(
                 }
                 let xs: Vec<f64> = comp.iter().map(|&idx| panel_valid[idx].bx).collect();
                 let ys: Vec<f64> = comp.iter().map(|&idx| panel_valid[idx].by).collect();
-                let x_span = xs.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b)) - xs.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-                let y_span = ys.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b)) - ys.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+                let x_span = xs.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b))
+                    - xs.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+                let y_span = ys.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b))
+                    - ys.iter().fold(f64::INFINITY, |a, &b| a.min(b));
 
                 if x_span >= y_span {
-                    comp.sort_by(|&a, &b| panel_valid[a].bx.partial_cmp(&panel_valid[b].bx).unwrap());
+                    comp.sort_by(|&a, &b| {
+                        panel_valid[a].bx.partial_cmp(&panel_valid[b].bx).unwrap()
+                    });
                     for (order, &idx) in comp.iter().enumerate() {
                         let offset_y = if order % 2 == 0 { -16.0 } else { 16.0 };
                         stagger_offsets.insert(idx, (0.0, offset_y));
                     }
                 } else {
-                    comp.sort_by(|&a, &b| panel_valid[a].by.partial_cmp(&panel_valid[b].by).unwrap());
+                    comp.sort_by(|&a, &b| {
+                        panel_valid[a].by.partial_cmp(&panel_valid[b].by).unwrap()
+                    });
                     for (order, &idx) in comp.iter().enumerate() {
                         let offset_x = if order % 2 == 0 { -16.0 } else { 16.0 };
                         stagger_offsets.insert(idx, (offset_x, 0.0));
@@ -727,16 +953,19 @@ pub fn generate_taxi_chart_html(
                 let sp_y = base_y + off_y;
 
                 if off_x.abs() > 0.0 || off_y.abs() > 0.0 {
-        svg_parts.push(format!("<line x1='{:.1}' y1='{:.1}' x2='{:.1}' y2='{:.1}' stroke='#94A3B8' stroke-width='1.8' stroke-dasharray='3,3'/>", base_x, base_y, sp_x, sp_y));
+                    svg_parts.push(format!("<line x1='{:.1}' y1='{:.1}' x2='{:.1}' y2='{:.1}' stroke='#94A3B8' stroke-width='1.8' stroke-dasharray='3,3'/>", base_x, base_y, sp_x, sp_y));
                 }
 
-        svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='4' fill='#64748B'/>", base_x, base_y));
+                svg_parts.push(format!(
+                    "<circle cx='{:.1}' cy='{:.1}' r='4' fill='#64748B'/>",
+                    base_x, base_y
+                ));
                 if is_alert {
-        svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='16' fill='#D32F2F' stroke='#FFFFFF' stroke-width='2.5'/>", sp_x, sp_y));
-        svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='17' fill='#FFFFFF' text-anchor='middle'>Q</text>", sp_x, sp_y + 6.0));
+                    svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='16' fill='#D32F2F' stroke='#FFFFFF' stroke-width='2.5'/>", sp_x, sp_y));
+                    svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='17' fill='#FFFFFF' text-anchor='middle'>Q</text>", sp_x, sp_y + 6.0));
                 } else {
-        svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='15' fill='#FFFFFF' stroke='#1A237E' stroke-width='2.5'/>", sp_x, sp_y));
-        svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='17' fill='#1A237E' text-anchor='middle'>{:02}</text>", sp_x, sp_y + 6.0, n_val));
+                    svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='15' fill='#FFFFFF' stroke='#1A237E' stroke-width='2.5'/>", sp_x, sp_y));
+                    svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='17' fill='#1A237E' text-anchor='middle'>{:02}</text>", sp_x, sp_y + 6.0, n_val));
                 }
             }
 
@@ -783,12 +1012,16 @@ pub fn generate_taxi_chart_html(
         for end in &r.ends {
             let desig = &end.designator;
             let hdg = end.heading_true;
-            let ils_str = end.ils.as_ref()
+            let ils_str = end
+                .ils
+                .as_ref()
                 .and_then(|v| {
                     if let Some(s) = v.as_str() {
                         Some(s.to_string())
                     } else if let Some(obj) = v.as_object() {
-                        obj.get("freq").and_then(|f| f.as_str()).map(|s| s.to_string())
+                        obj.get("freq")
+                            .and_then(|f| f.as_str())
+                            .map(|s| s.to_string())
                     } else {
                         None
                     }
@@ -796,19 +1029,34 @@ pub fn generate_taxi_chart_html(
                 .unwrap_or_else(|| "---".to_string());
 
             let is_active = active_desigs.contains(desig);
-            let badge = if is_active { r###"<span class="active-badge">ACTIVE</span>"### } else { "" };
+            let badge = if is_active {
+                r###"<span class="active-badge">ACTIVE</span>"###
+            } else {
+                ""
+            };
             let (ptrn_dir, alt_str) = if let Some(pat) = end.pattern.as_ref() {
-                let side = pat.get("overheadSide").and_then(|v| v.as_str()).unwrap_or("Left");
+                let side = pat
+                    .get("overheadSide")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Left");
                 let dir = if side.starts_with("Right") { "R" } else { "L" };
-                let final_alt = pat.get("final").and_then(|f| f.get("altFt")).and_then(|v| v.as_i64());
-                let alt = if let Some(fa) = final_alt { format!("{}'", fa) } else { "1,500'".to_string() };
+                let final_alt = pat
+                    .get("final")
+                    .and_then(|f| f.get("altFt"))
+                    .and_then(|v| v.as_i64());
+                let alt = if let Some(fa) = final_alt {
+                    format!("{}'", fa)
+                } else {
+                    "1,500'".to_string()
+                };
                 (dir, alt)
             } else {
                 ("L", "1,500'".to_string())
             };
             let ptrn_str = format!("{} ({})", ptrn_dir, alt_str);
 
-            rwy_rows.push(format!(r###"
+            rwy_rows.push(format!(
+                r###"
             <tr class="{}">
                 <td class="col-rwy"><b>{}</b> {}</td>
                 <td><b>{} × {} ft</b></td>
@@ -816,28 +1064,60 @@ pub fn generate_taxi_chart_html(
                 <td class="col-ils"><b>{}</b></td>
                 <td class="col-ptrn"><b>{}</b></td>
             </tr>
-            "###, if is_active { "rwy-active" } else { "" }, desig, badge, length, width, hdg, ils_str, ptrn_str));
+            "###,
+                if is_active { "rwy-active" } else { "" },
+                desig,
+                badge,
+                length,
+                width,
+                hdg,
+                ils_str,
+                ptrn_str
+            ));
         }
     }
 
     let rwy_table_html = rwy_rows.join("\n");
-    let chart_type_title = if is_departure { "DEPARTURE GROUND TAXI" } else { "RECOVERY GROUND TAXI & PARKING" };
+    let chart_type_title = if is_departure {
+        "DEPARTURE GROUND TAXI"
+    } else {
+        "RECOVERY GROUND TAXI & PARKING"
+    };
 
     let tacan_str = if let Some(tc) = tacan {
-        let chan = tc.get("channel").map(|v| {
-            if let Some(s) = v.as_str() {
-                s.to_string()
-            } else if let Some(n) = v.as_i64() {
-                n.to_string()
-            } else {
-                String::new()
-            }
-        }).unwrap_or_default();
+        let chan = tc
+            .get("channel")
+            .map(|v| {
+                if let Some(s) = v.as_str() {
+                    s.to_string()
+                } else if let Some(n) = v.as_i64() {
+                    n.to_string()
+                } else {
+                    String::new()
+                }
+            })
+            .unwrap_or_default();
         let band = tc.get("band").and_then(|v| v.as_str()).unwrap_or("X");
         let station = tc.get("station").and_then(|v| v.as_str()).unwrap_or("");
         if station.contains('(') && station.contains(')') {
-            let code = station.split('(').nth(1).unwrap_or("").split(')').next().unwrap_or("");
-            if !chan.is_empty() { format!("{}{}{} ({})", chan, band, if code.is_empty() { "" } else { " " }, code) } else { "---".to_string() }
+            let code = station
+                .split('(')
+                .nth(1)
+                .unwrap_or("")
+                .split(')')
+                .next()
+                .unwrap_or("");
+            if !chan.is_empty() {
+                format!(
+                    "{}{}{} ({})",
+                    chan,
+                    band,
+                    if code.is_empty() { "" } else { " " },
+                    code
+                )
+            } else {
+                "---".to_string()
+            }
         } else if !chan.is_empty() {
             format!("{}{}", chan, band)
         } else {
@@ -854,10 +1134,15 @@ pub fn generate_taxi_chart_html(
     };
 
     let get_freq = |key: &str| -> String {
-        freqs.and_then(|f| f.get(key)).and_then(|v| v.as_str()).unwrap_or("---").to_string()
+        freqs
+            .and_then(|f| f.get(key))
+            .and_then(|v| v.as_str())
+            .unwrap_or("---")
+            .to_string()
     };
 
-    format!(r###"<!DOCTYPE html>
+    format!(
+        r###"<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -1103,13 +1388,22 @@ pub fn generate_taxi_chart_html(
 </html>
 "###,
         map_h,
-        icao_badge_html, ap_name,
-        chart_type_title, elev,
-        wind_deg, wind_kts,
-        active_str, tacan_str,
-        get_freq("atisVhf"), get_freq("towerUhf"), get_freq("towerVhf"),
-        get_freq("groundUhf"), get_freq("approachUhf"), get_freq("opsUhf"),
-        svg_w, svg_h,
+        icao_badge_html,
+        ap_name,
+        chart_type_title,
+        elev,
+        wind_deg,
+        wind_kts,
+        active_str,
+        tacan_str,
+        get_freq("atisVhf"),
+        get_freq("towerUhf"),
+        get_freq("towerVhf"),
+        get_freq("groundUhf"),
+        get_freq("approachUhf"),
+        get_freq("opsUhf"),
+        svg_w,
+        svg_h,
         svg_content,
         rwy_table_html,
     )

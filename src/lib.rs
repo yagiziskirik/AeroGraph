@@ -1,8 +1,9 @@
-pub mod config;
-pub mod fvx;
 pub mod bms;
-pub mod input;
-pub mod speech;
+pub mod config;
 pub mod engine;
+pub mod fvx;
+pub mod input;
 pub mod kneeboard;
+pub mod speech;
 pub mod tray;
+pub mod updater;

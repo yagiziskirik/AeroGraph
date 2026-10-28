@@ -1,8 +1,8 @@
+use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use directories::ProjectDirs;
 use windows::core::HSTRING;
 use windows::Win32::System::Registry::{
     RegCloseKey, RegCreateKeyW, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW,
@@ -51,6 +51,17 @@ pub struct AppConfig {
 
     #[serde(default)]
     pub custom_slots: HashMap<String, String>,
+
+    // --- Auto-Updater Settings ---
+    #[serde(default = "default_true")]
+    pub check_updates_on_startup: bool,
+
+    #[serde(default = "default_github_repo")]
+    pub github_repo: String,
+}
+
+fn default_github_repo() -> String {
+    "yagiziskirik/AeroGraph".to_string()
 }
 
 fn default_polling_rate() -> u32 {
@@ -77,6 +88,8 @@ impl Default for AppConfig {
             bms_base_dir: None,
             play_sound_on_update: true,
             custom_slots: HashMap::new(),
+            check_updates_on_startup: true,
+            github_repo: default_github_repo(),
         }
     }
 }
@@ -168,7 +181,9 @@ impl AppConfig {
         }
 
         // Fallback to game directory FoxVox installation
-        let bms_fallback = PathBuf::from(r"C:\Games\Falcon BMS 4.38\FoxVox\Falcon BMS 4.38 v1.3.1\Falcon BMS 4.38 v1.3.1.fvx");
+        let bms_fallback = PathBuf::from(
+            r"C:\Games\Falcon BMS 4.38\FoxVox\Falcon BMS 4.38 v1.3.1\Falcon BMS 4.38 v1.3.1.fvx",
+        );
         if bms_fallback.exists() {
             return Some(bms_fallback);
         }
@@ -192,9 +207,19 @@ impl AppConfig {
                 let mut buf = [0u16; 512];
                 let mut len = (buf.len() * 2) as u32;
                 let val_name = windows::core::w!("baseDir");
-                if RegQueryValueExW(hkey, val_name, None, None, Some(buf.as_mut_ptr() as *mut _), Some(&mut len)).is_ok() {
+                if RegQueryValueExW(
+                    hkey,
+                    val_name,
+                    None,
+                    None,
+                    Some(buf.as_mut_ptr() as *mut _),
+                    Some(&mut len),
+                )
+                .is_ok()
+                {
                     let _ = RegCloseKey(hkey);
-                    let str_val = String::from_utf16_lossy(&buf[..(len as usize / 2).saturating_sub(1)]);
+                    let str_val =
+                        String::from_utf16_lossy(&buf[..(len as usize / 2).saturating_sub(1)]);
                     let p = PathBuf::from(str_val.trim());
                     if p.exists() {
                         return Some(p);
@@ -225,17 +250,41 @@ impl AppConfig {
                 let mut buf = [0u16; 256];
                 let mut len = (buf.len() * 2) as u32;
                 let val_theater = windows::core::w!("curTheater");
-                if RegQueryValueExW(hkey, val_theater, None, None, Some(buf.as_mut_ptr() as *mut _), Some(&mut len)).is_ok() {
-                    theater = String::from_utf16_lossy(&buf[..(len as usize / 2).saturating_sub(1)]).trim().to_string();
+                if RegQueryValueExW(
+                    hkey,
+                    val_theater,
+                    None,
+                    None,
+                    Some(buf.as_mut_ptr() as *mut _),
+                    Some(&mut len),
+                )
+                .is_ok()
+                {
+                    theater =
+                        String::from_utf16_lossy(&buf[..(len as usize / 2).saturating_sub(1)])
+                            .trim()
+                            .to_string();
                 }
 
                 // Pilot Callsign
                 let mut bin_buf = [0u8; 256];
                 let mut bin_len = bin_buf.len() as u32;
                 let val_callsign = windows::core::w!("PilotCallsign");
-                if RegQueryValueExW(hkey, val_callsign, None, None, Some(bin_buf.as_mut_ptr()), Some(&mut bin_len)).is_ok() {
+                if RegQueryValueExW(
+                    hkey,
+                    val_callsign,
+                    None,
+                    None,
+                    Some(bin_buf.as_mut_ptr()),
+                    Some(&mut bin_len),
+                )
+                .is_ok()
+                {
                     let raw = &bin_buf[..bin_len as usize];
-                    let cs = String::from_utf8_lossy(raw).trim_matches('\0').trim().to_string();
+                    let cs = String::from_utf8_lossy(raw)
+                        .trim_matches('\0')
+                        .trim()
+                        .to_string();
                     if !cs.is_empty() {
                         callsign = cs;
                     }
@@ -257,7 +306,14 @@ impl AppConfig {
                 let mut buf = [0u16; 512];
                 let mut len = (buf.len() * 2) as u32;
                 let val_name = windows::core::w!("AeroGraph");
-                let res = RegQueryValueExW(hkey, val_name, None, None, Some(buf.as_mut_ptr() as *mut _), Some(&mut len));
+                let res = RegQueryValueExW(
+                    hkey,
+                    val_name,
+                    None,
+                    None,
+                    Some(buf.as_mut_ptr() as *mut _),
+                    Some(&mut len),
+                );
                 let _ = RegCloseKey(hkey);
                 return res.is_ok();
             }
@@ -277,7 +333,10 @@ impl AppConfig {
                         let path_str = format!("\"{}\"", exe_path.display());
                         let hstr = HSTRING::from(path_str.as_str());
                         let slice = hstr.as_wide();
-                        let bytes = std::slice::from_raw_parts(slice.as_ptr() as *const u8, (slice.len() + 1) * 2);
+                        let bytes = std::slice::from_raw_parts(
+                            slice.as_ptr() as *const u8,
+                            (slice.len() + 1) * 2,
+                        );
                         let _ = RegSetValueExW(hkey, val_name, 0, REG_SZ, Some(bytes));
                     }
                 } else {

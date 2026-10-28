@@ -1,6 +1,6 @@
+use crate::kneeboard::models::{BriefingData, Steerpoint};
 use std::fs;
 use std::path::Path;
-use crate::kneeboard::models::{BriefingData, Steerpoint};
 
 /// Injects laser codes and TACAN channels from Comments.txt into package flights.
 pub fn inject_comments_into_briefing(data: &mut BriefingData, comments_path: &Path) {
@@ -9,7 +9,11 @@ pub fn inject_comments_into_briefing(data: &mut BriefingData, comments_path: &Pa
     }
 
     if let Ok(content) = fs::read_to_string(comments_path) {
-        let lines: Vec<&str> = content.lines().map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+        let lines: Vec<&str> = content
+            .lines()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
         for (i, flt) in data.package_flights.iter_mut().enumerate() {
             if let Some(line) = lines.get(i) {
                 let tokens: Vec<String> = line.split(',').map(|s| s.trim().to_string()).collect();
@@ -49,11 +53,12 @@ pub fn generate_briefing_page_1_html(data: &BriefingData) -> String {
         };
         let roster_class = if is_own { "ownroster" } else { row_class };
 
-        let flt_num_display = if is_own && !flt.flight_num.contains("(x") && !flt.flight_num.contains("(X") {
-            format!("{} (x ) ", flt.flight_num)
-        } else {
-            flt.flight_num.clone()
-        };
+        let flt_num_display =
+            if is_own && !flt.flight_num.contains("(x") && !flt.flight_num.contains("(X") {
+                format!("{} (x ) ", flt.flight_num)
+            } else {
+                flt.flight_num.clone()
+            };
 
         // Line 1: Callsign, Flt #, Role, Aircraft, VHF
         flight_rows.push(format!(
@@ -84,9 +89,12 @@ pub fn generate_briefing_page_1_html(data: &BriefingData) -> String {
         let num_ac = flt.pilots.len().max(1);
         let mut lt_cols = Vec::new();
         for ac_i in 0..num_ac {
-            let lt = flt.laser_tacan.get(ac_i).filter(|s| !s.is_empty()).cloned().unwrap_or_else(|| {
-                default_laser_tacan(idx, ac_i)
-            });
+            let lt = flt
+                .laser_tacan
+                .get(ac_i)
+                .filter(|s| !s.is_empty())
+                .cloned()
+                .unwrap_or_else(|| default_laser_tacan(idx, ac_i));
             lt_cols.push(format!("<td>{}</td>", lt));
         }
         while lt_cols.len() < 4 {
@@ -141,7 +149,8 @@ pub fn generate_briefing_page_1_html(data: &BriefingData) -> String {
 </div>
 </div>
 </body></html>"#,
-        data.pkg_num, data.task,
+        data.pkg_num,
+        data.task,
         flight_rows.join("\n"),
         comm_rows.join("\n")
     )
@@ -162,7 +171,9 @@ pub fn compute_min_fuel_ladder(steerpoints: &[Steerpoint]) -> Vec<String> {
         let next_sp = &steerpoints[i + 1];
         let curr_sp = &steerpoints[i];
 
-        if curr_sp.desc.eq_ignore_ascii_case("refuel") || curr_sp.action.to_lowercase().contains("refuel") {
+        if curr_sp.desc.eq_ignore_ascii_case("refuel")
+            || curr_sp.action.to_lowercase().contains("refuel")
+        {
             fuels[i] = None;
             continue;
         }
@@ -183,10 +194,13 @@ pub fn compute_min_fuel_ladder(steerpoints: &[Steerpoint]) -> Vec<String> {
         fuels[i] = Some(current_fuel);
     }
 
-    fuels.into_iter().map(|f| match f {
-        Some(lbs) => lbs.to_string(),
-        None => "--".to_string(),
-    }).collect()
+    fuels
+        .into_iter()
+        .map(|f| match f {
+            Some(lbs) => lbs.to_string(),
+            None => "--".to_string(),
+        })
+        .collect()
 }
 
 /// Generates Page 2 HTML (Steerpoints & Weather Report) matching briefing/style.css.
@@ -226,29 +240,96 @@ pub fn generate_briefing_page_2_html(data: &BriefingData, processed_time: &str) 
 <tr class="odd"><td>Temp:</td><td>{}</td><td>{}</td><td>{}</td></tr>
 <tr class="even"><td>Cloud Base:</td><td>{}</td><td>{}</td><td>{}</td></tr>
 <tr class="odd"><td>Con Layer:</td><td>{}</td><td>{}</td><td>{}</td></tr>"#,
-        if !w.to_situation.is_empty() { &w.to_situation } else { "Fair" },
-        if !w.tgt_situation.is_empty() { &w.tgt_situation } else { "Fair" },
-        if !w.lnd_situation.is_empty() { &w.lnd_situation } else { "Fair" },
-
-        if !w.to_wind.is_empty() { &w.to_wind } else { "265deg@ 15kts." },
-        if !w.tgt_wind.is_empty() { &w.tgt_wind } else { "265deg@ 15kts." },
-        if !w.lnd_wind.is_empty() { &w.lnd_wind } else { "265deg@ 15kts." },
-
-        if !w.to_visibility.is_empty() { &w.to_visibility } else { "115km" },
-        if !w.tgt_visibility.is_empty() { &w.tgt_visibility } else { "115km" },
-        if !w.lnd_visibility.is_empty() { &w.lnd_visibility } else { "115km" },
-
-        if !w.to_temp.is_empty() { &w.to_temp } else { "15deg C." },
-        if !w.tgt_temp.is_empty() { &w.tgt_temp } else { "15deg C." },
-        if !w.lnd_temp.is_empty() { &w.lnd_temp } else { "15deg C." },
-
-        if !w.to_cloud_base.is_empty() { &w.to_cloud_base } else { "5,000 ft MSL base" },
-        if !w.tgt_cloud_base.is_empty() { &w.tgt_cloud_base } else { "5,000 ft MSL base" },
-        if !w.lnd_cloud_base.is_empty() { &w.lnd_cloud_base } else { "5,000 ft MSL base" },
-
-        if !w.to_con_layer.is_empty() { &w.to_con_layer } else { "28,000 ft MSL base" },
-        if !w.tgt_con_layer.is_empty() { &w.tgt_con_layer } else { "28,000 ft MSL base" },
-        if !w.lnd_con_layer.is_empty() { &w.lnd_con_layer } else { "28,000 ft MSL base" }
+        if !w.to_situation.is_empty() {
+            &w.to_situation
+        } else {
+            "Fair"
+        },
+        if !w.tgt_situation.is_empty() {
+            &w.tgt_situation
+        } else {
+            "Fair"
+        },
+        if !w.lnd_situation.is_empty() {
+            &w.lnd_situation
+        } else {
+            "Fair"
+        },
+        if !w.to_wind.is_empty() {
+            &w.to_wind
+        } else {
+            "265deg@ 15kts."
+        },
+        if !w.tgt_wind.is_empty() {
+            &w.tgt_wind
+        } else {
+            "265deg@ 15kts."
+        },
+        if !w.lnd_wind.is_empty() {
+            &w.lnd_wind
+        } else {
+            "265deg@ 15kts."
+        },
+        if !w.to_visibility.is_empty() {
+            &w.to_visibility
+        } else {
+            "115km"
+        },
+        if !w.tgt_visibility.is_empty() {
+            &w.tgt_visibility
+        } else {
+            "115km"
+        },
+        if !w.lnd_visibility.is_empty() {
+            &w.lnd_visibility
+        } else {
+            "115km"
+        },
+        if !w.to_temp.is_empty() {
+            &w.to_temp
+        } else {
+            "15deg C."
+        },
+        if !w.tgt_temp.is_empty() {
+            &w.tgt_temp
+        } else {
+            "15deg C."
+        },
+        if !w.lnd_temp.is_empty() {
+            &w.lnd_temp
+        } else {
+            "15deg C."
+        },
+        if !w.to_cloud_base.is_empty() {
+            &w.to_cloud_base
+        } else {
+            "5,000 ft MSL base"
+        },
+        if !w.tgt_cloud_base.is_empty() {
+            &w.tgt_cloud_base
+        } else {
+            "5,000 ft MSL base"
+        },
+        if !w.lnd_cloud_base.is_empty() {
+            &w.lnd_cloud_base
+        } else {
+            "5,000 ft MSL base"
+        },
+        if !w.to_con_layer.is_empty() {
+            &w.to_con_layer
+        } else {
+            "28,000 ft MSL base"
+        },
+        if !w.tgt_con_layer.is_empty() {
+            &w.tgt_con_layer
+        } else {
+            "28,000 ft MSL base"
+        },
+        if !w.lnd_con_layer.is_empty() {
+            &w.lnd_con_layer
+        } else {
+            "28,000 ft MSL base"
+        }
     );
 
     let gen_time = if !data.timestamp_str.is_empty() {
@@ -282,6 +363,7 @@ pub fn generate_briefing_page_2_html(data: &BriefingData, processed_time: &str) 
 </body></html>"#,
         stpt_rows.join("\n"),
         weather_rows,
-        gen_time, processed_time
+        gen_time,
+        processed_time
     )
 }

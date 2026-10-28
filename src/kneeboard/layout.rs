@@ -67,7 +67,11 @@ pub struct SlotConfig {
     pub stripe_colors: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub header_color: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "stripe_spacing")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "stripe_spacing"
+    )]
     pub spaced: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes: Option<NotesContent>,
@@ -369,7 +373,10 @@ impl KneeboardLayoutConfig {
     pub fn load_or_create_default() -> Self {
         let path = Self::config_path();
         if !path.exists() {
-            log::info!("kneeboards.json not found. Generating default 32-slot configuration at: {:?}", path);
+            log::info!(
+                "kneeboards.json not found. Generating default 32-slot configuration at: {:?}",
+                path
+            );
             let default_str = Self::default_json_string();
             let _ = fs::write(&path, default_str);
         }
@@ -378,7 +385,11 @@ impl KneeboardLayoutConfig {
             match serde_json::from_str::<KneeboardLayoutConfig>(&content) {
                 Ok(cfg) => return cfg,
                 Err(e) => {
-                    log::warn!("Could not parse {:?}: {}. Falling back to default layout.", path, e);
+                    log::warn!(
+                        "Could not parse {:?}: {}. Falling back to default layout.",
+                        path,
+                        e
+                    );
                 }
             }
         }
@@ -429,13 +440,26 @@ mod tests {
             match cfg {
                 Ok(c) => {
                     assert!(c.slots.contains_key("F16_1L"));
-                    assert_eq!(c.slots.len(), 32, "Expected all 32 slots in kneeboards.json");
+                    assert_eq!(
+                        c.slots.len(),
+                        32,
+                        "Expected all 32 slots in kneeboards.json"
+                    );
                     let assets_dir = manifest_dir.join("assets");
                     for (slot, slot_cfg) in &c.slots {
                         if slot_cfg.page_type == KneeboardPageType::Notes {
                             let text = slot_cfg.resolve_notes_text(&assets_dir);
-                            assert!(text.is_some(), "Slot {} failed to resolve notes text from path {:?}", slot, slot_cfg.path);
-                            assert!(!text.unwrap().trim().is_empty(), "Slot {} has empty notes text", slot);
+                            assert!(
+                                text.is_some(),
+                                "Slot {} failed to resolve notes text from path {:?}",
+                                slot,
+                                slot_cfg.path
+                            );
+                            assert!(
+                                !text.unwrap().trim().is_empty(),
+                                "Slot {} has empty notes text",
+                                slot
+                            );
                         }
                     }
                     println!("Successfully verified all 32 slots and resolved all notes cards!");

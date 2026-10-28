@@ -1,5 +1,5 @@
-pub mod models;
 pub mod loader;
+pub mod models;
 
-pub use models::*;
 pub use loader::*;
+pub use models::*;
