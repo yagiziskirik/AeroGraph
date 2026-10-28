@@ -13,6 +13,7 @@
 /assets/work/*
 !assets/work/.gitkeep
 /assets/briefing/*.html
+/assets/data/DDS_Backup/
 *.tmp
 *.log
 aerograph.log
