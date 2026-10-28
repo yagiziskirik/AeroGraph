@@ -207,7 +207,7 @@ pub fn resolve_stripe_and_header_colors(
 /// Generates a complete 1024x1554 HTML page formatted in the F-16 POH / Checklist aesthetic.
 pub fn generate_notes_page_html(
     slot_name: &str,
-    title: &str,
+    title: Option<&str>,
     subtitle: Option<&str>,
     header_code: Option<&str>,
     page_num: Option<&str>,
@@ -219,9 +219,9 @@ pub fn generate_notes_page_html(
     notes_raw: &str,
     callsign: &str,
 ) -> String {
+    let _ = callsign;
     let is_left = slot_name.to_uppercase().ends_with('L');
     let effective_header_code = header_code.unwrap_or("AEROGRAPH // F-16 PILOT NOTES");
-    let effective_page_num = page_num.unwrap_or(if is_left { "NOTES-L" } else { "NOTES-R" });
 
     let (colors, effective_header_color) = resolve_stripe_and_header_colors(preset, stripe_color, stripe_colors, header_color);
 
@@ -266,10 +266,19 @@ pub fn generate_notes_page_html(
     };
 
     let notch_class = if is_left { "notch-left" } else { "notch-right" };
-    let subtitle_html = if let Some(sub) = subtitle {
-        format!("<div class=\"subtitle\">{}</div>", parse_inline_formatting(sub))
-    } else {
-        format!("<div class=\"subtitle\">PILOT: {} &bull; MISSION DATA</div>", escape_html(callsign.to_uppercase().as_str()))
+    let title_html = match title {
+        Some(t) if !t.trim().is_empty() => format!("<div class=\"main-title\">{}</div>\n", escape_html(t.trim())),
+        _ => String::new(),
+    };
+
+    let subtitle_html = match subtitle {
+        Some(s) if !s.trim().is_empty() => format!("<div class=\"subtitle\">{}</div>\n", parse_inline_formatting(s.trim())),
+        _ => String::new(),
+    };
+
+    let page_badge_html = match page_num {
+        Some(p) if !p.trim().is_empty() => format!("<span class=\"footer-page-badge\">{}</span>", escape_html(p.trim())),
+        _ => String::new(),
     };
 
     let parsed_content = parse_notes_to_html(notes_raw);
@@ -332,7 +341,7 @@ pub fn generate_notes_page_html(
         left: 0;
         width: 1024px;
         height: 1344px;
-        padding: 28px 64px 20px 64px;
+        padding: 24px 64px 20px 64px;
     }}
 
     .main-title {{
@@ -351,7 +360,7 @@ pub fn generate_notes_page_html(
         font-weight: 800;
         color: #546E7A;
         letter-spacing: 1.2px;
-        margin-bottom: 22px;
+        margin-bottom: 18px;
         text-transform: uppercase;
         border-bottom: 2px solid #CFD8DC;
         padding-bottom: 8px;
@@ -359,7 +368,7 @@ pub fn generate_notes_page_html(
 
     /* Formatted Elements */
     .spacer {{
-        height: 14px;
+        height: 12px;
     }}
 
     .section-h1 {{
@@ -369,7 +378,7 @@ pub fn generate_notes_page_html(
         background-color: #E3F2FD;
         border-left: 6px solid #1565C0;
         padding: 8px 14px;
-        margin: 16px 0 10px 0;
+        margin: 14px 0 8px 0;
         text-transform: uppercase;
         border-radius: 0 4px 4px 0;
     }}
@@ -380,7 +389,7 @@ pub fn generate_notes_page_html(
         color: #263238;
         border-bottom: 2px solid #90A4AE;
         padding-bottom: 4px;
-        margin: 16px 0 8px 0;
+        margin: 14px 0 6px 0;
         text-transform: uppercase;
     }}
 
@@ -399,7 +408,7 @@ pub fn generate_notes_page_html(
         font-weight: 900;
         padding: 4px 16px;
         border-radius: 4px;
-        margin: 14px 0 8px 0;
+        margin: 12px 0 6px 0;
         text-transform: uppercase;
         letter-spacing: 1px;
     }}
@@ -407,7 +416,7 @@ pub fn generate_notes_page_html(
     /* Alerts (WebKit Safe Table) */
     .alert-table {{
         width: 100%;
-        margin: 10px 0;
+        margin: 8px 0;
         border-radius: 6px;
         border-collapse: separate;
         padding: 8px 14px;
@@ -498,7 +507,7 @@ pub fn generate_notes_page_html(
         width: 100%;
         background-color: #ECEFF1;
         border-radius: 6px;
-        margin: 6px 0;
+        margin: 5px 0;
         border-collapse: separate;
     }}
     .kv-key {{
@@ -517,7 +526,7 @@ pub fn generate_notes_page_html(
         color: #0D47A1;
         text-align: right;
         font-family: "Lucida Console", "Consolas", monospace;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
         vertical-align: middle;
     }}
 
@@ -618,7 +627,7 @@ pub fn generate_notes_page_html(
 
     <!-- Main Notes Content -->
     <div class="content-container">
-        <div class="main-title">{title_escaped}</div>
+        {title_html}
         {subtitle_html}
         <div class="notes-body">
             {parsed_content}
@@ -637,7 +646,7 @@ pub fn generate_notes_page_html(
                 * PILOT MISSION NOTES / T.O. 1F-16CM-1
             </td>
             <td class="footer-right">
-                <span class="footer-page-badge">{effective_page_num}</span>
+                {page_badge_html}
             </td>
         </tr>
     </table>
@@ -649,11 +658,11 @@ pub fn generate_notes_page_html(
         header_color = effective_header_color,
         notch_class = notch_class,
         effective_header_code = escape_html(effective_header_code),
-        title_escaped = escape_html(title),
+        title_html = title_html,
         subtitle_html = subtitle_html,
         parsed_content = parsed_content,
         logo_b64 = AEROGRAPH_LOGO_B64.trim(),
-        effective_page_num = escape_html(effective_page_num),
+        page_badge_html = page_badge_html,
     )
 }
 
@@ -665,7 +674,7 @@ mod tests {
     fn test_left_vs_right_notch_position() {
         let left_html = generate_notes_page_html(
             "F16_10L",
-            "Pilot Notes",
+            Some("Pilot Notes"),
             None,
             None,
             None,
@@ -682,7 +691,7 @@ mod tests {
 
         let right_html = generate_notes_page_html(
             "F16_10R",
-            "Pilot Notes",
+            Some("Pilot Notes"),
             None,
             None,
             None,
@@ -696,6 +705,27 @@ mod tests {
         );
         assert!(right_html.contains("header-notch notch-right"));
         assert!(!right_html.contains("header-notch notch-left"));
+    }
+
+    #[test]
+    fn test_optional_title_subtitle_page_num() {
+        let html_no_meta = generate_notes_page_html(
+            "F16_7L",
+            None,
+            None,
+            Some("HEADER"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            true,
+            "Just content",
+            "VIPER",
+        );
+        assert!(!html_no_meta.contains("class=\"main-title\""));
+        assert!(!html_no_meta.contains("class=\"subtitle\""));
+        assert!(!html_no_meta.contains("class=\"footer-page-badge\""));
     }
 
     #[test]
@@ -772,7 +802,7 @@ CAUTION: Maintain minimum 18,000 FT MSL until IP ingress
 
         let left_html = generate_notes_page_html(
             "F16_10L",
-            "Pilot Mission Notes — ROE",
+            Some("Pilot Mission Notes — ROE"),
             Some("FLIGHT: VIPER 1 &bull; THEATER: KOREA"),
             None,
             Some("NOTES-1"),
@@ -787,7 +817,7 @@ CAUTION: Maintain minimum 18,000 FT MSL until IP ingress
 
         let right_html = generate_notes_page_html(
             "F16_10R",
-            "Pilot Fault List — Engine",
+            Some("Pilot Fault List — Engine"),
             Some("T.O. 1F-16CM-1 QUICK REFERENCE"),
             Some("T.O. BMS1F-16CJ-1CL-1"),
             Some("EP-7"),

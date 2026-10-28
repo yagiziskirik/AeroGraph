@@ -454,7 +454,25 @@ impl KneeboardWatcher {
         for (slot, slot_cfg) in &layout_cfg.slots {
             match &slot_cfg.page_type {
                 KneeboardPageType::Notes => {
-                    let title = slot_cfg.title.as_deref().unwrap_or("PILOT MISSION NOTES");
+                    // Check if an external notes file was specified but could not be found
+                    if slot_cfg.path.is_some() && slot_cfg.resolve_notes_text(&assets_dir).is_none() {
+                        let path_str = slot_cfg.path.as_deref().unwrap_or("unknown");
+                        let title = slot_cfg.title.as_deref().unwrap_or("NOTES FILE NOT FOUND");
+                        let reason = format!("REFERENCED NOTES FILE NOT FOUND:\n{}\n\nPLEASE VERIFY PATH IN KNEEBOARDS.JSON", path_str);
+                        let blank_html_path = work_dir.join(format!("blank_{}.html", slot));
+                        let blank_png_path = images_dir.join(format!("blank_{}.png", slot));
+                        let html = generate_blank_chart_html(title, &reason);
+                        if fs::write(&blank_html_path, html).is_ok() {
+                            if render_html_to_png(&wkhtmltoimage_path, &blank_html_path, &blank_png_path).is_ok() {
+                                if let Ok(img) = image::open(&blank_png_path) {
+                                    slot_images.insert(slot.clone(), img.to_rgba8());
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    let title = slot_cfg.title.as_deref();
                     let subtitle = slot_cfg.subtitle.as_deref();
                     let header_code = slot_cfg.header_code.as_deref();
                     let page_num = slot_cfg.page_num.as_deref();
@@ -488,6 +506,7 @@ impl KneeboardWatcher {
                     }
                 }
                 KneeboardPageType::Image => {
+                    let mut loaded = false;
                     if let Some(ref path_str) = slot_cfg.path {
                         let img_path = PathBuf::from(path_str);
                         let resolved = if img_path.is_absolute() {
@@ -498,6 +517,22 @@ impl KneeboardWatcher {
                         if resolved.exists() {
                             if let Ok(img) = image::open(&resolved) {
                                 slot_images.insert(slot.clone(), img.to_rgba8());
+                                loaded = true;
+                            }
+                        }
+                    }
+                    if !loaded {
+                        let path_str = slot_cfg.path.as_deref().unwrap_or("unknown");
+                        let title = slot_cfg.title.as_deref().unwrap_or("IMAGE FILE NOT FOUND");
+                        let reason = format!("REFERENCED IMAGE NOT FOUND:\n{}\n\nPLEASE VERIFY PATH IN KNEEBOARDS.JSON", path_str);
+                        let blank_html_path = work_dir.join(format!("blank_{}.html", slot));
+                        let blank_png_path = images_dir.join(format!("blank_{}.png", slot));
+                        let html = generate_blank_chart_html(title, &reason);
+                        if fs::write(&blank_html_path, html).is_ok() {
+                            if render_html_to_png(&wkhtmltoimage_path, &blank_html_path, &blank_png_path).is_ok() {
+                                if let Ok(img) = image::open(&blank_png_path) {
+                                    slot_images.insert(slot.clone(), img.to_rgba8());
+                                }
                             }
                         }
                     }

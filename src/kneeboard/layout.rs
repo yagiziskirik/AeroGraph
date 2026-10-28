@@ -87,11 +87,15 @@ impl SlotConfig {
 
         if let Some(ref path_str) = self.path {
             let p = PathBuf::from(path_str);
-            let candidates = [
+            let mut candidates = vec![
                 p.clone(),
                 assets_dir.join(&p),
                 assets_dir.join("notes").join(&p),
             ];
+            if let Some(parent) = assets_dir.parent() {
+                candidates.push(parent.join(&p));
+                candidates.push(parent.join("notes").join(&p));
+            }
 
             for candidate in &candidates {
                 if candidate.exists() {
@@ -116,7 +120,7 @@ pub struct KneeboardLayoutConfig {
 impl KneeboardLayoutConfig {
     /// Returns default JSON text containing all 32 slots (16L, 16R) formatted with clear descriptions.
     pub fn default_json_string() -> &'static str {
-        r#"{
+        r####"{
   "_comment": "AeroGraph Kneeboard Slot Configuration. Supports all 32 Falcon BMS slots (F16_1L through F16_16R, textures 7982.dds to 7997.dds). Available types: 'briefing_roster', 'briefing_steerpoints', 'custom_html', 'mission_route', 'mission_target', 'dep_taxi', 'arr_taxi', 'arr_ils_primary', 'arr_ils_secondary', 'blank', 'notes', 'image', 'restore_original', 'pass_through'.",
   "slots": {
     "F16_1L": {
@@ -175,87 +179,179 @@ impl KneeboardLayoutConfig {
       "description": "Departure Airfield Ground Taxi & Parking Chart"
     },
     "F16_7L": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7988.dds Left texture intact"
+      "type": "notes",
+      "title": "PILOT MISSION SCRATCHPAD",
+      "subtitle": "EDIT IN KNEEBOARDS.JSON • TRAY -> EDIT KNEEBOARDS",
+      "header_code": "T.O. BMS1F-16CM-1 // SPINS",
+      "page_num": "SPINS-1",
+      "preset": "caution",
+      "spaced": false,
+      "notes": [
+        "## 1. PRE-FLIGHT & UFC SETUP",
+        "[x] INS Alignment verified & UFC DED set",
+        "[x] Bullseye loaded: {blue: 045 / 60NM}",
+        "[ ] Master Arm {yellow: ARM} at STPT 4 (Fence In)",
+        "[ ] Laser Arm {green: ON} prior to 5nm to Target",
+        "",
+        "BULLSEYE: {blue: 045 / 60NM}",
+        "PACKAGE VHF: {blue: 138.250}",
+        "TACTICAL UHF: {blue: 254.000}",
+        "RAMROD CODE: {blue: CHARLIE}",
+        "PRIMARY LASER: {green: 1688}",
+        "",
+        "## 2. BVR RULES OF ENGAGEMENT (ROE)",
+        "- Hostile: 2x sensor confirm or AWACS 'HOT/HOSTILE'",
+        "- Weapons Free beyond {green: 25nm} from Bullseye 045/60",
+        "- Minimum Abort Range (MAR): {red: 12nm} mandatory egress",
+        "",
+        "WARNING: {highlight: Active SA-10 Grumble} tracking near STPT 6",
+        "CAUTION: Maintain minimum 18,000 FT MSL until IP ingress",
+        "",
+        "## 3. PILOT REMARKS / CUSTOM NOTES",
+        "- Right-click AeroGraph tray icon and select 'Edit Kneeboards'",
+        "- Edit this slot (F16_7L) to customize your flight notes"
+      ]
     },
     "F16_7R": {
       "type": "arr_ils_primary",
       "description": "Arrival Primary ILS Approach Chart (Runway matched from flight plan)"
     },
     "F16_8L": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7989.dds Left texture intact"
+      "type": "notes",
+      "title": "FUEL REGIMES, BINGO & HOLDING",
+      "header_code": "T.O. 1F-16CM-1 // FUEL-OPS",
+      "page_num": "FUEL-1",
+      "preset": "standard",
+      "path": "notes/fuel_planning.md"
     },
     "F16_8R": {
       "type": "arr_ils_secondary",
       "description": "Arrival Secondary ILS Approach Chart (or Intentionally Left Blank)"
     },
     "F16_9L": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7990.dds Left texture intact"
+      "type": "notes",
+      "title": "A/A MISSILES & BVR TIMELINES",
+      "header_code": "T.O. 1F-16CM-34-1-1 // A-A BVR",
+      "page_num": "A/A-1",
+      "preset": "tactical",
+      "path": "notes/aa_missiles.md"
     },
     "F16_9R": {
       "type": "arr_taxi",
       "description": "Recovery Airfield Ground Taxi & Parking Chart"
     },
     "F16_10L": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7991.dds Left texture intact"
+      "type": "notes",
+      "title": "A/G PRECISION GUIDED MUNITIONS",
+      "header_code": "T.O. 1F-16CM-34-1-2 // PGM STRIKE",
+      "page_num": "PGM-1",
+      "preset": "caution",
+      "spaced": false,
+      "path": "notes/ag_precision.md"
     },
     "F16_10R": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7991.dds Right texture intact"
+      "type": "notes",
+      "title": "RWR THREAT MATRIX & CMS PROGRAMS",
+      "header_code": "T.O. 1F-16CM-34-1-3 // RWR THREATS",
+      "page_num": "RWR-1",
+      "preset": "caution",
+      "spaced": false,
+      "path": "notes/rwr_countermeasures.md"
     },
     "F16_11L": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7992.dds Left texture intact"
+      "type": "notes",
+      "title": "A/G BALLISTIC ORDNANCE & STRAFE",
+      "header_code": "T.O. 1F-16CM-34-1-1 // BALLISTICS",
+      "page_num": "BALL-1",
+      "preset": "caution",
+      "spaced": false,
+      "path": "notes/ag_ballistic.md"
     },
     "F16_11R": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7992.dds Right texture intact"
+      "type": "notes",
+      "title": "CRITICAL PILOT FAULT LIST (PFL)",
+      "header_code": "T.O. 1F-16CM-1CL-1 // PFL FAULTS",
+      "page_num": "PFL-1",
+      "preset": "warning",
+      "spaced": false,
+      "path": "notes/pfl_fault_actions.md"
     },
     "F16_12L": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7993.dds Left texture intact"
+      "type": "notes",
+      "title": "SEAD / HARM PROFILES & ALIC CODES",
+      "header_code": "T.O. 1F-16CM-34-1-4 // SEAD HARM",
+      "page_num": "SEAD-1",
+      "preset": "caution",
+      "spaced": false,
+      "path": "notes/sead_harm.md"
     },
     "F16_12R": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7993.dds Right texture intact"
+      "type": "notes",
+      "title": "HYDRAULIC FAILURE & ALT GEAR",
+      "header_code": "T.O. 1F-16CM-1CL-2 // HYD-GEAR",
+      "page_num": "HYD-1",
+      "preset": "warning",
+      "spaced": false,
+      "path": "notes/ep_hydraulics.md"
     },
     "F16_13L": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7994.dds Left texture intact"
+      "type": "notes",
+      "title": "AIRFRAME & CROSSWIND LIMITATIONS",
+      "header_code": "T.O. 1F-16CM-1 // AIRFRAME LIMITS",
+      "page_num": "LIMITS-1",
+      "preset": "standard",
+      "path": "notes/airframe_limits.md"
     },
     "F16_13R": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7994.dds Right texture intact"
+      "type": "notes",
+      "title": "THEATER DIVERT AIRFIELDS DIRECTORY",
+      "header_code": "FLIGHT INFO PUB // THEATER DIVERT",
+      "page_num": "DIVERT-1",
+      "preset": "standard",
+      "path": "notes/divert_airfields.md"
     },
     "F16_14L": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7995.dds Left texture intact"
+      "type": "notes",
+      "title": "APPROACH SPEEDS & OVERHEAD BREAK",
+      "header_code": "T.O. 1F-16CM-1 // APPROACH & BREAK",
+      "page_num": "APP-1",
+      "preset": "standard",
+      "path": "notes/approach_speeds.md"
     },
     "F16_14R": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7995.dds Right texture intact"
+      "type": "notes",
+      "title": "INSTRUMENT HOLDING & MISSED APP",
+      "header_code": "FLIGHT INFO PUB // IFR RECOVERY",
+      "page_num": "IFR-1",
+      "preset": "standard",
+      "path": "notes/ifr_holding.md"
     },
     "F16_15L": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7996.dds Left texture intact"
+      "type": "notes",
+      "title": "LASER CODES & COMMS LADDER",
+      "header_code": "T.O. 1F-16CM-1 // COMMS & LASER",
+      "page_num": "COMMS-1",
+      "preset": "standard",
+      "path": "notes/comms_laser_matrix.md"
     },
     "F16_15R": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7996.dds Right texture intact"
+      "type": "notes",
+      "title": "ENGINE FLAMEOUT & SFO PROFILE",
+      "header_code": "T.O. 1F-16CM-1CL-1 // EP FLAMEOUT",
+      "page_num": "EP-1",
+      "preset": "emergency",
+      "path": "notes/ep_flameout.md"
     },
     "F16_16L": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7997.dds Left texture intact"
+      "type": "blank",
+      "description": "Intentionally left blank"
     },
     "F16_16R": {
-      "type": "pass_through",
-      "description": "Pass-through: Leave existing BMS 7997.dds Right texture intact"
+      "type": "blank",
+      "description": "Intentionally left blank"
     }
   }
-}"#
+}"####
     }
 
     /// Resolves the configuration file location next to current executable or working directory.
@@ -333,7 +429,16 @@ mod tests {
             match cfg {
                 Ok(c) => {
                     assert!(c.slots.contains_key("F16_1L"));
-                    println!("Successfully parsed kneeboards.json with {} slots", c.slots.len());
+                    assert_eq!(c.slots.len(), 32, "Expected all 32 slots in kneeboards.json");
+                    let assets_dir = manifest_dir.join("assets");
+                    for (slot, slot_cfg) in &c.slots {
+                        if slot_cfg.page_type == KneeboardPageType::Notes {
+                            let text = slot_cfg.resolve_notes_text(&assets_dir);
+                            assert!(text.is_some(), "Slot {} failed to resolve notes text from path {:?}", slot, slot_cfg.path);
+                            assert!(!text.unwrap().trim().is_empty(), "Slot {} has empty notes text", slot);
+                        }
+                    }
+                    println!("Successfully verified all 32 slots and resolved all notes cards!");
                 }
                 Err(e) => {
                     panic!("Failed to parse kneeboards.json: {}", e);

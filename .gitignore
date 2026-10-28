@@ -1,4 +1,5 @@
 /target/
 /assets/work/
+/assets/images/
 *.tmp
 *.log
