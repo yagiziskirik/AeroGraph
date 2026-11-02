@@ -248,7 +248,6 @@ pub fn compute_mission_route_coords(
 
     // If forward pass reached land_idx and arr_coords is given, reconcile closure error
     if let (true, Some(arr)) = (fwd_reached_land && land_idx > 0, arr_coords) {
-
         let err_x = arr.0 - coords[land_idx as usize].x;
         let err_y = arr.1 - coords[land_idx as usize].y;
         for (idx_offset, coord) in coords[1..=(land_idx as usize)].iter_mut().enumerate() {

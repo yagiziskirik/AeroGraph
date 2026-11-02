@@ -105,9 +105,7 @@ pub fn check_for_updates(
         .as_str()
         .unwrap_or_default()
         .to_string();
-    let clean_version = tag_name
-        .trim_start_matches(['v', 'V'])
-        .to_string();
+    let clean_version = tag_name.trim_start_matches(['v', 'V']).to_string();
 
     if !is_newer_version(&clean_version, current_version) {
         log::info!(

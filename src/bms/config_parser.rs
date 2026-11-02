@@ -236,7 +236,7 @@ impl BmsConfig {
                                     max: 65535,
                                     saturation: 65535,
                                     invert,
-                                    }),
+                                }),
                             });
                     }
                 }
