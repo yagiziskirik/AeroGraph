@@ -567,7 +567,7 @@ Right-click the AeroGraph icon in the Windows notification area to access:
 ## 📦 Installation & Uninstallation
 
 ### Installing via Graphical Setup Wizard
-1. Download `AeroGraph_Setup_v0.1.0.exe` from [GitHub Releases](https://github.com/yagiziskirik/AeroGraph/releases).
+1. Download `AeroGraph_Setup_v[x].exe` from [GitHub Releases](https://github.com/yagiziskirik/AeroGraph/releases/latest).
 2. Run the installer. AeroGraph installs to `%LOCALAPPDATA%\Programs\AeroGraph` without requiring administrator privileges.
 3. Choose whether to create a Desktop shortcut and whether to launch on Windows startup.
 4. Click **Finish** to launch AeroGraph.
@@ -605,8 +605,10 @@ powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
 ```
 The output installer will be created at:
 ```
-installer\output\AeroGraph_Setup_v0.1.0.exe
+installer\output\AeroGraph_Setup_v[x].exe
 ```
+
+> Make sure the version numbers are bumped up correctly. For more information about contributing, you can check out the [contribution](CONTRIBUTING.md) page.
 
 ---
 
