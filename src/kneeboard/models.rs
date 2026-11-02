@@ -39,6 +39,14 @@ impl Default for Steerpoint {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum ThreatKind {
+    #[default]
+    Sam,
+    Tanker,
+    Awacs,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Threat {
     pub system: String,
@@ -49,6 +57,8 @@ pub struct Threat {
     pub x: f64,
     pub y: f64,
     pub range_nm: f64,
+    #[serde(default)]
+    pub kind: ThreatKind,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,6 +132,8 @@ pub struct BriefingData {
     pub package_flights: Vec<PackageFlight>,
     pub weather: Option<WeatherReport>,
     pub timestamp_str: String,
+    pub link16_mission_channel: Option<String>,
+    pub link16_flight_stn: Option<String>,
 }
 
 impl Default for BriefingData {
@@ -148,6 +160,8 @@ impl Default for BriefingData {
             package_flights: Vec::new(),
             weather: None,
             timestamp_str: String::new(),
+            link16_mission_channel: None,
+            link16_flight_stn: None,
         }
     }
 }

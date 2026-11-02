@@ -17,17 +17,17 @@ fn main() {
         let rc_content = format!(
             "1 ICON \"{}\"\n\
             1 VERSIONINFO\n\
-            FILEVERSION 0,1,0,0\n\
-            PRODUCTVERSION 0,1,0,0\n\
+            FILEVERSION 0,2,0,0\n\
+            PRODUCTVERSION 0,2,0,0\n\
             BEGIN\n\
                 BLOCK \"StringFileInfo\"\n\
                 BEGIN\n\
                     BLOCK \"040904b0\"\n\
                     BEGIN\n\
                         VALUE \"FileDescription\", \"AeroGraph - Falcon BMS Voice & Kneeboards\"\n\
-                        VALUE \"FileVersion\", \"0.1.0\"\n\
+                        VALUE \"FileVersion\", \"0.2.0\"\n\
                         VALUE \"ProductName\", \"AeroGraph\"\n\
-                        VALUE \"ProductVersion\", \"0.1.0\"\n\
+                        VALUE \"ProductVersion\", \"0.2.0\"\n\
                     END\n\
                 END\n\
                 BLOCK \"VarFileInfo\"\n\

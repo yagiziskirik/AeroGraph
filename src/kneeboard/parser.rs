@@ -1,4 +1,6 @@
-use crate::kneeboard::models::{BriefingData, CommAgency, Steerpoint, TargetSteerpoint, Threat};
+use crate::kneeboard::models::{
+    BriefingData, CommAgency, Steerpoint, TargetSteerpoint, Threat, ThreatKind,
+};
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
@@ -317,7 +319,7 @@ pub fn parse_briefing(path: &Path) -> Option<BriefingData> {
         let threat_text = &after[..end_pos];
 
         if let Ok(re_threat) = Regex::new(
-            r"(?i)([A-Za-z0-9\-/\(\)\s]+?)\s*(?:missile launchers|battalion|site)?\s+(\d+(?:\.\d+)?)\s*nm\s+([a-z]+)\s+of\s+([A-Za-z0-9\s-]+)",
+            r"(?i)(?:--\s*)?([A-Za-z0-9\-/\(\)\s]+?)\s*(?:missile launchers|battalion|site)?\s+(\d+(?:\.\d+)?)\s*(?:nm|km)\s+([a-z]+)\s+of\s+([A-Za-z0-9\s'-]+)",
         ) {
             for line in threat_text.lines() {
                 let trimmed = line.trim();
@@ -325,7 +327,7 @@ pub fn parse_briefing(path: &Path) -> Option<BriefingData> {
                     continue;
                 }
                 if let Some(m) = re_threat.captures(trimmed) {
-                    let sys_name = m[1].trim().to_string();
+                    let sys_name = m[1].trim().trim_start_matches('-').trim().to_string();
                     let dist_nm: f64 = m[2].parse().unwrap_or(0.0);
                     let direction = m[3].trim().to_lowercase();
                     let place_name = m[4].trim().to_string();
@@ -338,6 +340,7 @@ pub fn parse_briefing(path: &Path) -> Option<BriefingData> {
                         x: 0.0,
                         y: 0.0,
                         range_nm: 8.0,
+                        kind: ThreatKind::Sam,
                     });
                 }
             }
@@ -375,6 +378,21 @@ pub fn parse_briefing(path: &Path) -> Option<BriefingData> {
                     uhf,
                     vhf,
                 });
+            }
+        }
+    }
+
+    // Link 16 Network Parameters
+    if let Some(pos) = text.find("Link 16") {
+        let l16_text = &text[pos..];
+        if let Ok(re_mission) = Regex::new(r"Mission:\s*(\d+)") {
+            if let Some(caps) = re_mission.captures(l16_text) {
+                data.link16_mission_channel = Some(caps[1].trim().to_string());
+            }
+        }
+        if let Ok(re_stn) = Regex::new(r"Flight\s+(\d+)") {
+            if let Some(caps) = re_stn.captures(l16_text) {
+                data.link16_flight_stn = Some(caps[1].trim().to_string());
             }
         }
     }
@@ -438,9 +456,237 @@ pub fn parse_callsign_stpts(ini_path: &Path) -> HashMap<u32, TargetSteerpoint> {
     map
 }
 
+pub fn parse_dtc_ppts_content(
+    content: &str,
+    expected_mission_channel: Option<&str>,
+    expected_flight_stn: Option<&str>,
+) -> Option<Vec<Threat>> {
+    let mut in_link16 = false;
+    let mut file_a_mission: Option<String> = None;
+    let mut file_a_stn: Option<String> = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("[LINK16]") {
+            in_link16 = true;
+            continue;
+        } else if trimmed.starts_with('[') && in_link16 {
+            break;
+        }
+
+        if in_link16 {
+            if let Some((k, v)) = trimmed.split_once('=') {
+                let key = k.trim();
+                let val = v.trim();
+                if key.eq_ignore_ascii_case("FILE_A_MISSION_CHANNEL") {
+                    file_a_mission = Some(val.to_string());
+                } else if key.eq_ignore_ascii_case("FILE_A_FLIGHT_1_STN") {
+                    file_a_stn = Some(val.to_string());
+                }
+            }
+        }
+    }
+
+    let mut verified = false;
+    if let (Some(exp_m), Some(m)) = (expected_mission_channel, &file_a_mission) {
+        if !exp_m.is_empty() && exp_m.trim().eq_ignore_ascii_case(m.trim()) {
+            verified = true;
+        }
+    }
+    if !verified {
+        if let (Some(exp_s), Some(s)) = (expected_flight_stn, &file_a_stn) {
+            if !exp_s.is_empty() && exp_s.trim().eq_ignore_ascii_case(s.trim()) {
+                verified = true;
+            }
+        }
+    }
+
+    if !verified {
+        return None;
+    }
+
+    let mut in_stpt = false;
+    let mut threats = Vec::new();
+    const NM_TO_FT: f64 = 6076.12;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("[STPT]") {
+            in_stpt = true;
+            continue;
+        } else if trimmed.starts_with('[') && in_stpt {
+            break;
+        }
+
+        if in_stpt && trimmed.starts_with("ppt_") {
+            if let Some((_, v)) = trimmed.split_once('=') {
+                let vals: Vec<&str> = v.split(',').map(|s| s.trim()).collect();
+                if vals.len() >= 5 {
+                    let x: f64 = vals[0].parse().unwrap_or(0.0);
+                    let y: f64 = vals[1].parse().unwrap_or(0.0);
+                    let radius_ft: f64 = vals[3].parse().unwrap_or(0.0);
+                    let label = vals[4].trim();
+
+                    if x == 0.0 && y == 0.0 {
+                        continue;
+                    }
+
+                    let upper_label = label.to_uppercase();
+                    let (kind, system, range_nm) =
+                        if upper_label.contains("TNK") || upper_label.contains("TANK") {
+                            let r = if radius_ft <= 0.1 * NM_TO_FT {
+                                10.0
+                            } else {
+                                radius_ft / NM_TO_FT
+                            };
+                            (ThreatKind::Tanker, label.to_string(), r)
+                        } else if upper_label.contains("AWC") || upper_label.contains("AWAC") {
+                            let r = if radius_ft <= 0.1 * NM_TO_FT {
+                                15.0
+                            } else {
+                                radius_ft / NM_TO_FT
+                            };
+                            (ThreatKind::Awacs, label.to_string(), r)
+                        } else {
+                            let sys =
+                                if label.chars().all(|c| c.is_ascii_digit()) && !label.is_empty() {
+                                    format!("SA-{}", label)
+                                } else {
+                                    label.to_string()
+                                };
+                            let r = if radius_ft <= 0.1 * NM_TO_FT {
+                                8.0
+                            } else {
+                                radius_ft / NM_TO_FT
+                            };
+                            (ThreatKind::Sam, sys, r)
+                        };
+
+                    threats.push(Threat {
+                        system,
+                        dist_nm: 0.0,
+                        dir: String::new(),
+                        place: String::new(),
+                        raw: format!("PPT: {}", label),
+                        x,
+                        y,
+                        range_nm,
+                        kind,
+                    });
+                }
+            }
+        }
+    }
+
+    if threats.is_empty() {
+        None
+    } else {
+        Some(threats)
+    }
+}
+
+pub fn parse_dtc_ppts(
+    ini_path: &Path,
+    expected_mission_channel: Option<&str>,
+    expected_flight_stn: Option<&str>,
+) -> Option<Vec<Threat>> {
+    if !ini_path.exists() {
+        return None;
+    }
+    let bytes = fs::read(ini_path).ok()?;
+    let content = String::from_utf8_lossy(&bytes);
+    parse_dtc_ppts_content(&content, expected_mission_channel, expected_flight_stn)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn test_parse_link16_synthetic() {
+        let sample =
+            "Link 16:\nMission:\t125\tFlight 56741\tCallsign:\tFN\tNumber:\t11\nVoice 1:\t125\n";
+        let mut data = BriefingData::default();
+        if let Some(pos) = sample.find("Link 16") {
+            let l16_text = &sample[pos..];
+            if let Ok(re_mission) = Regex::new(r"Mission:\s*(\d+)") {
+                if let Some(caps) = re_mission.captures(l16_text) {
+                    data.link16_mission_channel = Some(caps[1].trim().to_string());
+                }
+            }
+            if let Ok(re_stn) = Regex::new(r"Flight\s+(\d+)") {
+                if let Some(caps) = re_stn.captures(l16_text) {
+                    data.link16_flight_stn = Some(caps[1].trim().to_string());
+                }
+            }
+        }
+        assert_eq!(data.link16_mission_channel.as_deref(), Some("125"));
+        assert_eq!(data.link16_flight_stn.as_deref(), Some("56741"));
+    }
+
+    #[test]
+    fn test_parse_dtc_ppts_content_success() {
+        let ini_content = r#"
+[LINK16]
+FILE_A_MISSION_CHANNEL=125
+FILE_A_FLIGHT_1_STN=56741
+
+[STPT]
+ppt_0=1638521.5, 1234546.5, 0.0, 145826.78, 17
+ppt_1=1546570.3, 1300195.1, 0.0, 121522.31, 11
+ppt_2=1500786.0, 1201535.8, 0.0, 121522.31, 11
+ppt_3=1400000.0, 1100000.0, 0.0, 60761.2, TNK
+ppt_4=0.0, 0.0, 0.0, 0.0, 0
+"#;
+        let threats =
+            parse_dtc_ppts_content(ini_content, Some("125"), None).expect("Expected valid PPTs");
+        assert_eq!(threats.len(), 4);
+        assert_eq!(threats[0].system, "SA-17");
+        assert_eq!(threats[0].kind, ThreatKind::Sam);
+        assert!((threats[0].range_nm - 24.0).abs() < 0.1);
+
+        assert_eq!(threats[1].system, "SA-11");
+        assert_eq!(threats[1].kind, ThreatKind::Sam);
+        assert!((threats[1].range_nm - 20.0).abs() < 0.1);
+
+        assert_eq!(threats[2].system, "SA-11");
+        assert_eq!(threats[2].kind, ThreatKind::Sam);
+
+        assert_eq!(threats[3].system, "TNK");
+        assert_eq!(threats[3].kind, ThreatKind::Tanker);
+        assert!((threats[3].range_nm - 10.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_parse_dtc_ppts_content_mismatch_fallback() {
+        let ini_content = r#"
+[LINK16]
+FILE_A_MISSION_CHANNEL=125
+FILE_A_FLIGHT_1_STN=56741
+
+[STPT]
+ppt_0=1638521.5, 1234546.5, 0.0, 145826.78, 17
+"#;
+        let threats = parse_dtc_ppts_content(ini_content, Some("999"), Some("00000"));
+        assert!(
+            threats.is_none(),
+            "Should fall back to None when Link 16 does not match"
+        );
+    }
+
+    #[test]
+    fn test_threat_regex_with_apostrophe() {
+        let re_threat = Regex::new(
+            r"(?i)(?:--\s*)?([A-Za-z0-9\-/\(\)\s]+?)\s*(?:missile launchers|battalion|site)?\s+(\d+(?:\.\d+)?)\s*(?:nm|km)\s+([a-z]+)\s+of\s+([A-Za-z0-9\s'-]+)"
+        ).unwrap();
+        let sample = "-- SA-11 (9K37M1)missile launchers 1 nm west of Hanjong-ni's Town";
+        let caps = re_threat
+            .captures(sample)
+            .expect("Regex should match place with apostrophe");
+        assert_eq!(caps[1].trim(), "SA-11 (9K37M1)");
+        assert_eq!(caps[2].trim(), "1");
+        assert_eq!(caps[3].trim(), "west");
+        assert_eq!(caps[4].trim(), "Hanjong-ni's Town");
+    }
 
     #[test]
     fn test_parse_real_briefing() {
@@ -486,6 +732,21 @@ mod tests {
                 None,
             );
             assert_eq!(route.len(), data.steerpoints.len());
+            // Target steerpoint (Grnd Attack) must have action_code 20
+            let tgt = route.iter().find(|p| p.action_code == 20);
+            assert!(
+                tgt.is_some(),
+                "Should find target steerpoint with action_code 20"
+            );
+            let tgt_p = tgt.unwrap();
+            assert_eq!(tgt_p.num, 7, "Target should be STPT 7 (Grnd Attack)");
+            // IP steerpoint must have action_code 13
+            let ip = route.iter().find(|p| p.action_code == 13);
+            assert!(
+                ip.is_some(),
+                "Should find IP steerpoint with action_code 13"
+            );
+            assert_eq!(ip.unwrap().num, 6, "IP should be STPT 6 (IP)");
         }
     }
 }
