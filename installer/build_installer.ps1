@@ -4,7 +4,13 @@
 .DESCRIPTION
     Compiles AeroGraph in release mode and packages it into a single standalone
     graphical Windows setup executable (AeroGraph_Setup_vX.Y.Z.exe) using Inno Setup.
+.PARAMETER Version
+    Optional version string override (e.g. "0.9.9-test"). If omitted, reads from Cargo.toml.
 #>
+
+param(
+    [string]$Version = ""
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -16,19 +22,23 @@ Write-Host "==========================================================" -Foregro
 Write-Host "         AeroGraph Automated Installer Builder            " -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
-# 1. Read package version from Cargo.toml
-$cargoTomlPath = "$projectRoot\Cargo.toml"
-if (-not (Test-Path $cargoTomlPath)) {
-    Write-Error "Cargo.toml not found at $cargoTomlPath"
-}
+# 1. Resolve package version
+if (-not $Version) {
+    $cargoTomlPath = "$projectRoot\Cargo.toml"
+    if (-not (Test-Path $cargoTomlPath)) {
+        Write-Error "Cargo.toml not found at $cargoTomlPath"
+    }
 
-$cargoToml = Get-Content $cargoTomlPath -Raw
-if ($cargoToml -match 'version\s*=\s*"([^"]+)"') {
-    $version = $Matches[1]
-    Write-Host "Detected AeroGraph Version: v$version" -ForegroundColor Green
+    $cargoToml = Get-Content $cargoTomlPath -Raw
+    if ($cargoToml -match 'version\s*=\s*"([^"]+)"') {
+        $Version = $Matches[1]
+        Write-Host "Detected AeroGraph Version from Cargo.toml: v$Version" -ForegroundColor Green
+    } else {
+        $Version = "0.1.0"
+        Write-Host "Could not detect version from Cargo.toml, defaulting to v$Version" -ForegroundColor Yellow
+    }
 } else {
-    $version = "0.1.0"
-    Write-Host "Could not detect version from Cargo.toml, defaulting to v$version" -ForegroundColor Yellow
+    Write-Host "Using Custom AeroGraph Version: v$Version" -ForegroundColor Cyan
 }
 
 # 2. Build release binary with Cargo
@@ -97,12 +107,12 @@ if (-not (Test-Path $outputDir)) {
     New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 }
 
-& $isccPath "/DMyAppVersion=$version" $setupScript
+& $isccPath "/DMyAppVersion=$Version" $setupScript
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Inno Setup compilation failed with exit code $LASTEXITCODE"
 }
 
-$setupExe = "$outputDir\AeroGraph_Setup_v$version.exe"
+$setupExe = "$outputDir\AeroGraph_Setup_v$Version.exe"
 if (Test-Path $setupExe) {
     $sizeMB = [math]::Round((Get-Item $setupExe).Length / 1MB, 2)
     Write-Host ""
