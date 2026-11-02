@@ -214,7 +214,7 @@ impl AxisSampler {
                 let raw_val = self.get_axis_value(&state, binding.axis_index);
                 // DirectInput default range is 0..65535, with 32767 as neutral center
                 let raw_norm = (raw_val as f32) / 65535.0;
-                let is_inverted = binding.calibration.as_ref().map_or(false, |c| c.invert);
+                let is_inverted = binding.calibration.as_ref().is_some_and(|c| c.invert);
                 let normalized = if is_inverted {
                     (1.0 - raw_norm).clamp(0.0, 1.0)
                 } else {

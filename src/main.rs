@@ -564,12 +564,12 @@ fn run_voice_worker_loop(
         }
 
         // Check BMS shared memory connection (throttled to 1s when disconnected)
-        if !bms_client.is_connected() {
-            if last_bms_connect_attempt.elapsed() >= Duration::from_secs(1) {
-                last_bms_connect_attempt = Instant::now();
-                if bms_client.connect() {
-                    log::info!("Connected to Falcon BMS Shared Memory!");
-                }
+        if !bms_client.is_connected()
+            && last_bms_connect_attempt.elapsed() >= Duration::from_secs(1)
+        {
+            last_bms_connect_attempt = Instant::now();
+            if bms_client.connect() {
+                log::info!("Connected to Falcon BMS Shared Memory!");
             }
         }
 
@@ -825,12 +825,12 @@ fn run_voice_worker_loop(
                         if !state_engine.is_group_active(group) {
                             log::info!("🚫 [Condition Gated] Command group [{}] is inactive under current conditions. Ignoring \"{}\"", grp_name, text);
                         } else {
-                            let requires_ptt1 = group.PushToTalk.as_ref().map_or(false, |ptt| {
+                            let requires_ptt1 = group.PushToTalk.as_ref().is_some_and(|ptt| {
                                 ptt.VariableInputs
                                     .iter()
                                     .any(|v| v.Name == "SimTransmitCom1")
                             });
-                            let requires_ptt2 = group.PushToTalk.as_ref().map_or(false, |ptt| {
+                            let requires_ptt2 = group.PushToTalk.as_ref().is_some_and(|ptt| {
                                 ptt.VariableInputs
                                     .iter()
                                     .any(|v| v.Name == "SimTransmitCom2")
@@ -838,9 +838,9 @@ fn run_voice_worker_loop(
 
                             let ptt_grace = Duration::from_millis(1500);
                             let ptt1_held = ptt_com1
-                                || last_ptt_com1_time.map_or(false, |t| t.elapsed() <= ptt_grace);
+                                || last_ptt_com1_time.is_some_and(|t| t.elapsed() <= ptt_grace);
                             let ptt2_held = ptt_com2
-                                || last_ptt_com2_time.map_or(false, |t| t.elapsed() <= ptt_grace);
+                                || last_ptt_com2_time.is_some_and(|t| t.elapsed() <= ptt_grace);
 
                             let ptt_allowed = if requires_ptt1 {
                                 ptt1_held

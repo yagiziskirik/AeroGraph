@@ -28,8 +28,10 @@ pub fn is_bms_running() -> bool {
             Err(_) => return false,
         };
 
-        let mut entry = PROCESSENTRY32W::default();
-        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+        let mut entry = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
 
         if Process32FirstW(snapshot, &mut entry).is_ok() {
             loop {
@@ -63,7 +65,7 @@ pub fn is_bms_running() -> bool {
 pub fn is_newer_version(remote: &str, current: &str) -> bool {
     let clean = |s: &str| -> Vec<u64> {
         s.trim()
-            .trim_start_matches(|c| c == 'v' || c == 'V')
+            .trim_start_matches(['v', 'V'])
             .split('.')
             .filter_map(|p| p.parse::<u64>().ok())
             .collect()
@@ -104,7 +106,7 @@ pub fn check_for_updates(
         .unwrap_or_default()
         .to_string();
     let clean_version = tag_name
-        .trim_start_matches(|c| c == 'v' || c == 'V')
+        .trim_start_matches(['v', 'V'])
         .to_string();
 
     if !is_newer_version(&clean_version, current_version) {

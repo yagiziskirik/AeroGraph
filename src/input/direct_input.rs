@@ -223,7 +223,7 @@ impl DirectInputManager {
         let proc = unsafe {
             GetProcAddress(
                 hmodule,
-                windows::core::PCSTR(b"DirectInput8Create\0".as_ptr()),
+                windows::core::PCSTR(c"DirectInput8Create".as_ptr() as *const u8),
             )
         }
         .ok_or("Failed to find DirectInput8Create in dinput8.dll")?;
@@ -320,8 +320,7 @@ impl DirectInputManager {
     /// Connects and initializes a joystick/TQS/pedals device by GUID string.
     pub fn open_device(&mut self, guid_str: &str) -> Result<(), Box<dyn std::error::Error>> {
         let clean_guid = guid_str.trim_matches('{').trim_matches('}');
-        let parsed_guid = GUID::try_from(clean_guid)
-            .map_err(|e| format!("Invalid device GUID {}: {:?}", guid_str, e))?;
+        let parsed_guid = GUID::from(clean_guid);
 
         if self.devices.contains_key(clean_guid) {
             return Ok(());

@@ -434,13 +434,12 @@ impl KneeboardWatcher {
                     let blank_png = images_dir.join("arr_ils_blank.png");
                     let html =
                         generate_blank_chart_html(&arr_name, "ILS APPROACH CHARTS NOT AVAILABLE");
-                    if fs::write(&blank_html, html).is_ok() {
-                        if render_html_to_png(&wkhtmltoimage_path, &blank_html, &blank_png).is_ok()
-                        {
-                            if let Ok(img) = image::open(&blank_png) {
-                                slot_images.insert("F16_7R".to_string(), img.to_rgba8());
-                                dirty_slots.insert("F16_7R".to_string());
-                            }
+                    if fs::write(&blank_html, html).is_ok()
+                        && render_html_to_png(&wkhtmltoimage_path, &blank_html, &blank_png).is_ok()
+                    {
+                        if let Ok(img) = image::open(&blank_png) {
+                            slot_images.insert("F16_7R".to_string(), img.to_rgba8());
+                            dirty_slots.insert("F16_7R".to_string());
                         }
                     }
                 }
@@ -453,19 +452,19 @@ impl KneeboardWatcher {
                 if let Some(arr) = arr_ap {
                     if arr_active.len() > 1 {
                         let sec_end = &arr_active[1];
-                        if sec_end.has_ils {
-                            if find_and_render_ils_chart(
+                        if sec_end.has_ils
+                            && find_and_render_ils_chart(
                                 arr,
                                 sec_end,
                                 &assets_dir,
                                 &charts_json_raw,
                                 &sec_ils_png,
-                            ) {
-                                if let Ok(img) = image::open(&sec_ils_png) {
-                                    slot_images.insert("F16_8R".to_string(), img.to_rgba8());
-                                    dirty_slots.insert("F16_8R".to_string());
-                                    rendered = true;
-                                }
+                            )
+                        {
+                            if let Ok(img) = image::open(&sec_ils_png) {
+                                slot_images.insert("F16_8R".to_string(), img.to_rgba8());
+                                dirty_slots.insert("F16_8R".to_string());
+                                rendered = true;
                             }
                         }
                     }
@@ -475,13 +474,12 @@ impl KneeboardWatcher {
                     let blank_png = images_dir.join("sec_ils_blank.png");
                     let html =
                         generate_blank_chart_html(&arr_name, "ILS APPROACH CHARTS NOT AVAILABLE");
-                    if fs::write(&blank_html, html).is_ok() {
-                        if render_html_to_png(&wkhtmltoimage_path, &blank_html, &blank_png).is_ok()
-                        {
-                            if let Ok(img) = image::open(&blank_png) {
-                                slot_images.insert("F16_8R".to_string(), img.to_rgba8());
-                                dirty_slots.insert("F16_8R".to_string());
-                            }
+                    if fs::write(&blank_html, html).is_ok()
+                        && render_html_to_png(&wkhtmltoimage_path, &blank_html, &blank_png).is_ok()
+                    {
+                        if let Ok(img) = image::open(&blank_png) {
+                            slot_images.insert("F16_8R".to_string(), img.to_rgba8());
+                            dirty_slots.insert("F16_8R".to_string());
                         }
                     }
                 }
@@ -588,18 +586,17 @@ impl KneeboardWatcher {
                         }
 
                         if needs_render {
-                            if fs::write(&blank_html_path, &html).is_ok() {
-                                if render_html_to_png(
+                            if fs::write(&blank_html_path, &html).is_ok()
+                                && render_html_to_png(
                                     &wkhtmltoimage_path,
                                     &blank_html_path,
                                     &blank_png_path,
                                 )
                                 .is_ok()
-                                {
-                                    if let Ok(img) = image::open(&blank_png_path) {
-                                        slot_images.insert(slot.clone(), img.to_rgba8());
-                                        dirty_slots.insert(slot.clone());
-                                    }
+                            {
+                                if let Ok(img) = image::open(&blank_png_path) {
+                                    slot_images.insert(slot.clone(), img.to_rgba8());
+                                    dirty_slots.insert(slot.clone());
                                 }
                             }
                         } else if let Ok(img) = image::open(&blank_png_path) {
@@ -690,18 +687,17 @@ impl KneeboardWatcher {
                         }
 
                         if needs_render {
-                            if fs::write(&blank_html_path, &html).is_ok() {
-                                if render_html_to_png(
+                            if fs::write(&blank_html_path, &html).is_ok()
+                                && render_html_to_png(
                                     &wkhtmltoimage_path,
                                     &blank_html_path,
                                     &blank_png_path,
                                 )
                                 .is_ok()
-                                {
-                                    if let Ok(img) = image::open(&blank_png_path) {
-                                        slot_images.insert(slot.clone(), img.to_rgba8());
-                                        dirty_slots.insert(slot.clone());
-                                    }
+                            {
+                                if let Ok(img) = image::open(&blank_png_path) {
+                                    slot_images.insert(slot.clone(), img.to_rgba8());
+                                    dirty_slots.insert(slot.clone());
                                 }
                             }
                         } else if let Ok(img) = image::open(&blank_png_path) {
@@ -732,18 +728,17 @@ impl KneeboardWatcher {
                     }
 
                     if needs_render {
-                        if fs::write(&blank_html_path, &html).is_ok() {
-                            if render_html_to_png(
+                        if fs::write(&blank_html_path, &html).is_ok()
+                            && render_html_to_png(
                                 &wkhtmltoimage_path,
                                 &blank_html_path,
                                 &blank_png_path,
                             )
                             .is_ok()
-                            {
-                                if let Ok(img) = image::open(&blank_png_path) {
-                                    slot_images.insert(slot.clone(), img.to_rgba8());
-                                    dirty_slots.insert(slot.clone());
-                                }
+                        {
+                            if let Ok(img) = image::open(&blank_png_path) {
+                                slot_images.insert(slot.clone(), img.to_rgba8());
+                                dirty_slots.insert(slot.clone());
                             }
                         }
                     } else if let Ok(img) = image::open(&blank_png_path) {

@@ -54,15 +54,16 @@ pub fn get_sam_range(system_name: &str) -> f64 {
 }
 
 pub fn get_compass_dir(dir_str: &str) -> (f64, f64) {
+    let diag = std::f64::consts::FRAC_1_SQRT_2;
     match dir_str.to_lowercase().trim() {
         "north" | "n" => (1.0, 0.0),
         "south" | "s" => (-1.0, 0.0),
         "east" | "e" => (0.0, 1.0),
         "west" | "w" => (0.0, -1.0),
-        "northeast" | "ne" => (0.7071, 0.7071),
-        "northwest" | "nw" => (0.7071, -0.7071),
-        "southeast" | "se" => (-0.7071, 0.7071),
-        "southwest" | "sw" => (-0.7071, -0.7071),
+        "northeast" | "ne" => (diag, diag),
+        "northwest" | "nw" => (diag, -diag),
+        "southeast" | "se" => (-diag, diag),
+        "southwest" | "sw" => (-diag, -diag),
         _ => (0.0, 0.0),
     }
 }
@@ -246,14 +247,15 @@ pub fn compute_mission_route_coords(
     }
 
     // If forward pass reached land_idx and arr_coords is given, reconcile closure error
-    if fwd_reached_land && arr_coords.is_some() && land_idx > 0 {
-        let arr = arr_coords.unwrap();
+    if let (true, Some(arr)) = (fwd_reached_land && land_idx > 0, arr_coords) {
+
         let err_x = arr.0 - coords[land_idx as usize].x;
         let err_y = arr.1 - coords[land_idx as usize].y;
-        for i in 1..=(land_idx as usize) {
+        for (idx_offset, coord) in coords[1..=(land_idx as usize)].iter_mut().enumerate() {
+            let i = idx_offset + 1;
             let factor = i as f64 / land_idx as f64;
-            coords[i].x += err_x * factor;
-            coords[i].y += err_y * factor;
+            coord.x += err_x * factor;
+            coord.y += err_y * factor;
         }
     } else {
         // Backward pass from Landing steerpoint
@@ -452,6 +454,7 @@ fn solve_waypoint_tag_placements(
     results
 }
 
+#[allow(clippy::too_many_arguments)]
 fn get_edge_point(
     from_x: f64,
     from_y: f64,
@@ -573,6 +576,7 @@ pub fn compute_target_crop_box(
     Some((crop_min_x, crop_max_x, crop_min_y, crop_max_y))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn generate_mission_overview_page(
     b_data: &BriefingData,
     merged_stpts: &[Steerpoint],
@@ -1058,6 +1062,7 @@ pub fn generate_mission_overview_html(
     Ok(html_file)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn generate_tactical_target_page(
     b_data: &BriefingData,
     merged_stpts: &[Steerpoint],

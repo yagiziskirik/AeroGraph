@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ffi::c_void;
 use std::mem;
 use std::ptr;
-use windows::core::{Result, PCWSTR, PWSTR};
+use windows::core::{Interface, Result, PCWSTR, PWSTR};
 use windows::Win32::Media::Speech::{
     ISpObjectToken, ISpObjectTokenCategory, ISpRecoContext, ISpRecoGrammar, ISpRecoResult,
     ISpRecognizer, SPRAF_Active, SPRAF_TopLevel, SpInprocRecognizer, SpObjectToken,
@@ -685,19 +685,18 @@ impl SapiEngine {
                 } else {
                     // For other events with COM object or pointer in lParam, release or free them
                     let param_type = ((event._bitfield >> 16) & 0xFFFF) as i32;
-                    if param_type == SPET_LPARAM_IS_OBJECT.0 as i32 {
-                        let obj_ptr = event.lParam.0 as *mut windows::core::IUnknown;
+                    if param_type == SPET_LPARAM_IS_OBJECT.0 {
+                        let obj_ptr = event.lParam.0 as *mut c_void;
                         if !obj_ptr.is_null() {
-                            let _: windows::core::IUnknown = mem::transmute(obj_ptr);
+                            let _ = windows::core::IUnknown::from_raw(obj_ptr);
                         }
-                    } else if param_type == SPET_LPARAM_IS_POINTER.0 as i32
-                        || param_type == SPET_LPARAM_IS_STRING.0 as i32
+                    } else if (param_type == SPET_LPARAM_IS_POINTER.0
+                        || param_type == SPET_LPARAM_IS_STRING.0)
+                        && event.lParam.0 != 0
                     {
-                        if event.lParam.0 != 0 {
-                            windows::Win32::System::Com::CoTaskMemFree(Some(
-                                event.lParam.0 as *const c_void,
-                            ));
-                        }
+                        windows::Win32::System::Com::CoTaskMemFree(Some(
+                            event.lParam.0 as *const c_void,
+                        ));
                     }
                 }
             }

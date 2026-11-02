@@ -56,7 +56,7 @@ impl LoadedProfile {
         }
 
         // Clean any leading dots, slashes, or backslashes
-        let clean = sanitized.trim_start_matches(|c| c == '.' || c == '/');
+        let clean = sanitized.trim_start_matches(['.', '/']);
         let joined = self.base_dir.join(clean);
         if joined.exists() {
             return joined;
