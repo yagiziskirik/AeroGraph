@@ -36,6 +36,9 @@ pub struct AppConfig {
     #[serde(default)]
     pub show_console: bool,
 
+    #[serde(alias = "voice_enabled", default = "default_true")]
+    pub voice_recognition: bool,
+
     #[serde(default = "default_true")]
     pub listening_enabled: bool,
 
@@ -83,6 +86,7 @@ impl Default for AppConfig {
             output_device: None,
             input_device: None,
             show_console: false,
+            voice_recognition: true,
             listening_enabled: true,
             auto_kneeboards: true,
             bms_base_dir: None,

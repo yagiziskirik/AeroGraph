@@ -205,8 +205,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut config = AppConfig::load();
     log::info!(
-        "Configuration loaded (Polling rate: {} Hz | Auto-Kneeboards: {})",
+        "Configuration loaded (Polling rate: {} Hz | Voice Recognition: {} | Auto-Kneeboards: {})",
         config.polling_rate_hz,
+        config.voice_recognition,
         config.auto_kneeboards
     );
 
@@ -216,7 +217,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 1. Locate or resolve FoxVox profile (.fvx)
     let mut profile_path = config.resolve_profile();
-    if profile_path.is_none() {
+    if profile_path.is_none() && config.voice_recognition {
         log::info!("No profile configured. Prompting user to select a profile (.fvx)...");
         profile_path = AppTray::prompt_select_profile();
         if let Some(ref p) = profile_path {
@@ -255,6 +256,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tray = AppTray::new(
         &profile_name,
         config.pilot_female,
+        config.voice_recognition,
         config.listening_enabled,
         config.auto_kneeboards,
         autostart_enabled,
@@ -312,11 +314,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         if let Event::NewEvents(_) = event {
             // Keep tray menu in sync if listening was toggled via voice ("stand by" / "radio check")
-            let current_listening = {
+            let (current_listening, voice_enabled) = {
                 let cfg = shared_config.lock().unwrap();
-                cfg.listening_enabled
+                (cfg.listening_enabled, cfg.voice_recognition)
             };
-            if current_listening != last_tray_listening {
+            if voice_enabled && current_listening != last_tray_listening {
                 tray.set_listening_active(current_listening);
                 last_tray_listening = current_listening;
             }
@@ -327,8 +329,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     running.store(false, Ordering::SeqCst);
                     *control_flow = ControlFlow::Exit;
                     return;
+                } else if menu_event.id == tray.item_voice_recognition.id() {
+                    let mut cfg = shared_config.lock().unwrap();
+                    cfg.voice_recognition = !cfg.voice_recognition;
+                    tray.set_voice_recognition_enabled(cfg.voice_recognition);
+                    let is_enabled = cfg.voice_recognition;
+                    let _ = cfg.save();
+                    reload_trigger.store(true, Ordering::SeqCst);
+                    log::info!(
+                        "Voice recognition set to: {}",
+                        if is_enabled { "Enabled" } else { "Disabled" }
+                    );
                 } else if menu_event.id == tray.item_listening.id() {
                     let mut cfg = shared_config.lock().unwrap();
+                    if !cfg.voice_recognition {
+                        continue;
+                    }
                     cfg.listening_enabled = !cfg.listening_enabled;
                     tray.set_listening_active(cfg.listening_enabled);
                     last_tray_listening = cfg.listening_enabled;
@@ -450,16 +466,26 @@ fn run_voice_worker_loop(
     proxy: tao::event_loop::EventLoopProxy<AppEvent>,
 ) {
     let mut bms_client = BmsSharedMemoryClient::new();
-    let mut sapi = match SapiEngine::new() {
-        Ok(s) => {
-            log::info!("SAPI Speech Recognizer initialized successfully");
-            Some(s)
-        }
-        Err(e) => {
-            log::error!("Failed to initialize Windows SAPI Recognizer: {:?}", e);
-            None
-        }
+    let initial_voice_enabled = {
+        let cfg = config_lock.lock().unwrap();
+        cfg.voice_recognition
     };
+    let mut sapi = if initial_voice_enabled {
+        match SapiEngine::new() {
+            Ok(s) => {
+                log::info!("SAPI Speech Recognizer initialized successfully");
+                Some(s)
+            }
+            Err(e) => {
+                log::error!("Failed to initialize Windows SAPI Recognizer: {:?}", e);
+                None
+            }
+        }
+    } else {
+        log::info!("Voice recognition disabled in configuration; skipping SAPI initialization.");
+        None
+    };
+
     let initial_gender = {
         let cfg = config_lock.lock().unwrap();
         cfg.pilot_female
@@ -485,11 +511,45 @@ fn run_voice_worker_loop(
     let mut initial_chirp_played = false;
 
     while running.load(Ordering::SeqCst) {
-        let polling_rate = {
+        let (polling_rate, voice_enabled) = {
             let cfg = config_lock.lock().unwrap();
-            cfg.polling_rate_hz.clamp(10, 100)
+            (cfg.polling_rate_hz.clamp(10, 100), cfg.voice_recognition)
         };
         let poll_interval = Duration::from_millis((1000 / polling_rate) as u64);
+
+        if !voice_enabled {
+            if sapi.is_some() {
+                log::info!("Voice recognition disabled: releasing SAPI and microphone");
+                sapi = None;
+            }
+            if axis_sampler.is_some() {
+                log::info!("Voice recognition disabled: releasing DirectInput axis sampler");
+                axis_sampler = None;
+            }
+            if bms_client.is_connected() {
+                bms_client.disconnect();
+            }
+            active_profile_name = None;
+            last_compiled_config = None;
+            thread::sleep(Duration::from_millis(200));
+            continue;
+        }
+
+        if sapi.is_none() {
+            log::info!("Voice recognition enabled: initializing SAPI Recognizer...");
+            sapi = match SapiEngine::new() {
+                Ok(s) => {
+                    log::info!("SAPI Speech Recognizer initialized successfully");
+                    Some(s)
+                }
+                Err(e) => {
+                    log::error!("Failed to initialize Windows SAPI Recognizer: {:?}", e);
+                    None
+                }
+            };
+            active_profile_name = None;
+            last_compiled_config = None;
+        }
 
         let reload = reload_trigger.swap(false, Ordering::SeqCst);
         if reload {

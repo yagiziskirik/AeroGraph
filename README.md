@@ -289,7 +289,10 @@ sapi_earcons = false
 # Show console diagnostic window on launch, editable via tray icon
 show_console = false
 
-# Voice recognition listening state, editable via tray icon
+# Master toggle for voice recognition and controller sampling, editable via tray icon
+voice_recognition = true
+
+# Voice recognition listening state (active/standby), editable via tray icon
 listening_enabled = true
 
 # Live file monitoring on User/Briefings/briefing.txt
@@ -303,7 +306,7 @@ check_updates_on_startup = true
 github_repo = "yagiziskirik/AeroGraph"
 ```
 
-Some of these settings like `listening_enabled` and `show_console` can be altered via the tray menu. In case you need to change something manually (like for the future, you want to fetch the updates from another fork), this is where you change it.
+Some of these settings like `voice_recognition`, `listening_enabled`, `auto_kneeboards`, and `show_console` can be altered via the tray menu. In case you need to change something manually (like for the future, you want to fetch the updates from another fork), this is where you change it.
 
 ---
 
@@ -507,6 +510,7 @@ For a complete breakdown of all available voice interactions, dialogue trees, ha
 Right-click the AeroGraph icon in the Windows notification area to access:
 
 - **Profile: [Profile Name]**: Displays currently active aircraft voice profile.
+- **🎙️ Voice Recognition**: Master toggle to completely enable or disable speech recognition and DirectInput controller sampling.
 - **🎙️ Listening Mode**: Toggle voice recognition on/off (also controllable hands-free via *"Stand by"* / *"Radio check"*).
 - **Pilot Voice**: Toggle between Male and Female pilot voice responses.
 - **Select .fvx Profile...**: Browse and load different FoxVox aircraft profiles.
@@ -543,7 +547,7 @@ Right-click the AeroGraph icon in the Windows notification area to access:
 ## ❓ Frequently Asked Questions (FAQ) & Troubleshooting
 
 ### Q: Voice engine is not responding to my commands?
-1. Check the system tray icon: ensure **🎙️ Listening: Active** is displayed (say *"Radio check"* or right-click to unmute).
+1. Check the system tray icon: ensure **🎙️ Voice Recognition: Enabled** and **🎙️ Listening: Active** are displayed (say *"Radio check"* or right-click to unmute).
 2. Verify your default recording device in Windows Sound Settings.
 3. Confirm that Windows Speech Recognition (SAPI 5.4+) is enabled in Windows Settings.
 4. If Windows Speech Recognition is not working, not activated or installed, you can [install them within the settings](https://support.microsoft.com/en-us/education/learning-accelerators/download-languages-and-voices-for-immersive-reader-read-mode-and-read-aloud) and restart your computer to check the settings again.
