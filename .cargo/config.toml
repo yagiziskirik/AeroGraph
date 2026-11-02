@@ -1,0 +1,9 @@
+[alias]
+# Fast lint & style shortcuts
+lint = "clippy -- -D warnings"
+fmt-check = "fmt --all --check"
+
+# Native workspace tasks (runs src/bin/xtask.rs)
+xtask = "run --bin xtask --"
+check-all = "run --bin xtask -- check"
+installer = "run --bin xtask -- installer"
