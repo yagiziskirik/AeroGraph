@@ -3,7 +3,7 @@
 ; Single executable output: AeroGraph_Setup_v{#MyAppVersion}.exe
 
 #define MyAppName "AeroGraph"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.2.0"
 #define MyAppPublisher "yagiziskirik"
 #define MyAppURL "https://github.com/yagiziskirik/AeroGraph"
 #define MyAppExeName "AeroGraph.exe"

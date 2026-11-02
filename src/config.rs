@@ -260,10 +260,11 @@ impl AppConfig {
                 )
                 .is_ok()
                 {
-                    theater =
-                        String::from_utf16_lossy(&buf[..(len as usize / 2).saturating_sub(1)])
-                            .trim()
-                            .to_string();
+                    let end_idx = buf[..(len as usize / 2)]
+                        .iter()
+                        .position(|&w| w == 0)
+                        .unwrap_or(len as usize / 2);
+                    theater = String::from_utf16_lossy(&buf[..end_idx]).trim().to_string();
                 }
 
                 // Pilot Callsign
@@ -281,10 +282,8 @@ impl AppConfig {
                 .is_ok()
                 {
                     let raw = &bin_buf[..bin_len as usize];
-                    let cs = String::from_utf8_lossy(raw)
-                        .trim_matches('\0')
-                        .trim()
-                        .to_string();
+                    let end_idx = raw.iter().position(|&b| b == 0).unwrap_or(raw.len());
+                    let cs = String::from_utf8_lossy(&raw[..end_idx]).trim().to_string();
                     if !cs.is_empty() {
                         callsign = cs;
                     }

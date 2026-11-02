@@ -23,7 +23,7 @@ use crate::kneeboard::mission_html::{
     compute_mission_route_coords, compute_route_crop_box, compute_target_crop_box,
     generate_mission_overview_html, generate_tactical_target_html, resolve_threat_coords,
 };
-use crate::kneeboard::parser::{parse_briefing, parse_callsign_stpts};
+use crate::kneeboard::parser::{parse_briefing, parse_dtc_ppts};
 use crate::kneeboard::renderer::{render_html_batch_parallel, render_html_to_png};
 use crate::kneeboard::runways::{
     calculate_active_runways, find_airport, map_theater_id, TheaterDatabase,
@@ -235,7 +235,6 @@ impl KneeboardWatcher {
             None
         };
 
-        let callsign_stpts = parse_callsign_stpts(&callsign_ini);
         let dep_name = b_data
             .dep_name
             .clone()
@@ -254,12 +253,8 @@ impl KneeboardWatcher {
 
         let dep_xy = dep_ap.map(|a| (a.x, a.y));
         let arr_xy = arr_ap.map(|a| (a.x, a.y));
-        b_data.steerpoints = compute_mission_route_coords(
-            &b_data.steerpoints,
-            dep_xy,
-            arr_xy,
-            Some(&callsign_stpts),
-        );
+        b_data.steerpoints =
+            compute_mission_route_coords(&b_data.steerpoints, dep_xy, arr_xy, None);
 
         let data_dir = assets_dir.join("data");
 
@@ -287,7 +282,22 @@ impl KneeboardWatcher {
             log::info!("Base map resolved: {:?}", base_map);
 
             let geo_file = data_dir.join("geo").join(format!("{}.json", map_id));
-            let resolved_threats = resolve_threat_coords(&b_data.threats, &geo_file);
+            let dtc_threats = parse_dtc_ppts(
+                &callsign_ini,
+                b_data.link16_mission_channel.as_deref(),
+                b_data.link16_flight_stn.as_deref(),
+            );
+            let resolved_threats = if let Some(ppts) = dtc_threats {
+                log::info!(
+                    "DTC PPT threat fusion active: {} points from {}",
+                    ppts.len(),
+                    callsign_ini.display()
+                );
+                b_data.threats = ppts.clone();
+                ppts
+            } else {
+                resolve_threat_coords(&b_data.threats, &geo_file)
+            };
 
             if let Some(ref map_path) = base_map {
                 let need_route = layout_cfg.has_type(&KneeboardPageType::MissionRoute);

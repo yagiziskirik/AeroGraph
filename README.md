@@ -47,7 +47,7 @@
 1. **Automated Kneeboard Generator & Live Briefing Watcher**: 
    A multi-threaded pipeline that detects mission briefings and dynamically renders pixel-calibrated, high-contrast, VR-optimized kneeboards (Package Roster, Comms Ladder, Steerpoints, Weather, 16k SkyVector Route & Combat Area Maps, Dynamic Airfield Ground Taxi Diagrams, ILS Approach Plates, and T.O. 1F-16 POH Flight Reference Cards). Texture injection into Falcon BMS 3D cockpit files (`7982.dds` through `7997.dds`) executes in **under 1.5 seconds**, while the entire end-to-end cycle; from briefing file detection to HTML rendering, map cropping, and texture injection, typically finishes in **under 10 seconds**.
 2. **Crew Chief & Cockpit Voice Engine**: 
-   A speech-recognition copilot and ground crew engine powered by the Microsoft Speech API (SAPI), DirectInput 8 HOTAS hardware axis and button sampling, and FoxVox `.fvx` profiles. Includes state-machine tracking (e.g. MPO kick check validation, wheel chocks, external air/power, engine start, shutdown sequences) and low-latency audio cue feedback.
+   A speech-recognition copilot and ground crew engine powered by the Microsoft Speech API (SAPI), DirectInput 8 HOTAS hardware axis and button sampling, and FoxVox `.fvx` profiles. Includes state-machine tracking (e.g. MPO kick check validation, wheel chocks, external air/power, engine start sequences) and low-latency audio cue feedback.
 
 ---
 
@@ -93,40 +93,40 @@ All kneeboard pages are natively rendered at **1024×1554 resolution**, calibrat
 
 ## 💡 Design Philosophy & Origins
 
-AeroGraph was created to address a common frustration shared by Falcon BMS pilots: **the friction of pre-flight setup and alt-tabbing**.
+AeroGraph was created to address a frustration that I have in Falcon BMS: **the friction of pre-flight setup, alt-tabbing to check what went wrong and desire to use the in-game paper kneeboards instead of dynamic kneeboards**.
 
 ### The Motivation
-- **Ease-Of-Use, For Me:** I'm a real life pilot (civillian, not military) and I've built some habits throughout the years. I've used iPads and papers on my kneeboard, and I find the paper more reliable and authentic. I was using the Weapon Delivery Planner to update my charts, but I just felt something was off. The text wasn't so readable in VR, and I wanted something _more_ out of it. I found EZBoards quite useful, yet I wanted more. Speaking of VR, I had problems with the FoxVox's performance (**nothing on foxster's work**, more specifically, my computer's performance under BMS running in VR, my 3 custom joysticks on 1000 Hz refresh rate, background charts waiting to be refreshed in the background, and FoxVox waiting for inputs), therefore constant crashes one way or another. I was wondering what will give up first while in the simulator: BMS, my controllers, FoxVox or me. Hence, I started developing this.
-- **Automating Chart & Kneeboard Delivery**: The original **EZBoards** and **EZWatch** utilities demonstrated the tremendous value of getting briefed kneeboards into the cockpit. While EZBoards created L1 and R1 pages and EZWatch automatically fetched `briefing.txt`, managing external batch files and separate script tools remained cumbersome. AeroGraph completely rewrites this entire chart generation pipeline in pure, native Rust:
-  - We use modified versions of the original EZBoards checklists and custom templates.
-  - We do it vastly faster, with significantly more advanced features (16k SkyVector theater maps with dynamic SAM threat rings, dynamic vector airport ground charts, and T.O. 1F-16 POH scratchpads).
-  - We unify the entire pipeline with voice recognition in a single, lightweight application.
-- **Single-Process Runtime & Zero Alt-Tabbing**: While FoxVox provides hands-free muting and somewhat logging on the temp folder, running multiple separate external programs at sim launch often leads to heavy resource consumption, conflicting window hooks, or having to alt-tab out of the 3D cockpit to see why a command failed or whether a background tool crashed. AeroGraph runs as a unified background service with clear Windows system tray status and zero alt-tabbing required. Now if it goes down, everything goes down 🥲
-- **Bundled Customized FoxVox Profile**: AeroGraph comes bundled with an updated, customized version of the Falcon BMS profile for FoxVox (`Falcon BMS 4.38 v1.3.1.fvx`). I have updated and shuffled around several commands and flows to conform more strictly to real-world Falcon BMS documentation and textbook procedures. Pilots can seamlessly run this profile out of the box or select their own custom `.fvx` profiles via the tray menu.
+- **Ease-Of-Use, For Me:** I'm a real life pilot (civillian, not military) and I've built some habits throughout the years. I've used iPads and papers on my kneeboard, and I find the paper more reliable and authentic. I was using the Weapon Delivery Planner to update my charts, but I just felt something was off. The text wasn't so readable in VR, and I wanted something _more_ out of it. I found EZBoards quite useful, readable and perfect for this application, yet I wanted to see the airport charts and didn't want to manually select the charts and replace them by hand. Speaking of VR, I _thought_ had problems with the FoxVox's performance (**apparently this wasn't the case**, and found out it was my computer's performance under BMS running in VR, my 4 custom joysticks on 1000 Hz refresh rate, background charts waiting to be refreshed in the background, and FoxVox waiting for inputs on 4000 Hz combined), therefore constant crashes one way or another. I was wondering what will give up first while in the simulator: BMS, my controllers, FoxVox or me. Hence, I started developing this.
+- **Automating Chart & Kneeboard Delivery**: The original **EZBoards** and **EZWatch** utilities demonstrated the tremendous value of getting briefed kneeboards into the cockpit. While EZBoards created L1 and R1 pages and EZWatch automatically fetched `briefing.txt`, and I created some `batch` and `python` files to compliment the EZBoards, managing external batch files and separate script tools remained cumbersome. AeroGraph completely rewrites this entire chart generation pipeline in pure, native Rust:
+  - I used modified versions of the original EZBoards checklists and custom templates (except for the first two pages, I still love how Logic created them).
+  - I do it a bit faster thanks to the Rust, with advanced features (16k SkyVector theater maps with dynamic SAM threat rings, dynamic vector airport ground charts, and T.O. 1F-16 POH scratchpads).
+  - I tried to unify the entire pipeline with voice recognition in a single, lightweight application.
+- **Single-Process Runtime & Minimised Alt-Tabbing**: While FoxVox provides hands-free muting and somewhat logging on the temp folder, running multiple separate external programs at sim launch often leads to heavy resource consumption, conflicting window hooks, or having to alt-tab out of the 3D cockpit to see why a command failed or whether a background tool crashed. AeroGraph runs as a unified background service with clear Windows system tray status and zero alt-tabbing required for the most of the time. I still need to open the tool that I created if I want to change my own scratchpads, but that's as close as that I can get. Now if one thing goes down, everything goes down 🥲
+- **Bundled Customized FoxVox Profile**: AeroGraph comes bundled with an updated, customized version of the Falcon BMS profile for FoxVox (`Falcon BMS 4.38 v1.3.1.fvx`). I have updated and shuffled around several commands and flows to conform more strictly to the Falcon BMS documentation and textbook procedures (I'm still not sure, though). Virtual pilots can seamlessly run this profile out of the box or select their own custom `.fvx` profiles via the tray menu.
 - **Theater Support & Validation**: AeroGraph includes coordinate mapping, base charts, and airfield databases for most major Falcon BMS theaters (including addon theaters like Balkans, Israel, etc.), but **Korea (KTO)** is the primary, battle-tested and fully verified default theater.
-- **Not a Replacement**: AeroGraph natively executes `.fvx` profiles for low latency and minimal CPU footprint. Creating, recording audio for, or modifying `.fvx` profile structures should always be done inside FoxVox.
+- **Not a Replacement**: AeroGraph natively executes `.fvx` profiles for low latency and minimal CPU footprint. Creating, recording audio for, or modifying `.fvx` profile structures should always be done inside FoxVox. I cannot top-off Foxster's work on that matter.
 
 > ℹ️ **First-Launch Heads-Up: Initial Cache Generation**  
-> On your very first launch, local caches have not yet been built. AeroGraph will decompress the 16k SkyVector base map into a memory-mapped raw cache, index the theater airfield geometry database, and compile the SAPI binary voice grammar to disk. This one-time initialization may take 10–15 seconds on initial run, but every subsequent startup and mission update will run at full, instantaneous speed (~1.5 ms voice transitions and sub-second cached renders). Be aware of that when opening the program and clicking the "Print" button for the very first time.
+> On your very first launch, local caches have not yet been built. AeroGraph will decompress the 16k SkyVector base map into a memory-mapped raw cache (around 1 GB or so, be aware), index the theater airfield geometry database, and compile the SAPI binary voice grammar to disk. This one-time initialisation may take 20–30 seconds on initial run, but every subsequent startup and mission update will run at full, instantaneous speed (~1.5 ms voice transitions and sub-second cached renders). Be aware of that when opening the program and clicking the "Print" button for the very first time.
 
 ---
 
 ## 🛠️ Key Capabilities & Technical Specifications
 
 ### What We Do
-- **Automated Cockpit Texture Injection**: Intercepts Falcon BMS briefing files (`briefing.txt`) and automatically compiles, formats, and stitches active mission data into 32 kneeboard pages (16 Left and 16 Right pages mapped to DDS textures `7982.dds` through `7997.dds`).
+- **Automated Cockpit Texture Injection**: Intercepts Falcon BMS briefing files (`briefing.txt`) and automatically compiles, formats, and stitches active mission data into 32 kneeboard pages (16 Left and 16 Right pages mapped to DDS textures `7982.dds` through `7997.dds`) thanks to the EZBoards' `briefing.txt` parsing methods.
 - **Dynamic Airport Ground Taxi Charts**: Dynamically parses the departure and arrival airfields from your briefing, calculates live wind vectors, selects active runways based on headwind components, and renders detailed vector taxi diagrams with runway dimensions, parking ramps, and frequency ladders.
-- **Hardware-Integrated Voice Engine**: Listens for hands-free voice commands via Windows SAPI, sampling HOTAS hardware switches (e.g. MPO toggle, trim switches, speedbrakes) and validating real-time game telemetry from Falcon BMS shared memory.
-- **Flight-Safe Auto-Updater**: Transparently checks GitHub Releases for application updates without interrupting active simulator flights.
+- **Hardware-Integrated Voice Engine**: Listens for hands-free voice commands via Windows SAPI, sampling HOTAS hardware switches (e.g. MPO toggle, trim switches, speedbrakes) and validating real-time game telemetry from Falcon BMS shared memory, thanks to the FoxVox.
+- **Flight-Safe Auto-Updater**: Transparently checks GitHub Releases for application updates without interrupting active simulator flights. If any flights are detected, the updates will wait until BMS is closed.
 
 ### How We Do It
 - **Pure Rust Architecture**: Zero Electron or Node.js runtime overhead. Direct Win32 COM, DirectInput, and Win32 Memory Mapping APIs.
 - **SIMD Multithreaded Texture Compression**: Employs `image_dds` and multi-threaded CPU scopes (`std::thread::scope`) to compress 2048×2048 cockpit textures to BC1/DXT1 in parallel across all CPU cores.
 - **SAPI Binary Grammar Serialization**: In-memory compilation of `.fvx` XML grammar rules into native COM binary grammar blobs (`SPBINARYGRAMMAR`), serialized to disk with MD5 state hashing.
-- **Headless Vector & HTML Rendering**: Bundled headless WebKit renderer (`wkhtmltoimage`) executes parallel sub-second page layouts with full CSS styling.
+- **Headless Vector & HTML Rendering**: Bundled headless WebKit renderer (`wkhtmltoimage`) or local browsers as a backup (Edge or Chrome) executes parallel sub-second page layouts with full CSS styling.
 
 ### Why We Do It
-- **Eliminates Cockpit Alt-Tabbing**: No need to tab out of Falcon BMS to look up steerpoints, ILS frequencies, departure taxi layouts, or comm ladders.
+- **Tryies to Eliminate Cockpit Alt-Tabbing**: No need to tab out of Falcon BMS to look up steerpoints, ILS frequencies, departure taxi layouts, or comm ladders, or what went wrong.
 - **VR Readability without God-Rays**: Replaces harsh pure-white backgrounds with calibrated `#FAFAF8` daylight tinting and bold `#111111` typography, eliminating lens glare and god-rays in VR headsets.
 - **Seamless Pilot Workflow**: Save your mission or data cartridge in BMS, and your kneeboards are ready in the cockpit before you ramp start.
 
@@ -148,6 +148,7 @@ AeroGraph dynamically generates custom airfield ground taxi charts (`dep_taxi` a
    - Renders exact paved boundaries, runway centerlines, taxiway routes, and apron parking stands.
    - For sprawling airfields (e.g. Gunsan or Osan), AeroGraph renders a dedicated **Apron Parking Stands Magnification** inset so pilots can identify their assigned parking spot at a glance.
    - Overlays a dynamic wind arrow showing exact direction and velocity in knots.
+   - Still looks a bit overcrowded, but working with SVG creation dynamically is not easy, I'll try to make it better in time.
 5. **Aviation Metadata Ladder**:
    Includes airport ICAO, field elevation, active ATIS, Tower, Ground, Departure, and Approach frequencies, TACAN channel, runway dimensions ($L \times W$), magnetic headings, ILS localizer frequencies, and traffic pattern direction.
 
@@ -158,7 +159,7 @@ AeroGraph dynamically generates custom airfield ground taxi charts (`dep_taxi` a
 AeroGraph has been engineered from the ground up for minimal sim footprint and instantaneous updates:
 
 ### 1. SAPI Database Compaction & Hierarchical Prefix-Tree
-In standard FoxVox profiles, combining every agency prefix (*"Gunsan Tower"*, *"Tower"*, *"Departure"*, *"Approach"*) with every command variation in a flat list resulted in **over 37,000 distinct phrase transitions**. Compiling this flat database in SAPI previously took **68 seconds** on every aircraft change.
+In standard FoxVox profiles, combining every agency prefix (*"Gunsan Tower"*, *"Tower"*, *"Departure"*, *"Approach"*) with every command variation in a flat list resulted in **over 37,000 distinct phrase transitions**. Compiling this flat database in SAPI previously took **68 seconds** on every aircraft change (on my slow PC, of course).
 
 AeroGraph prunes and restructures the SAPI grammar into a **2-stage hierarchical state machine**:
 ```
@@ -203,6 +204,7 @@ AeroGraph's automated kneeboard generator monitors `User/Briefings/briefing.txt`
 1. Open the Falcon BMS Launcher and open the **Configuration** menu.
 2. Navigate to **General > Briefing/Debriefing**:
    - Ensure **`1. Briefing Output to File`** is **ENABLED** (checked).
+   - Ensure **`2. Append New Briefings`** is **DISABLED** (unchecked).
    - Ensure **`3. HTML Briefings`** is **DISABLED** (unchecked).
 
 <p align="center">
@@ -226,13 +228,13 @@ Whenever you plan a mission in Campaign or Tactical Engagement:
   <em>Click the 'Print' button in the BMS Briefing window to generate User/Briefings/briefing.txt.</em>
 </p>
 
-4. Falcon BMS immediately outputs `briefing.txt`. AeroGraph detects the change in milliseconds, renders your complete kneeboard suite, and injects textures directly into your cockpit!
+4. Falcon BMS immediately outputs `briefing.txt`. AeroGraph detects the change in milliseconds, renders your complete kneeboard suite, and injects textures directly into your cockpit. It can take a few seconds, just wait for `DATA` sound (you'll understand when you hear it), and than you are ready for departure!
 
 ---
 
 ### 2. HOTAS & Controller Configuration (MPO Switch Mapping)
 
-Flight controls, PTT, and cockpit keybindings are mapped inside Falcon BMS directly.
+Flight controls, PTT, and cockpit keybindings are mapped inside Falcon BMS directly, and requires no further configuration.
 
 > **Note:** This is the way I could make it work. If your instance can check the MPO switch out of the box, you can keep you current configuration, or skip this step entirely.
 
@@ -272,28 +274,28 @@ AeroGraph automatically creates and manages its settings file at:
 
 Key configuration options include:
 ```toml
-# Path to the active FoxVox aircraft profile (.fvx)
+# Path to the active FoxVox aircraft profile (.fvx), it automatically changes this via the selected profile
 profile_path = 'C:\Games\Falcon BMS 4.38\FoxVox\Falcon BMS 4.38 v1.3.1\Falcon BMS 4.38 v1.3.1.fvx'
 
-# DirectInput hardware sampling rate (Hz)
+# DirectInput hardware sampling rate (Hz), in case your controllers making the program run slow
 polling_rate_hz = 25
 
-# Pilot response voice (false = Male, true = Female)
+# Pilot response voice (false = Male, true = Female), required for FoxVox profile
 pilot_female = false
 
-# SAPI audio feedback cues
+# SAPI audio feedback cues, the default "beeps" of the Microsoft voice detection. Quite annoying if on, hence off by default.
 sapi_earcons = false
 
-# Show console diagnostic window on launch
+# Show console diagnostic window on launch, editable via tray icon
 show_console = false
 
-# Voice recognition listening state
+# Voice recognition listening state, editable via tray icon
 listening_enabled = true
 
 # Live file monitoring on User/Briefings/briefing.txt
 auto_kneeboards = true
 
-# Sound cue playback on kneeboard updates
+# Sound cue playback ("DATA" sound effect) on kneeboard updates
 play_sound_on_update = true
 
 # Auto-Updater Settings
@@ -513,7 +515,7 @@ Right-click the AeroGraph icon in the Windows notification area to access:
 - **📝 Edit Kneeboards**: Opens `kneeboards.json` directly in Notepad.
 - **⚡ Regenerate Kneeboards Now**: Manually triggers the complete generation pipeline.
 - **📁 Open Kneeboard Images**: Opens the intermediate PNG page directory.
-- **🚀 Start with Windows**: Toggle automatic startup on Windows boot.
+- **🚀 Start with Windows**: Toggle automatic startup on Windows boot (I don't use it, but in case you need it).
 - **Show/Hide Console Window**: Toggle diagnostic console output.
 - **🔄 Check for Updates...**: Manually checks GitHub for new releases.
 - **Open Log File**: View application logs (`aerograph.log`).
@@ -525,13 +527,13 @@ Right-click the AeroGraph icon in the Windows notification area to access:
 
 - **Not a Mission Commander (MC)**: AeroGraph does not create flight plans, edit Falcon BMS campaign files, or modify Air Tasking Orders (ATOs).
 - **Not a Weapon Delivery Planner (WDP)**: AeroGraph reads generated mission data; it does not replace external flight planning suites.
-- **Not a FoxVox Profile Creator**: FoxVox is required to record, configure, or modify `.fvx` profiles. AeroGraph provides a unified native runtime that executes those profiles. Installing FoxVox is highly recommended.
+- **Not a FoxVox Profile Creator**: FoxVox is required to record, configure, or modify `.fvx` profiles. AeroGraph provides a unified native runtime that executes those profiles. Installing [FoxVox](https://foxster.itch.io/foxvox) is highly recommended.
 
 ---
 
 ## ⚠️ Limitations & Operational Caveats
 
-- **Notes Templates**: POH markdown reference files in `notes/` (`aa_missiles.md`, `divert_airfields.md`, etc.) are read by AeroGraph. If deleted, they must be restored from the installer or repository.
+- **Notes Templates**: POH markdown reference files in `notes/` (`aa_missiles.md`, `divert_airfields.md`, etc.) are read by AeroGraph. If deleted, they must be restored from the installer or repository. That's if you need the originals. If you've changed them to something else, you can delete them, of course.
 - **Voice Profiles**: Voice profiles must be authored in FoxVox and follow FoxVox XML conventions.
 - **F-16 Specific Cockpit Mapping**: Kneeboard texture positions (`7982.dds` through `7997.dds`) are calibrated for the Falcon BMS F-16 cockpit.
 - **Single Instance**: AeroGraph utilizes a Windows named mutex (`AeroGraph_SingleInstance_Mutex`) to ensure only one instance runs at any time.
@@ -606,12 +608,13 @@ installer\output\AeroGraph_Setup_v0.1.0.exe
 
 ## 🤝 Community Credits & License
 
-AeroGraph is built with immense gratitude for the community creators whose foundational work made this project possible:
+AeroGraph stands on the shoulders of the fantastic work done by the creators of the original FoxVox and EZBoards for Falcon BMS. This Rust rewrite would not have been possible without their foundational efforts and their gracious permission to let me carry the project forward.
 
-- **FoxVox by [foxster](https://foxster.itch.io/foxvox)**: Creator of the [FoxVox](https://foxster.itch.io/foxvox) application and author of the FoxVox Falcon BMS VCC profile library (`Falcon BMS 4.38 v1.3.1.fvx`). AeroGraph executes these profiles natively in Rust for zero background footprint and sub-millisecond response. For comprehensive video guides on configuring voice keys and controller bindings, visit **[foxster's YouTube Channel](https://www.youtube.com/@foxster2)** and the **[FoxVox Video Tutorials](https://foxster.itch.io/foxvox/devlog/870907/foxvox-tutorial-videos)**. This project wouldn't be possible without foxster.
-- **Voice Audio & Sound Design by [Bogey Dope](https://www.youtube.com/@BogeyDope)**: Original pilot response audio, ground crew recordings, and sound design. Huge fan, by the way!
-- **Startup Procedure Contribution by Tomcattwo**: Updated cold start checklist and ground crew flow. Brains behind the scenes.
-- **EZBoards / EZCharts by "Logic"**: Original concept, dynamic data generation from the `briefing.txt` file, the checklist and package pages designs, and kneeboard layout templates ([Falcon BMS Forum](https://forum.falcon-bms.com/topic/19901/ezboards-instant-single-click-briefing-to-kneeboards-conversion)). AeroGraph features a ground-up pure Rust rewrite of the chart generation pipeline for automated, sub-second cockpit delivery with its own new features. Without Logic, you wouldn't see those automated first two pages and the quality checklists.
+A massive thank you to:
+- **[FoxVox by Foxster](https://foxster.itch.io/foxvox)**: Creator of the [FoxVox](https://foxster.itch.io/foxvox) application and author of the FoxVox Falcon BMS VCC profile library (`Falcon BMS 4.38 v1.3.1.fvx`). AeroGraph executes these profiles natively in Rust for zero background footprint and sub-millisecond response. For comprehensive video guides on configuring voice keys and controller bindings, visit **[Foxster's YouTube Channel](https://www.youtube.com/@foxster2)** and the **[FoxVox Video Tutorials](https://foxster.itch.io/foxvox/devlog/870907/foxvox-tutorial-videos)**. This project wouldn't be possible without Foxster, and I am incredibly grateful for his blessing to let me integrate and build upon his brilliant work.
+- **Voice Audio & Sound Design by [Bogey Dope](https://www.youtube.com/@BogeyDope)**: The incredible and immersive pilot response audio, ground crew recordings, and sound design. I'm a huge fan, by the way, and I want to extend a special thank you to him for graciously allowing me to include these legendary recordings that bring the sim to life!
+- **Startup Procedure Contribution by Tomcattwo**: The brains behind the updated cold start checklist and ground crew flow contributed to the original FoxVox. Before creating this program, I also relied heavily on his fantastic [WDP map and airport integrations](https://forum.falcon-bms.com/topic/30760/updated-4.38-maps-and-airports-for-weapon-delivery-planner-wdp). A huge thank you to him for creating that amazing flow!
+- **EZBoards / EZCharts by "Logic"**: Original concept, dynamic data generation from the `briefing.txt` file, the checklist and package pages designs, and kneeboard layout templates ([Falcon BMS Forum](https://forum.falcon-bms.com/topic/19901/ezboards-instant-single-click-briefing-to-kneeboards-conversion)). AeroGraph features a ground-up pure Rust rewrite of the chart generation pipeline for automated, sub-second cockpit delivery with its own new features. Without Logic, you wouldn't see those automated first two pages and the quality checklists. A huge thank you to him for giving me the green light and permission to rewrite and evolve his original creation. An amazing person to chat with!
 - **The Falcon BMS Community**: Special thanks to Benchmark Sims (BMS), the forum community, and all the flight sim pilots, mission designers, and profile contributors whose decades of passion and dedication continually drive this simulation forward. I wanted to contribute somehow, I hope you will like it.
 
 AeroGraph's original Rust source code, airfield vector databases, and build scripts are licensed under the [MIT License](LICENSE). Third-party community assets (FoxVox profiles, Bogey Dope audio recordings, and EZBoards-inspired layout templates) remain under the exclusive copyright of their respective authors and are strictly non-commercial. Sublicensing, monetizing, or commercial exploitation of bundled community assets is strictly prohibited (see [LICENSE](LICENSE) for full terms and author removal policies).

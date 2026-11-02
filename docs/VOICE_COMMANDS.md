@@ -61,7 +61,7 @@ Follow this authentic checklist sequence during cold ramp start:
 | Step | Action / Procedure | Spoken Pilot Phrase | Crew Chief Response | BMS / DirectInput Action |
 | :---: | :--- | :--- | :--- | :--- |
 | **1** | **Comms Check** | `"Comms Check"` | *"Loud & clear, sir!"* or *"Loud & clear, ma'am!"* | Audio verification |
-| **2** | **Engine Start 2** | `"Start Two"` | *"Clear for start two."* | Clears tailpipe and spool area |
+| **2** | **Engine Start 2** | `"Start Two"` | *"Clear for start two."* | Waits for successful engine start |
 | **3** | **EPU Safety Pin** | `"Pull EPU Pin"` / `"Remove EPU Safety Pin"` / `"EPU Safety Pin"` | *"Copy."* &rarr; *"EPU run up."* | EPU pin pulled |
 | **4** | **Fuel / Hyd Flow** | `"Check Flow"` / `"Verify Flow"` | *"No flow."* | Confirms no hydraulic leaks |
 | **5** | **SEC Check Prep** | `"Ready SEC"` / `"Clear SEC"` | *"Ready for SEC."* | Chief monitors engine nozzle |
@@ -69,10 +69,10 @@ Follow this authentic checklist sequence during cold ramp start:
 | **7** | **Flight Controls Initial** | `"Flight Controls Clear"` / `"Controls Clear"` | *"Flight controls clear."* | Surfaces visually cleared |
 | **8** | **FLCS BIT Clearance** | `"Cleared for BIT"` / `"Ready BIT"` | *"Cleared for BIT."* | Cleared for built-in test run |
 | **9** | **Trim Check Prep** | `"Ready for Trim Check"` / `"Ready Trim"` | *"Ready for trim."* | Trim monitoring activated |
-| **10** | **Trim Disconnect Test** | `"Trim Disconnected"` | *"Copy."* | Verifies autopilot trim disconnect |
+| **10** | **Trim Disconnect Test** | `"Trim Disconnected"` | *"Copy."* | Verifies autopilot trim disconnect and no movement on trim input from sidestick |
 | **11** | **Trim Connected & MPO Kick** | `"Trim Connected"` | Chief checks controls (*"Nose Up"*, *"Nose Down"*, *"Roll Left"*, *"Roll Right"*, *"Yaw Left"*, *"Yaw Right"*) | **DirectInput / BMS MPO switch toggle & trim validation** |
-| **12** | **Speedbrakes & Big Movements** | `"Clear for Big Movements"` / `"Ready Big Movements"` | *"Flight controls still clear."* &rarr; *"Speedbrakes open."* &rarr; *"Speedbrakes closed."* | Speedbrake cycle test |
-| **13** | **DBU Check** | `"DBU Still Clear"` / `"Digital Backup Clear"` | *"Flight controls still clear."* | Digital Backup Unit verify |
+| **12** | **Speedbrakes & Big Movements** | `"Clear for Big Movements"` / `"Ready Big Movements"` | *"Flight controls still clear."* &rarr; *"Speedbrakes open."* &rarr; *"Speedbrakes closed."* | Controls and speedbrake cycle test |
+| **13** | **DBU Check** | `"DBU Still Clear"` / `"Digital Backup Clear"` | *"Flight controls still clear."* | Digital Backup Unit verify (same as last) |
 | **14** | **Left Brake Check** | `"Ready Left Brake"` / `"Ready on the Left Brake"` | *"Copy."* &rarr; *"Ready left brake."* | Left main brake verification |
 | **15** | **Right Brake Check** | `"Ready Right Brake"` / `"Ready on the Right Brake"` | *"Copy."* &rarr; *"Ready right brake."* | Right main brake verification |
 | **16** | **Aerial Refueling Door** | `"Check AAR Door"` / `"Check Refuel Door"` | *"Copy, standby."* &rarr; *"Refuel door check ready."* &rarr; *"AAR door check open."* &rarr; *"AAR door check closed."* | Refuel slipway door check |
@@ -89,9 +89,6 @@ Follow this authentic checklist sequence during cold ramp start:
 - **Pause / Wait**:
   - Say: `"Hold on"`, `"Wait a minute"`, `"Stand by"`, `"Give me a moment"`
   - Response: *"Yes sir, standing by."* / *"Yes ma'am, standing by."*
-- **Repeat Dialogue**:
-  - Say: `"Say again"`
-  - Response: Chief repeats the last instruction.
 - **Skip Procedure**:
   - Say: `"Skip Flight"`
   - Response: Instantly completes the ramp start sequence and clears the crew chief off.

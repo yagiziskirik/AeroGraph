@@ -1,5 +1,5 @@
 use crate::kneeboard::crop::crop_theater_map;
-use crate::kneeboard::models::{BriefingData, Steerpoint, TargetSteerpoint, Threat};
+use crate::kneeboard::models::{BriefingData, Steerpoint, TargetSteerpoint, Threat, ThreatKind};
 use crate::kneeboard::renderer::render_html_to_png;
 use std::collections::HashMap;
 use std::fs;
@@ -140,6 +140,7 @@ pub fn resolve_threat_coords(threats: &[Threat], geo_path: &Path) -> Vec<Threat>
                 x: tx,
                 y: ty,
                 range_nm: rng_nm,
+                kind: t.kind,
             });
         }
     }
@@ -294,8 +295,15 @@ pub fn compute_mission_route_coords(
         let is_tgt = desc_l.contains("tgt")
             || desc_l.contains("target")
             || desc_l.contains("strike")
-            || desc_l.contains("attack");
-        let is_ip = desc_l.contains("ip") || desc_l.contains("initial point");
+            || desc_l.contains("attack")
+            || desc_l.contains("sead")
+            || desc_l.contains("bomb");
+        let is_ip = !is_tgt
+            && !desc_l.contains("pre")
+            && (desc_l == "ip"
+                || desc_l.starts_with("ip ")
+                || desc_l.ends_with(" ip")
+                || desc_l.contains("initial point"));
         let is_refuel = desc_l.contains("refuel") || desc_l.contains("tanker");
         s.action_code = if is_tgt {
             20
@@ -540,7 +548,14 @@ pub fn compute_target_crop_box(
 
     let tgt_pt = valid_pts
         .iter()
-        .find(|p| p.action_code == 20 || p.desc.to_uppercase().contains("TGT"))
+        .find(|p| {
+            p.action_code == 20
+                || p.desc.to_uppercase().contains("TGT")
+                || p.desc.to_uppercase().contains("TARGET")
+                || p.desc.to_uppercase().contains("ATTACK")
+                || p.desc.to_uppercase().contains("STRIKE")
+                || p.desc.to_uppercase().contains("SEAD")
+        })
         .copied()
         .unwrap_or(valid_pts[valid_pts.len() / 2]);
 
@@ -664,10 +679,8 @@ pub fn generate_mission_overview_html(
 
     let mut wp_placement_inputs = Vec::new();
     for p in &svg_pts {
-        let is_tgt = p.action_code == 20
-            || p.desc.to_uppercase().contains("TGT")
-            || p.desc.to_uppercase().contains("TARGET");
-        let is_ip = p.action_code == 13 || p.desc.to_uppercase().contains("IP");
+        let is_tgt = p.action_code == 20;
+        let is_ip = p.action_code == 13;
         let tw = if is_tgt { 210.0 } else { 190.0 };
         let th = if is_tgt { 56.0 } else { 50.0 };
         wp_placement_inputs.push(WaypointPlacementInput {
@@ -686,23 +699,54 @@ pub fn generate_mission_overview_html(
 
     let mut svg_elements = Vec::new();
 
-    // Threat rings
+    // Threat & Support Orbit rings
     for t in resolved_threats {
         let (tx, ty) = to_svg(t.x, t.y);
         let rng_ft = t.range_nm * NM_TO_FT;
         let r_px = (rng_ft / (crop_max_x - crop_min_x)) * h_svg;
         let name = t.system.to_uppercase();
-        svg_elements.push(format!(
-            r#"<!-- Threat {name} -->
+
+        match t.kind {
+            ThreatKind::Tanker => {
+                svg_elements.push(format!(
+                    r#"<!-- Support Orbit TNK -->
+            <circle cx='{tx:.1}' cy='{ty:.1}' r='{r_px:.1}' fill='rgba(126, 34, 206, 0.08)' stroke='#7E22CE' stroke-width='3.0' stroke-dasharray='8,6' />
+            <circle cx='{tx:.1}' cy='{ty:.1}' r='7' fill='#7E22CE' stroke='#FFFFFF' stroke-width='2' />
+            <rect x='{:.1}' y='{:.1}' width='180' height='28' rx='4' fill='rgba(255, 255, 255, 0.96)' stroke='#7E22CE' stroke-width='2' />
+            <text x='{tx:.1}' y='{:.1}' font-size='15' font-weight='900' fill='#7E22CE' text-anchor='middle'>TNK ORBIT ({:.0}NM)</text>"#,
+                    tx - 90.0,
+                    ty - r_px - 28.0,
+                    ty - r_px - 9.0,
+                    t.range_nm
+                ));
+            }
+            ThreatKind::Awacs => {
+                svg_elements.push(format!(
+                    r#"<!-- Support Orbit AWACS -->
+            <circle cx='{tx:.1}' cy='{ty:.1}' r='{r_px:.1}' fill='rgba(13, 148, 136, 0.08)' stroke='#0D9488' stroke-width='3.0' stroke-dasharray='8,6' />
+            <circle cx='{tx:.1}' cy='{ty:.1}' r='7' fill='#0D9488' stroke='#FFFFFF' stroke-width='2' />
+            <rect x='{:.1}' y='{:.1}' width='190' height='28' rx='4' fill='rgba(255, 255, 255, 0.96)' stroke='#0D9488' stroke-width='2' />
+            <text x='{tx:.1}' y='{:.1}' font-size='15' font-weight='900' fill='#0D9488' text-anchor='middle'>AWACS ORBIT ({:.0}NM)</text>"#,
+                    tx - 95.0,
+                    ty - r_px - 28.0,
+                    ty - r_px - 9.0,
+                    t.range_nm
+                ));
+            }
+            ThreatKind::Sam => {
+                svg_elements.push(format!(
+                    r#"<!-- Threat {name} -->
             <circle cx='{tx:.1}' cy='{ty:.1}' r='{r_px:.1}' fill='rgba(220, 38, 38, 0.14)' stroke='#DC2626' stroke-width='3.5' stroke-dasharray='10,6' />
             <circle cx='{tx:.1}' cy='{ty:.1}' r='8' fill='#DC2626' stroke='#FFFFFF' stroke-width='2.5' />
             <rect x='{:.1}' y='{:.1}' width='160' height='28' rx='4' fill='rgba(255, 255, 255, 0.96)' stroke='#DC2626' stroke-width='2' />
             <text x='{tx:.1}' y='{:.1}' font-size='16' font-weight='900' fill='#DC2626' text-anchor='middle'>{name} ({:.0}NM)</text>"#,
-            tx - 80.0,
-            ty - r_px - 28.0,
-            ty - r_px - 9.0,
-            t.range_nm
-        ));
+                    tx - 80.0,
+                    ty - r_px - 28.0,
+                    ty - r_px - 9.0,
+                    t.range_nm
+                ));
+            }
+        }
     }
 
     // Polyline route: Thick Royal Blue with White dashed core
@@ -713,10 +757,8 @@ pub fn generate_mission_overview_html(
 
     // Waypoints
     for p in &svg_pts {
-        let is_tgt = p.action_code == 20
-            || p.desc.to_uppercase().contains("TGT")
-            || p.desc.to_uppercase().contains("TARGET");
-        let is_ip = p.action_code == 13 || p.desc.to_uppercase().contains("IP");
+        let is_tgt = p.action_code == 20;
+        let is_ip = p.action_code == 13;
         let is_refuel = p.action_code == 2 || p.desc.to_uppercase().contains("REFUEL");
 
         if is_tgt {
@@ -841,12 +883,16 @@ pub fn generate_mission_overview_html(
         w_svg - 60.0
     ));
 
-    let threat_val = if !resolved_threats.is_empty() {
-        format!("{} SAM THREATS", resolved_threats.len())
+    let sam_threats: Vec<&Threat> = resolved_threats
+        .iter()
+        .filter(|t| t.kind == ThreatKind::Sam)
+        .collect();
+    let threat_val = if !sam_threats.is_empty() {
+        format!("{} SAM THREATS", sam_threats.len())
     } else {
         "NONE DETECTED".to_string()
     };
-    let threat_cls = if !resolved_threats.is_empty() {
+    let threat_cls = if !sam_threats.is_empty() {
         "threat-alert"
     } else {
         "threat-clear"
@@ -1051,14 +1097,26 @@ pub fn generate_tactical_target_html(
         .collect();
     let tgt_pt = valid_pts
         .iter()
-        .find(|p| p.action_code == 20 || p.desc.to_uppercase().contains("TGT"))
+        .find(|p| {
+            p.action_code == 20
+                || p.desc.to_uppercase().contains("TGT")
+                || p.desc.to_uppercase().contains("TARGET")
+                || p.desc.to_uppercase().contains("ATTACK")
+                || p.desc.to_uppercase().contains("STRIKE")
+                || p.desc.to_uppercase().contains("SEAD")
+        })
         .copied()
         .unwrap_or(valid_pts[valid_pts.len() / 2]);
 
     let tgt_num = tgt_pt.num;
     let ip_pt = valid_pts
         .iter()
-        .find(|p| p.num == tgt_num.saturating_sub(1))
+        .find(|p| p.action_code == 13 && p.num < tgt_num)
+        .or_else(|| {
+            valid_pts
+                .iter()
+                .find(|p| p.num == tgt_num.saturating_sub(1))
+        })
         .copied();
     let egress_pt = valid_pts.iter().find(|p| p.num == tgt_num + 1).copied();
 
@@ -1105,8 +1163,11 @@ pub fn generate_tactical_target_html(
         ty - r15_px + 18.0
     ));
 
-    // Local threats
-    for t in resolved_threats {
+    // Local SAM threats
+    for t in resolved_threats
+        .iter()
+        .filter(|t| t.kind == ThreatKind::Sam)
+    {
         let margin_threat = 15.0 * NM_TO_FT;
         if t.x >= crop_min_x - margin_threat
             && t.x <= crop_max_x + margin_threat
@@ -1416,12 +1477,16 @@ pub fn generate_tactical_target_html(
         w_svg - 60.0
     ));
 
-    let threat_val = if !resolved_threats.is_empty() {
-        format!("{} SAM THREATS", resolved_threats.len())
+    let sam_threats: Vec<&Threat> = resolved_threats
+        .iter()
+        .filter(|t| t.kind == ThreatKind::Sam)
+        .collect();
+    let threat_val = if !sam_threats.is_empty() {
+        format!("{} SAM THREATS", sam_threats.len())
     } else {
         "NONE DETECTED".to_string()
     };
-    let threat_cls = if !resolved_threats.is_empty() {
+    let threat_cls = if !sam_threats.is_empty() {
         "threat-alert"
     } else {
         "threat-clear"
