@@ -218,17 +218,35 @@ pub fn perform_silent_update(
     let mut reader = response.into_reader();
     let mut file = File::create(&temp_setup_path)?;
     let bytes_copied = std::io::copy(&mut reader, &mut file)?;
-    file.flush()?;
+    let _ = file.flush();
+    let _ = file.sync_all();
+    drop(file);
 
     log::info!(
         "Successfully downloaded installer ({} bytes). Launching silent update...",
         bytes_copied
     );
 
-    // Launch setup in silent mode, force-closing running instance and restarting after update
-    let spawn_result = Command::new(&temp_setup_path)
-        .args(["/SILENT", "/FORCECLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"])
-        .spawn();
+    // Launch setup in silent mode, force-closing running instance and restarting after update.
+    // Retry briefly if Windows Defender / AV temporarily holds an exclusive lock (os error 32).
+    let mut attempts = 0;
+    let spawn_result = loop {
+        match Command::new(&temp_setup_path)
+            .args(["/SILENT", "/FORCECLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"])
+            .spawn()
+        {
+            Ok(child) => break Ok(child),
+            Err(e) if e.raw_os_error() == Some(32) && attempts < 10 => {
+                attempts += 1;
+                log::warn!(
+                    "Installer file busy (os error 32, possibly AV scan), retrying in 300ms (attempt {}/10)...",
+                    attempts
+                );
+                std::thread::sleep(Duration::from_millis(300));
+            }
+            Err(e) => break Err(e),
+        }
+    };
 
     match spawn_result {
         Ok(_) => {
