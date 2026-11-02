@@ -90,7 +90,7 @@ pub fn render_html_to_png(
         #[cfg(windows)]
         cmd.creation_flags(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS);
 
-        cmd.args(&[
+        cmd.args([
             "--headless=new",
             "--disable-gpu",
             "--hide-scrollbars",
@@ -114,7 +114,7 @@ pub fn render_html_to_png(
         #[cfg(windows)]
         cmd.creation_flags(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS);
 
-        cmd.args(&[
+        cmd.args([
             "--width",
             "1024",
             "--height",

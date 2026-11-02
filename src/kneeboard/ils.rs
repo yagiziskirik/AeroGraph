@@ -80,10 +80,8 @@ pub fn find_and_render_ils_chart(
             charts_dir.join(format!("{}_ILS_{}.png", icao, desig_norm)),
         ];
         for uc in &user_candidates {
-            if uc.exists() {
-                if format_image_to_kneeboard(uc, output_png).is_ok() {
-                    return true;
-                }
+            if uc.exists() && format_image_to_kneeboard(uc, output_png).is_ok() {
+                return true;
             }
         }
     }
@@ -97,7 +95,7 @@ pub fn find_and_render_ils_chart(
 
     if !id_str.is_empty() {
         // Helper to search a list of chart objects for this airport
-        let try_find_in_list = |ap_charts: &Vec<serde_json::Value>| -> Option<String> {
+        let try_find_in_list = |ap_charts: &[serde_json::Value]| -> Option<String> {
             // First try matching ILS and runway designator
             for chart in ap_charts {
                 let title = chart

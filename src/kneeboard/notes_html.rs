@@ -73,26 +73,26 @@ pub fn parse_notes_to_html(raw_text: &str) -> String {
         }
 
         // Section Headers
-        if trimmed.starts_with("### ") {
+        if let Some(rest) = trimmed.strip_prefix("### ") {
             if in_list {
                 html.push_str("</ul>\n");
                 in_list = false;
             }
-            let title = parse_inline_formatting(&trimmed[4..]);
+            let title = parse_inline_formatting(rest);
             html.push_str(&format!("<h3 class=\"section-h3\">{}</h3>\n", title));
-        } else if trimmed.starts_with("## ") {
+        } else if let Some(rest) = trimmed.strip_prefix("## ") {
             if in_list {
                 html.push_str("</ul>\n");
                 in_list = false;
             }
-            let title = parse_inline_formatting(&trimmed[3..]);
+            let title = parse_inline_formatting(rest);
             html.push_str(&format!("<h2 class=\"section-h2\">{}</h2>\n", title));
-        } else if trimmed.starts_with("# ") {
+        } else if let Some(rest) = trimmed.strip_prefix("# ") {
             if in_list {
                 html.push_str("</ul>\n");
                 in_list = false;
             }
-            let title = parse_inline_formatting(&trimmed[2..]);
+            let title = parse_inline_formatting(rest);
             html.push_str(&format!("<h1 class=\"section-h1\">{}</h1>\n", title));
         } else if trimmed.starts_with('[')
             && trimmed.ends_with(']')
@@ -270,7 +270,7 @@ pub fn resolve_stripe_and_header_colors(
                 vec!["#1B5E20".to_string(), "#388E3C".to_string()],
                 "#1B5E20".to_string(),
             ),
-            "standard" | "black" | _ => (vec!["#111111".to_string()], "#111111".to_string()),
+            _ => (vec!["#111111".to_string()], "#111111".to_string()),
         }
     } else if let Some(c) = stripe_color {
         (vec![c.to_string()], c.to_string())
@@ -283,6 +283,7 @@ pub fn resolve_stripe_and_header_colors(
 }
 
 /// Generates a complete 1024x1554 HTML page formatted in the F-16 POH / Checklist aesthetic.
+#[allow(clippy::too_many_arguments)]
 pub fn generate_notes_page_html(
     slot_name: &str,
     title: Option<&str>,

@@ -28,8 +28,10 @@ pub fn is_bms_running() -> bool {
             Err(_) => return false,
         };
 
-        let mut entry = PROCESSENTRY32W::default();
-        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+        let mut entry = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
 
         if Process32FirstW(snapshot, &mut entry).is_ok() {
             loop {
@@ -63,7 +65,7 @@ pub fn is_bms_running() -> bool {
 pub fn is_newer_version(remote: &str, current: &str) -> bool {
     let clean = |s: &str| -> Vec<u64> {
         s.trim()
-            .trim_start_matches(|c| c == 'v' || c == 'V')
+            .trim_start_matches(['v', 'V'])
             .split('.')
             .filter_map(|p| p.parse::<u64>().ok())
             .collect()
@@ -103,9 +105,7 @@ pub fn check_for_updates(
         .as_str()
         .unwrap_or_default()
         .to_string();
-    let clean_version = tag_name
-        .trim_start_matches(|c| c == 'v' || c == 'V')
-        .to_string();
+    let clean_version = tag_name.trim_start_matches(['v', 'V']).to_string();
 
     if !is_newer_version(&clean_version, current_version) {
         log::info!(
@@ -218,17 +218,35 @@ pub fn perform_silent_update(
     let mut reader = response.into_reader();
     let mut file = File::create(&temp_setup_path)?;
     let bytes_copied = std::io::copy(&mut reader, &mut file)?;
-    file.flush()?;
+    let _ = file.flush();
+    let _ = file.sync_all();
+    drop(file);
 
     log::info!(
         "Successfully downloaded installer ({} bytes). Launching silent update...",
         bytes_copied
     );
 
-    // Launch setup in silent mode, force-closing running instance and restarting after update
-    let spawn_result = Command::new(&temp_setup_path)
-        .args(["/SILENT", "/FORCECLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"])
-        .spawn();
+    // Launch setup in silent mode, force-closing running instance and restarting after update.
+    // Retry briefly if Windows Defender / AV temporarily holds an exclusive lock (os error 32).
+    let mut attempts = 0;
+    let spawn_result = loop {
+        match Command::new(&temp_setup_path)
+            .args(["/SILENT", "/FORCECLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"])
+            .spawn()
+        {
+            Ok(child) => break Ok(child),
+            Err(e) if e.raw_os_error() == Some(32) && attempts < 10 => {
+                attempts += 1;
+                log::warn!(
+                    "Installer file busy (os error 32, possibly AV scan), retrying in 300ms (attempt {}/10)...",
+                    attempts
+                );
+                std::thread::sleep(Duration::from_millis(300));
+            }
+            Err(e) => break Err(e),
+        }
+    };
 
     match spawn_result {
         Ok(_) => {

@@ -12,6 +12,7 @@ pub struct TheaterEntry {
     pub airfield_set: String,
 }
 
+#[allow(clippy::type_complexity)]
 pub fn load_theater_database(
     data_dir: &Path,
     theater_id: &str,

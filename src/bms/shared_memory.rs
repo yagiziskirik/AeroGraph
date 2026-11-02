@@ -161,6 +161,7 @@ impl Drop for MappedArea {
 }
 
 /// Client to read Falcon BMS shared memory
+#[derive(Default)]
 pub struct BmsSharedMemoryClient {
     primary: Option<MappedArea>,
     vibe: Option<MappedArea>,
@@ -169,11 +170,7 @@ pub struct BmsSharedMemoryClient {
 
 impl BmsSharedMemoryClient {
     pub fn new() -> Self {
-        Self {
-            primary: None,
-            vibe: None,
-            string_area: None,
-        }
+        Self::default()
     }
 
     /// Attempts to connect to Falcon BMS shared memory areas.

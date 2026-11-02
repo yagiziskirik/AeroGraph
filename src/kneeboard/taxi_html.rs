@@ -41,7 +41,7 @@ pub fn generate_taxi_chart_html(
                 })
                 .collect()
         })
-        .unwrap_or_else(|| Vec::new());
+        .unwrap_or_default();
 
     let routes_list = airfield
         .get("routes")

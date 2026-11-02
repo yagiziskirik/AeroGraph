@@ -5,10 +5,11 @@ use tray_icon::{TrayIcon, TrayIconBuilder};
 pub struct AppTray {
     pub tray: TrayIcon,
     pub item_profile: MenuItem,
-    pub item_select: MenuItem,
-    pub item_reload: MenuItem,
+    pub item_voice_recognition: MenuItem,
     pub item_listening: MenuItem,
     pub item_gender: MenuItem,
+    pub item_select: MenuItem,
+    pub item_reload: MenuItem,
     pub item_auto_kneeboards: MenuItem,
     pub item_edit_kneeboards: MenuItem,
     pub item_regen_now: MenuItem,
@@ -24,6 +25,7 @@ impl AppTray {
     pub fn new(
         current_profile_name: &str,
         pilot_female: bool,
+        voice_recognition_enabled: bool,
         listening_enabled: bool,
         auto_kneeboards_enabled: bool,
         autostart_enabled: bool,
@@ -37,12 +39,19 @@ impl AppTray {
         let item_reload = MenuItem::new("Reload Profile", true, None);
 
         // 2. Voice Section
+        let voice_text = if voice_recognition_enabled {
+            "🎙️ Voice Recognition: Enabled"
+        } else {
+            "🎙️ Voice Recognition: Disabled"
+        };
+        let item_voice_recognition = MenuItem::new(voice_text, true, None);
+
         let listening_text = if listening_enabled {
             "🎙️ Listening: Active"
         } else {
             "🎙️ Listening: Muted"
         };
-        let item_listening = MenuItem::new(listening_text, true, None);
+        let item_listening = MenuItem::new(listening_text, voice_recognition_enabled, None);
 
         let gender_text = if pilot_female {
             "Pilot: Female"
@@ -84,6 +93,7 @@ impl AppTray {
 
         let _ = menu.append(&item_profile);
         let _ = menu.append(&PredefinedMenuItem::separator());
+        let _ = menu.append(&item_voice_recognition);
         let _ = menu.append(&item_listening);
         let _ = menu.append(&item_gender);
         let _ = menu.append(&item_select);
@@ -115,6 +125,7 @@ impl AppTray {
         Ok(Self {
             tray,
             item_profile,
+            item_voice_recognition,
             item_select,
             item_reload,
             item_listening,
@@ -133,6 +144,15 @@ impl AppTray {
 
     pub fn set_profile_name(&self, name: &str) {
         self.item_profile.set_text(format!("Profile: {}", name));
+    }
+
+    pub fn set_voice_recognition_enabled(&self, enabled: bool) {
+        self.item_voice_recognition.set_text(if enabled {
+            "🎙️ Voice Recognition: Enabled"
+        } else {
+            "🎙️ Voice Recognition: Disabled"
+        });
+        self.item_listening.set_enabled(enabled);
     }
 
     pub fn set_listening_active(&self, active: bool) {

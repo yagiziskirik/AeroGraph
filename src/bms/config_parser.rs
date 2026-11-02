@@ -68,7 +68,7 @@ impl BmsConfig {
         let config_dir = bms_path.join("User").join("Config");
 
         let mut devices =
-            Self::parse_device_sorting(&config_dir.join("DeviceSorting.txt")).unwrap_or_default();
+            Self::parse_device_sorting(config_dir.join("DeviceSorting.txt")).unwrap_or_default();
 
         let key_file_name = custom_key_file.unwrap_or("BMS - Auto.key");
         let key_file_path = config_dir.join(key_file_name);
@@ -76,9 +76,9 @@ impl BmsConfig {
             Self::parse_key_file(&key_file_path, &devices).unwrap_or((None, None));
 
         let axis_calibrations =
-            Self::parse_joystick_cal(&config_dir.join("joystick.cal")).unwrap_or_default();
+            Self::parse_joystick_cal(config_dir.join("joystick.cal")).unwrap_or_default();
         let mut axes = Self::parse_axis_mapping(
-            &config_dir.join("axismapping.dat"),
+            config_dir.join("axismapping.dat"),
             &devices,
             axis_calibrations,
         )
@@ -103,7 +103,7 @@ impl BmsConfig {
     }
 
     /// Dynamically scans and enriches device, button, and axis mappings from
-    /// BMS Alternative Launcher profile XMLs (Setup.v100.<Name> {<GUID>}.xml).
+    /// BMS Alternative Launcher profile XMLs (Setup.v100.`<Name>` {`<GUID>`}.xml).
     pub fn enrich_from_setup_xmls(
         config_dir: &Path,
         devices: &mut Vec<DeviceInfo>,
@@ -347,7 +347,7 @@ impl BmsConfig {
         file.read_to_end(&mut bytes)?;
 
         let mut calibrations = Vec::new();
-        for chunk in bytes.chunks_exact(24) {
+        for chunk in bytes.as_chunks::<24>().0 {
             let center = i32::from_le_bytes(chunk[0..4].try_into()?);
             let deadzone = i32::from_le_bytes(chunk[4..8].try_into()?);
             let min = i32::from_le_bytes(chunk[8..12].try_into()?);
@@ -412,7 +412,7 @@ impl BmsConfig {
         let mut axes = HashMap::new();
         let records = &bytes[24..]; // Skip 24-byte header
 
-        for (idx, chunk) in records.chunks_exact(16).enumerate() {
+        for (idx, chunk) in records.as_chunks::<16>().0.iter().enumerate() {
             if idx >= axis_names.len() {
                 break;
             }

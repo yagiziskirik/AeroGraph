@@ -245,6 +245,7 @@ fn crop_box_to_file(
 
 /// Decodes the base map once (using fast on-disk raw cache if present),
 /// crops both the route overview and target zoom, and immediately drops the map from RAM.
+#[allow(clippy::type_complexity)]
 pub fn crop_theater_map_dual(
     base_map_path: &Path,
     theater_size_ft: f64,
