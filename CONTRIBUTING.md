@@ -2,40 +2,111 @@
 
 Thank you for your interest in contributing to **AeroGraph**! Whether you are reporting a bug, proposing a new cockpit checklist template, or optimizing the rendering engine, we welcome your contributions.
 
-Please review this guide before submitting issues or pull requests.
+Please review this guide before submitting issues or pull requests. For a technical overview of how AeroGraph integrates with Falcon BMS and Windows flight hardware, consult the [System Architecture Guide](docs/ARCHITECTURE.md).
 
 ---
 
-## 🧭 Branching & Pull Request Rules
+## 🛠️ 1. Prerequisites & Local Environment Setup
+
+Before building AeroGraph locally, ensure you have the following installed:
+
+1. **Rust Toolchain (Stable 1.75+)**:
+   ```powershell
+   rustup update stable
+   rustup component add rustfmt clippy
+   ```
+2. **Windows SDK**:
+   Required for `rc.exe` (resource compiler used to embed icon and application metadata into Windows PE binaries). Usually installed automatically with Visual Studio Build Tools / C++ desktop workload.
+3. **Inno Setup 6**:
+   Required to compile the standalone setup installer. Install via winget or official installer:
+   ```powershell
+   winget install JRSoftware.InnoSetup
+   ```
+
+---
+
+## 🌿 2. Branching & Pull Request Workflow
 
 > ⚠️ **Important: Never push commits directly to `main`!**  
 > The `main` branch is protected and always reflects stable, tested releases. All work must follow a feature branch workflow and be submitted via Pull Requests. Every PR is personally tested on a live Falcon BMS setup before merging.
 
+### Branch Naming Conventions:
+Name feature branches descriptively using standard prefixes:
+- `feature/<name>` or `feat/<name>`: New capabilities or enhancements (e.g., `feature/mfd-threat-rings`)
+- `fix/<name>` or `bugfix/<name>`: Bug fixes (e.g., `fix/briefing-parser-date`)
+- `docs/<name>`: Documentation improvements (e.g., `docs/install-guide`)
+- `refactor/<name>`: Code refactoring without changing functionality (e.g., `refactor/kneeboard-renderer`)
+
+### Commit Message Standards (Conventional Commits):
+AeroGraph adheres to [Conventional Commits](https://www.conventionalcommits.org/):
+```text
+<type>(<optional scope>): <description>
+```
+Common types:
+- `feat`: A new feature for the end-user (e.g., `feat(kneeboard): add night mode palette`)
+- `fix`: A bug fix (e.g., `fix(parser): handle missing bullseye in flight plan`)
+- `docs`: Documentation changes only
+- `refactor`: Code changes that neither fix a bug nor add a feature
+- `test`: Adding missing tests or correcting existing tests
+- `chore`: Maintenance tasks, dependency updates, or internal build configs
+
 ### Workflow:
-1. **Fork or branch**:
+1. **Fork or branch from latest `main`**:
    ```powershell
    git checkout main
    git pull origin main
    git checkout -b feature/your-feature-name
-   # or fix/your-bugfix-name
    ```
-2. **Make your changes** and test locally:
+2. **Understand the architecture and make your changes**:
+   Consult [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for subsystem boundaries, the kneeboard `.dds` rendering pipeline, and threading model. Keep the scope of changes focused.
+3. **Run Pre-Flight Quality Checks** (see Section 3 below):
    ```powershell
-   cargo test
+   cargo check-all
    ```
-3. **Commit with descriptive messages**:
+4. **Commit with descriptive messages** following Conventional Commits:
    ```powershell
-   git commit -am "feat: add support for new theater approach plates"
+   git commit -am "feat(kneeboard): add support for new theater approach plates"
    ```
-4. **Push your branch to GitHub**:
+5. **Push your branch to GitHub**:
    ```powershell
    git push origin feature/your-feature-name
    ```
-5. **Open a Pull Request** against the `main` branch using our PR template.
+6. **Open a Pull Request** against `main` using our PR template.
+
+> [!NOTE]
+> **Do NOT bump version numbers in feature branches!**  
+> `Cargo.toml` version bumping and release tagging are managed exclusively on `main` by the maintainer when preparing an official release.
 
 ---
 
-## 🤖 AI-Generated Content Policy
+## 🧪 3. Pre-Flight Quality Checks
+
+AeroGraph enforces strict code quality and formatting. CI will automatically check formatting, linting with Clippy, and run unit tests on every pull request.
+
+To verify your code before pushing, use our native Cargo command:
+
+### Fast All-in-One Pre-Flight Check:
+```powershell
+cargo check-all
+```
+This runs:
+1. `cargo fmt` (automatically formats all Rust source files according to `rustfmt.toml`)
+2. `cargo clippy -- -D warnings` (ensures zero lint warnings or compiler warnings)
+3. `cargo test` (executes the automated unit test suite)
+
+### Individual Commands:
+- **Format Code**: `cargo fmt`
+- **Verify Format Without Changes**: `cargo fmt-check` (or `cargo fmt --all --check`)
+- **Lint**: `cargo lint` (or `cargo clippy -- -D warnings`)
+- **Tests**: `cargo test`
+
+### Dependency & Performance Guidelines:
+- Avoid introducing heavyweight dependencies (e.g. OpenSSL, heavy asynchronous runtimes, or external C dependencies) where lightweight, synchronous pure-Rust or native Win32 APIs can be used.
+- All code changes must maintain low sim overhead and sub-millisecond responsiveness.
+
+---
+
+## 🤖 4. AI-Generated Content Policy
 
 We embrace AI tools as powerful productivity enhancers for coding, drafting documentation, and generating test fixtures. However, maintaining simulator stability and code quality is paramount:
 
@@ -45,131 +116,63 @@ We embrace AI tools as powerful productivity enhancers for coding, drafting docu
 
 ---
 
-## 📦 Release Distribution & Update Delivery Architecture
+## 🚀 5. Maintainer Release & Delivery Architecture
 
-### Where Are Release Files Stored?
-Release setup executables are **NOT stored inside the Git repository tree or project source files**. Committing 130MB installer binaries into git history would quickly bloat the repository to gigabytes and make cloning painfully slow.
+*(This section is for maintainers cutting releases and curious contributors who want to understand AeroGraph's distribution architecture).*
 
-Instead, release binaries are stored in **GitHub Releases Assets**:
-1. When a version tag (e.g. `v0.2.0`) is pushed to GitHub, the **GitHub Actions Release Workflow** (`.github/workflows/release.yml`) executes on a clean Microsoft Windows virtual machine runner.
-2. The runner compiles the optimized release binary and builds `AeroGraph_Setup_v0.2.0.exe` using Inno Setup.
-3. The workflow publishes a new **GitHub Release** and uploads the setup executable as an attached release asset:
-   ```
-   https://github.com/yagiziskirik/AeroGraph/releases/tag/v0.2.0
-   ```
+### Single Source of Truth
+AeroGraph's version number is declared in **one place only**:
+- **`Cargo.toml`** (`[package] version = "X.Y.Z"`)
 
-### How Do Users Receive Updates?
-Users receive new updates through two simple channels:
-
-1. **Automatic In-App Flight-Safe Updater (`src/updater.rs`)**:
-   - On application startup (or when clicking *"🔄 Check for Updates..."* in the tray), AeroGraph queries the public GitHub Releases REST API:
-     ```
-     GET https://api.github.com/repos/yagiziskirik/AeroGraph/releases/latest
-     ```
-   - AeroGraph parses the latest release tag, compares it with its local version using semantic versioning (`v0.1.0` vs. `v0.2.0`), and resolves the HTTPS download URL for `AeroGraph_Setup_v*.exe` from GitHub's global Content Delivery Network (CDN).
-   - If an active flight is in progress (`Falcon BMS.exe` is running), AeroGraph suppresses update prompts until the flight finishes.
-   - When confirmed, AeroGraph downloads the setup executable to `%TEMP%`, shuts down cleanly, executes the installer silently (`/SILENT /FORCECLOSEAPPLICATIONS /RESTARTAPPLICATIONS`), updates files in `%LOCALAPPDATA%\Programs\AeroGraph`, and relaunches automatically.
-
-2. **Manual Download**:
-   - Users can download the standalone setup installer directly from the project's [GitHub Releases page](https://github.com/yagiziskirik/AeroGraph/releases) and run it manually at any time.
-
----
-
-## 🔢 Version Control & Release Management
-
-AeroGraph follows [Semantic Versioning (SemVer)](https://semver.org/):
-- **MAJOR (`X.0.0`)**: Incompatible architectural changes or major sim engine rewrites.
-- **MINOR (`0.X.0`)**: Backwards-compatible features (e.g. new page types, new audio engines, updater changes).
-- **PATCH (`0.0.X`)**: Bug fixes, performance improvements, and documentation fixes.
-
-### Synchronizing Versions Across Files
-When bumping the version, you must update the version string in the following files:
-
-1. **`Cargo.toml`**:
-   ```toml
-   [package]
-   name = "aerograph"
-   version = "0.2.0"
-   ```
-2. **`build.rs`** (Windows resource metadata):
-   ```rust
-   FILEVERSION 0,2,0,0
-   PRODUCTVERSION 0,2,0,0
-   VALUE "FileVersion", "0.2.0"
-   VALUE "ProductVersion", "0.2.0"
-   ```
-3. **`installer/setup.iss`**:
-   ```iss
-   #define MyAppVersion "0.2.0"
-   ```
-
-### Tagging & Release Workflow
-Once a release PR is merged into `main`:
-1. Check out the latest `main`:
-   ```powershell
-   git checkout main
-   git pull origin main
-   ```
-2. Tag the release:
-   ```powershell
-   git tag -a v0.2.0 -m "Release v0.2.0"
-   git push origin v0.2.0
-   ```
-3. The GitHub Actions Release workflow will automatically compile the release executable, package the single `AeroGraph_Setup_v0.2.0.exe`, and publish the GitHub Release with attached assets.
-
----
-
-## 🛠️ Local Development & Testing
-
-### Prerequisites
-- **Rust Toolchain**: 1.75+ (`rustup update stable`)
-- **Windows SDK**: Required for `rc.exe` (resource compiler for icons and metadata)
-- **Inno Setup 6**: Required to compile the standalone setup installer (`winget install JRSoftware.InnoSetup`)
-
-### Running Automated Tests
-```powershell
-cargo test
-```
+All other consumers read this version dynamically at build or compile time:
+- **`build.rs`**: Reads `CARGO_PKG_VERSION` environment variables to populate Windows PE resource metadata (`FILEVERSION`, `PRODUCTVERSION`, `FileVersion`). Never edit `build.rs` for version bumps.
+- **`installer/setup.iss`**: Receives `/DMyAppVersion` dynamically from the build script and GitHub Actions.
+- **`README.md`**: Fetches the latest release dynamically via GitHub Shields badge.
 
 ### Building the Standalone Setup Installer Locally
 To build and test the setup executable on your local machine:
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
+cargo installer
 ```
-The compiled installer will be output to:
+This automatically compiles the optimized release executable (`cargo build --release`) first, and then compiles `installer/setup.iss` with Inno Setup. The installer is output to:
 ```
-installer\output\AeroGraph_Setup_v<version>.exe
+installer\output\AeroGraph_Setup_v*.exe
 ```
 
----
-
-## 🎨 Code Style & Quality Standards
-
-AeroGraph enforces standard Rust code styling using `rustfmt.toml`. All contributions must pass formatting and lint checks before being merged:
-
-### 1. Code Formatting (`cargo fmt`)
-Format all source files automatically according to the repository's `rustfmt.toml`:
+#### Testing Custom Version Installers:
+If you need to test generating an installer for a custom version string without editing `Cargo.toml`:
 ```powershell
-cargo fmt
+cargo installer --version 0.9.9-test
 ```
+This outputs `installer\output\AeroGraph_Setup_v0.9.9-test.exe`.
 
-To verify whether your changes conform to formatting without modifying files (as checked by CI):
-```powershell
-cargo fmt --all --check
-```
+### Fleet Auto-Update & GitHub Tag Protection
+When an official version tag (`v*.*.*`) is pushed to GitHub, GitHub Actions (`.github/workflows/release.yml`) builds the installer and attaches it to a new GitHub Release.
 
-### 2. Linting (`cargo clippy`)
-Run Clippy to catch common errors, unnecessary allocations, or anti-patterns:
-```powershell
-cargo clippy -- -D warnings
-```
+AeroGraph's in-app updater (`src/updater.rs`) queries `GET /repos/yagiziskirik/AeroGraph/releases/latest` on startup. If a newer release exists, it prompts active pilots to update. To protect live pilot installations from accidental or unauthorized releases:
+- Tag creation on `refs/tags/v*` is strictly restricted to the repository maintainer via **GitHub Tag Protection Rules**.
+- Contributors cannot push release tags.
 
-### 3. Unit Tests
-Ensure all unit tests pass cleanly:
-```powershell
-cargo test
-```
-
-### 4. Dependency Guidelines
-- Avoid introducing heavyweight dependencies (e.g. OpenSSL, heavy asynchronous runtimes, or external C dependencies) where lightweight, synchronous pure-Rust or native Win32 APIs can be used.
-- All code changes should maintain low sim overhead and high performance.
+### Maintainer Release Workflow (`cargo-release`)
+Once all feature PRs for a release are merged into `main`:
+1. Check out latest `main`:
+   ```powershell
+   git checkout main
+   git pull origin main
+   ```
+2. Run a dry run to inspect changes:
+   ```powershell
+   cargo release patch
+   # Or: cargo release minor / cargo release 0.3.0
+   ```
+3. Execute the release:
+   ```powershell
+   cargo release patch --execute
+   ```
+   `cargo-release` will:
+   - Run pre-release checks (`cargo check`)
+   - Bump `version` in `Cargo.toml` and update `Cargo.lock`
+   - Commit `chore(release): vX.Y.Z`
+   - Create annotated tag `vX.Y.Z`
+   - Push commit and tag to GitHub
+4. The GitHub Actions Release workflow will automatically compile the release executable, package `AeroGraph_Setup_vX.Y.Z.exe`, and publish the GitHub Release with attached assets.

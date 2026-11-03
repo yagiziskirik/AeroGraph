@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/yagiziskirik/AeroGraph/releases"><img src="https://img.shields.io/badge/Release-v0.1.0-blue.svg" alt="Release" /></a>
+  <a href="https://github.com/yagiziskirik/AeroGraph/releases/latest"><img src="https://img.shields.io/github/v/release/yagiziskirik/AeroGraph?color=blue&label=Release" alt="Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT%20%2B%20Community%20Attribution-green.svg" alt="License" /></a>
   <img src="https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20x64-informational.svg" alt="Platform" />
   <img src="https://img.shields.io/badge/Falcon%20BMS-4.38.1%20Tested-orange.svg" alt="Falcon BMS" />
@@ -567,7 +567,7 @@ Right-click the AeroGraph icon in the Windows notification area to access:
 ## 📦 Installation & Uninstallation
 
 ### Installing via Graphical Setup Wizard
-1. Download `AeroGraph_Setup_v[x].exe` from [GitHub Releases](https://github.com/yagiziskirik/AeroGraph/releases/latest).
+1. Download the latest installer (`AeroGraph_Setup_v*.exe`) from [GitHub Releases](https://github.com/yagiziskirik/AeroGraph/releases/latest).
 2. Run the installer. AeroGraph installs to `%LOCALAPPDATA%\Programs\AeroGraph` without requiring administrator privileges.
 3. Choose whether to create a Desktop shortcut and whether to launch on Windows startup.
 4. Click **Finish** to launch AeroGraph.
@@ -601,14 +601,14 @@ cargo build --release
 
 ### Build Standalone Setup Executable
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
+cargo installer
 ```
 The output installer will be created at:
 ```
-installer\output\AeroGraph_Setup_v[x].exe
+installer\output\AeroGraph_Setup_v*.exe
 ```
 
-> Make sure the version numbers are bumped up correctly. For more information about contributing, you can check out the [contribution](CONTRIBUTING.md) page.
+> AeroGraph uses Cargo as the single source of truth for versions. For details on local checks and releases, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 

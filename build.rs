@@ -13,21 +13,27 @@ fn main() {
         let rc_file = out_dir.join("app.rc");
         let res_file = out_dir.join("app.res");
 
+        // Extract version metadata dynamically from Cargo
+        let major = env::var("CARGO_PKG_VERSION_MAJOR").unwrap_or_else(|_| "0".into());
+        let minor = env::var("CARGO_PKG_VERSION_MINOR").unwrap_or_else(|_| "0".into());
+        let patch = env::var("CARGO_PKG_VERSION_PATCH").unwrap_or_else(|_| "0".into());
+        let version = env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "0.0.0".into());
+
         // Generate .rc script with embedded icon and application metadata
         let rc_content = format!(
             "1 ICON \"{}\"\n\
             1 VERSIONINFO\n\
-            FILEVERSION 0,2,1,0\n\
-            PRODUCTVERSION 0,2,1,0\n\
+            FILEVERSION {major},{minor},{patch},0\n\
+            PRODUCTVERSION {major},{minor},{patch},0\n\
             BEGIN\n\
                 BLOCK \"StringFileInfo\"\n\
                 BEGIN\n\
                     BLOCK \"040904b0\"\n\
                     BEGIN\n\
                         VALUE \"FileDescription\", \"AeroGraph - Falcon BMS Voice & Kneeboards\"\n\
-                        VALUE \"FileVersion\", \"0.2.1\"\n\
+                        VALUE \"FileVersion\", \"{version}\"\n\
                         VALUE \"ProductName\", \"AeroGraph\"\n\
-                        VALUE \"ProductVersion\", \"0.2.1\"\n\
+                        VALUE \"ProductVersion\", \"{version}\"\n\
                     END\n\
                 END\n\
                 BLOCK \"VarFileInfo\"\n\
