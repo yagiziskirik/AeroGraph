@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing to **AeroGraph**! Whether you are reporting a bug, proposing a new cockpit checklist template, or optimizing the rendering engine, we welcome your contributions.
 
-Please review this guide before submitting issues or pull requests.
+Please review this guide before submitting issues or pull requests. For a technical overview of how AeroGraph integrates with Falcon BMS and Windows flight hardware, consult the [System Architecture Guide](docs/ARCHITECTURE.md).
 
 ---
 
@@ -57,7 +57,8 @@ Common types:
    git pull origin main
    git checkout -b feature/your-feature-name
    ```
-2. **Make your changes** and keep the scope focused.
+2. **Understand the architecture and make your changes**:
+   Consult [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for subsystem boundaries, the kneeboard `.dds` rendering pipeline, and threading model. Keep the scope of changes focused.
 3. **Run Pre-Flight Quality Checks** (see Section 3 below):
    ```powershell
    cargo check-all
