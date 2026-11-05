@@ -118,6 +118,7 @@ impl AppTray {
 
         let tray = TrayIconBuilder::new()
             .with_menu(Box::new(menu))
+            .with_menu_on_left_click(false)
             .with_tooltip("AeroGraph - Falcon BMS Voice & Kneeboards")
             .with_icon(icon)
             .build()?;
