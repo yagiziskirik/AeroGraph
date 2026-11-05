@@ -4,6 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { Ipc } from '../services/ipc';
 import { Sound } from '../services/sound';
 import { AppConfig } from '../types/ipc';
+import {
+  MechanicalToggle,
+  VolumeSlider,
+} from '../components/inputs';
+import pkg from '../../package.json';
 
 interface SystemViewProps {
   config: AppConfig;
@@ -37,6 +42,7 @@ export const SystemView: React.FC<SystemViewProps> = ({
 }) => {
   const [consoleLogsOpen, setConsoleLogsOpen] = useState(false);
   const [logLines, setLogLines] = useState<string[]>([]);
+
 
   useEffect(() => {
     const unsub = Ipc.on('ConsoleLogs', (data: { lines: string[] }) => {
@@ -149,7 +155,13 @@ export const SystemView: React.FC<SystemViewProps> = ({
 
         <div className="grid grid-cols-2 gap-4">
           {/* Master Relay Audio Toggle */}
-          <div className="flex items-center justify-between p-3 rounded bg-[#18181B] border border-white/[0.06]">
+          <div
+            onClick={() => {
+              Sound.playSwitch();
+              onToggleSound(!soundEnabled);
+            }}
+            className="flex items-center justify-between p-3 rounded bg-[#18181B] border border-white/[0.06] hover:border-white/[0.15] cursor-pointer transition-colors"
+          >
             <div>
               <div className="text-white font-mono font-semibold text-xs tracking-wide">
                 MECHANICAL SWITCH DETENTS
@@ -158,20 +170,13 @@ export const SystemView: React.FC<SystemViewProps> = ({
                 Acoustic feedback on button clicks, mode shifts, and tabs.
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                Sound.playSwitch();
-                onToggleSound(!soundEnabled);
-              }}
-              className={`h-8 px-4 rounded font-mono font-bold text-xs border transition-colors cursor-pointer ${
-                soundEnabled
-                  ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-400'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-500'
-              }`}
-            >
-              {soundEnabled ? 'ENABLED' : 'MUTED'}
-            </button>
+            <div className="pointer-events-none">
+              <MechanicalToggle
+                size="sm"
+                checked={soundEnabled}
+                interactive={false}
+              />
+            </div>
           </div>
 
           {/* Volume Slider */}
@@ -184,20 +189,11 @@ export const SystemView: React.FC<SystemViewProps> = ({
                 Current level: {Math.round(soundVolume * 100)}%
               </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={soundVolume}
-                onChange={(e) => onChangeVolume(parseFloat(e.target.value))}
-                className="w-32 accent-emerald-400 cursor-pointer"
-              />
-              <span className="font-mono text-xs font-bold text-white w-10 text-right">
-                {Math.round(soundVolume * 100)}%
-              </span>
-            </div>
+            <VolumeSlider
+              value={soundVolume}
+              step={0.01}
+              onChangeValue={(val) => onChangeVolume(val)}
+            />
           </div>
         </div>
       </div>
@@ -217,61 +213,55 @@ export const SystemView: React.FC<SystemViewProps> = ({
           {/* 3D Auto-Dock */}
           <div
             onClick={() => toggleSetting('gui_auto_dock_on_3d')}
-            className="p-3 rounded bg-[#18181B] border border-white/[0.06] hover:border-white/[0.15] flex items-center justify-between cursor-pointer"
+            className="p-3 rounded bg-[#18181B] border border-white/[0.06] hover:border-white/[0.15] flex items-center justify-between cursor-pointer transition-colors"
           >
             <div>
               <div className="text-white font-semibold">3D AUTO-DOCK</div>
               <div className="text-[10px] text-zinc-500">Zero CPU/GPU in 3D flight</div>
             </div>
-            <span
-              className={`px-2 py-0.5 rounded font-bold text-[10px] border ${
-                config.gui_auto_dock_on_3d
-                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-500/30'
-                  : 'text-zinc-500 bg-zinc-800 border-zinc-700'
-              }`}
-            >
-              {config.gui_auto_dock_on_3d ? 'ENABLED' : 'OFF'}
-            </span>
+            <div className="pointer-events-none">
+              <MechanicalToggle
+                size="sm"
+                checked={config.gui_auto_dock_on_3d}
+                interactive={false}
+              />
+            </div>
           </div>
 
           {/* Auto-Kneeboards */}
           <div
             onClick={() => toggleSetting('auto_kneeboards')}
-            className="p-3 rounded bg-[#18181B] border border-white/[0.06] hover:border-white/[0.15] flex items-center justify-between cursor-pointer"
+            className="p-3 rounded bg-[#18181B] border border-white/[0.06] hover:border-white/[0.15] flex items-center justify-between cursor-pointer transition-colors"
           >
             <div>
               <div className="text-white font-semibold">AUTO-KNEEBOARDS</div>
               <div className="text-[10px] text-zinc-500">Regen on briefing change</div>
             </div>
-            <span
-              className={`px-2 py-0.5 rounded font-bold text-[10px] border ${
-                config.auto_kneeboards
-                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-500/30'
-                  : 'text-zinc-500 bg-zinc-800 border-zinc-700'
-              }`}
-            >
-              {config.auto_kneeboards ? 'ENABLED' : 'OFF'}
-            </span>
+            <div className="pointer-events-none">
+              <MechanicalToggle
+                size="sm"
+                checked={config.auto_kneeboards}
+                interactive={false}
+              />
+            </div>
           </div>
 
           {/* Tray Startup */}
           <div
             onClick={() => toggleSetting('gui_open_on_startup')}
-            className="p-3 rounded bg-[#18181B] border border-white/[0.06] hover:border-white/[0.15] flex items-center justify-between cursor-pointer"
+            className="p-3 rounded bg-[#18181B] border border-white/[0.06] hover:border-white/[0.15] flex items-center justify-between cursor-pointer transition-colors"
           >
             <div>
               <div className="text-white font-semibold">START IN FOREGROUND</div>
               <div className="text-[10px] text-zinc-500">Default boots to tray</div>
             </div>
-            <span
-              className={`px-2 py-0.5 rounded font-bold text-[10px] border ${
-                config.gui_open_on_startup
-                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-500/30'
-                  : 'text-zinc-500 bg-zinc-800 border-zinc-700'
-              }`}
-            >
-              {config.gui_open_on_startup ? 'ENABLED' : 'TRAY'}
-            </span>
+            <div className="pointer-events-none">
+              <MechanicalToggle
+                size="sm"
+                checked={config.gui_open_on_startup}
+                interactive={false}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -297,7 +287,7 @@ export const SystemView: React.FC<SystemViewProps> = ({
               <div className="text-white font-semibold">OPEN LOG FILE</div>
               <div className="text-[10px] text-zinc-500">Opens app.log in Notepad</div>
             </div>
-            <span className="px-2 py-0.5 rounded font-bold text-[10px] border text-accent bg-emerald-950/30 border-emerald-500/30">
+            <span className="px-2 py-0.5 rounded font-bold text-[10px] border border-current text-accent bg-black/40">
               OPEN
             </span>
           </div>
@@ -311,7 +301,7 @@ export const SystemView: React.FC<SystemViewProps> = ({
               <div className="text-white font-semibold">VIEW CONSOLE LOGS</div>
               <div className="text-[10px] text-zinc-500">Interactive log terminal</div>
             </div>
-            <span className="px-2 py-0.5 rounded font-bold text-[10px] border text-accent bg-emerald-950/30 border-emerald-500/30">
+            <span className="px-2 py-0.5 rounded font-bold text-[10px] border border-current text-accent bg-black/40">
               VIEW
             </span>
           </div>
@@ -324,21 +314,19 @@ export const SystemView: React.FC<SystemViewProps> = ({
               const updated = { ...config, show_console: !config.show_console };
               onUpdateConfig(updated);
             }}
-            className="p-3 rounded bg-[#18181B] border border-white/[0.06] hover:border-white/[0.15] flex items-center justify-between cursor-pointer"
+            className="p-3 rounded bg-[#18181B] border border-white/[0.06] hover:border-white/[0.15] flex items-center justify-between cursor-pointer transition-colors"
           >
             <div>
               <div className="text-white font-semibold">CONSOLE WINDOW</div>
               <div className="text-[10px] text-zinc-500">Host Windows terminal</div>
             </div>
-            <span
-              className={`px-2 py-0.5 rounded font-bold text-[10px] border ${
-                config.show_console
-                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-500/30'
-                  : 'text-zinc-500 bg-zinc-800 border-zinc-700'
-              }`}
-            >
-              {config.show_console ? 'VISIBLE' : 'HIDDEN'}
-            </span>
+            <div className="pointer-events-none">
+              <MechanicalToggle
+                size="sm"
+                checked={config.show_console}
+                interactive={false}
+              />
+            </div>
           </div>
 
           {/* Open Images Directory */}
@@ -353,7 +341,7 @@ export const SystemView: React.FC<SystemViewProps> = ({
               <div className="text-white font-semibold">IMAGES DIRECTORY</div>
               <div className="text-[10px] text-zinc-500">Opens images/ in Explorer</div>
             </div>
-            <span className="px-2 py-0.5 rounded font-bold text-[10px] border text-amber-400 bg-amber-950/30 border-amber-500/30">
+            <span className="px-2 py-0.5 rounded font-bold text-[10px] border border-current text-amber-400 bg-black/40">
               EXPLORER
             </span>
           </div>
@@ -368,9 +356,9 @@ export const SystemView: React.FC<SystemViewProps> = ({
           >
             <div>
               <div className="text-white font-semibold">CHECK FOR UPDATES</div>
-              <div className="text-[10px] text-zinc-500">GitHub release check</div>
+              <div className="text-[10px] text-zinc-500">Installed: v{pkg.version} {'//'} GitHub release check</div>
             </div>
-            <span className="px-2 py-0.5 rounded font-bold text-[10px] border text-emerald-400 bg-emerald-950/30 border-emerald-500/30">
+            <span className="px-2 py-0.5 rounded font-bold text-[10px] border border-current text-accent bg-black/40">
               CHECK
             </span>
           </div>
@@ -387,12 +375,45 @@ export const SystemView: React.FC<SystemViewProps> = ({
               <div className="text-white font-semibold">EDIT KNEEBOARDS.JSON</div>
               <div className="text-[10px] text-zinc-500">Opens config in Notepad</div>
             </div>
-            <span className="px-2 py-0.5 rounded font-bold text-[10px] border text-accent bg-emerald-950/30 border-emerald-500/30">
+            <span className="px-2 py-0.5 rounded font-bold text-[10px] border border-current text-accent bg-black/40">
               NOTEPAD
             </span>
           </div>
         </div>
       </div>
+
+      {/* System Footer: Build Version & Creator Attribution */}
+      <div className="pt-2 pb-1 flex items-center justify-between text-zinc-500 font-mono text-[10px] border-t border-white/[0.06] shrink-0">
+        <div className="flex items-center space-x-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+          <span className="tracking-wider text-zinc-400">AEROGRAPH AVIONICS CONSOLE</span>
+          <span className="text-zinc-600">{'//'}</span>
+          <span className="text-zinc-300 font-bold">v{pkg.version}</span>
+        </div>
+
+        <a
+          href="https://iskirik.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center space-x-1.5 text-zinc-500 hover:text-white transition-colors group px-2 py-1 rounded bg-[#141416] border border-white/[0.06] hover:border-white/[0.15] cursor-pointer"
+          title="Visit iskirik.com"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.svg"
+            alt="yagiziskirik logo"
+            className="w-3.5 h-3.5 object-contain opacity-70 group-hover:opacity-100 transition-opacity"
+          />
+          <span className="text-[9px] tracking-wider uppercase">
+            CREATED BY{' '}
+            <span className="text-zinc-400 group-hover:text-accent font-semibold transition-colors">
+              yagiziskirik
+            </span>
+          </span>
+        </a>
+      </div>
+
+
 
       {/* Console Logs Interactive Modal */}
       {consoleLogsOpen && (
