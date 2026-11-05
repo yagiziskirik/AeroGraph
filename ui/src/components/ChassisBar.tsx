@@ -72,7 +72,7 @@ export const ChassisBar: React.FC<ChassisBarProps> = ({
         }
         Ipc.dragWindow();
       }}
-      className="h-11 w-full bg-[#121214] border-b border-white/[0.08] flex items-center justify-between px-3 select-none cursor-move z-50 shrink-0 relative"
+      className="h-11 w-full bg-[#121214] border-b border-white/[0.08] flex items-center justify-between px-3 select-none cursor-move z-30 shrink-0 relative"
     >
       {/* Tactical Left Identity: Official AeroGraph Insignia + Sim Engine Status Pip */}
       <div className="flex items-center space-x-3 pointer-events-none">
@@ -88,7 +88,7 @@ export const ChassisBar: React.FC<ChassisBarProps> = ({
               AEROGRAPH
             </span>
             <span className="text-[9px] text-zinc-500 font-mono tracking-widest mt-0.5 leading-none">
-              TACTICAL CONSOLE // F-16
+              TACTICAL CONSOLE // BY YGZ
             </span>
           </div>
         </div>

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Ipc } from '../services/ipc';
 import { Sound } from '../services/sound';
 import { AppConfig, TelemetryData } from '../types/ipc';
+import { LeverSwitch } from '../components/inputs';
 
 interface HardwareViewProps {
   config: AppConfig;
@@ -467,48 +468,23 @@ export const HardwareView: React.FC<HardwareViewProps> = ({
                 </div>
               </div>
 
-              {/* Mechanical MPO Toggle Lever */}
+              {/* Mechanical MPO Toggle Lever (Telemetry-Driven Indicator) */}
               <div
-                onClick={handleTogglePhysicalMpoSwitch}
-                title="Click to toggle MPO switch"
-                className="flex flex-col items-center justify-center p-2 rounded bg-black/40 border border-white/[0.08] cursor-pointer hover:border-white/20 transition-all select-none w-20"
+                title="MPO hardware state (driven by flight stick telemetry)"
+                className="flex flex-col items-center justify-center p-2 rounded bg-black/40 border border-white/[0.08] select-none pointer-events-none"
               >
-                <span
-                  className={`text-[9px] font-mono font-bold transition-colors ${
-                    isMpoActive ? 'text-rose-400' : 'text-zinc-600'
-                  }`}
-                >
-                  OVRD
-                </span>
-
-                {/* Switch Plate & Metallic Lever */}
-                <div className="w-10 h-16 bg-[#1E1E22] rounded-full border border-white/20 relative my-1 flex items-center justify-center shadow-inner">
-                  {/* Nut ring */}
-                  <div className="w-6 h-6 rounded-full border border-zinc-500/50 bg-[#27272A] absolute" />
-
-                  {/* Physical Lever Arm with 3D tilting shadow */}
-                  <div
-                    className={`w-3 h-9 rounded-full bg-gradient-to-r from-zinc-300 via-zinc-100 to-zinc-400 shadow-lg transition-transform duration-150 will-change-transform ${
-                      isMpoActive
-                        ? '-translate-y-2.5 rotate-[-12deg] shadow-[0_0_10px_rgba(244,63,94,0.5)]'
-                        : 'translate-y-2.5 rotate-[12deg]'
-                    }`}
-                  >
-                    <div
-                      className={`w-3 h-3 rounded-full border border-white/40 ${
-                        isMpoActive ? 'bg-rose-500' : 'bg-zinc-400'
-                      }`}
-                    />
-                  </div>
+                <div className="flex items-center space-x-1 mb-1 font-mono text-[9px] font-bold">
+                  <span className={isMpoActive ? 'text-rose-400' : 'text-zinc-600'}>OVRD</span>
+                  <span className="text-zinc-600">/</span>
+                  <span className={!isMpoActive ? 'text-emerald-400' : 'text-zinc-600'}>NORM</span>
                 </div>
-
-                <span
-                  className={`text-[9px] font-mono font-bold transition-colors ${
-                    !isMpoActive ? 'text-emerald-400' : 'text-zinc-600'
-                  }`}
-                >
-                  NORM
-                </span>
+                <LeverSwitch
+                  checked={isMpoActive}
+                  fontSize={7}
+                  showPlate={false}
+                  showLeds={false}
+                  interactive={false}
+                />
               </div>
             </div>
           </div>

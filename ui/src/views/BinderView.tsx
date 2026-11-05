@@ -8,6 +8,7 @@ import { Sound } from '../services/sound';
 import { SlotConfig, TemplateMetadata, QuickStamp } from '../types/ipc';
 import { AVAILABLE_TEMPLATES_CATALOG, DEFAULT_DEV_SLOTS, EMBEDDED_NOTES } from '../services/templatesData';
 import { AEROGRAPH_LOGO_B64 } from '../components/ChassisBar';
+import { ShiningCheckbox } from '../components/inputs';
 
 interface BinderViewProps {
   initialSlots?: Record<string, SlotConfig>;
@@ -841,12 +842,12 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
     <div className="h-full w-full flex flex-col bg-[#0E0E10] select-none overflow-hidden font-sans relative">
       {/* 1. Global Tactical Binder Action Ribbon */}
       <div className="h-10 w-full bg-[#141416] border-b border-white/[0.08] px-4 flex items-center justify-between shrink-0 font-mono text-xs">
-        {/* Left Side: Dual Flight Pads Title */}
+        {/* Left Side: Kneeboards Title */}
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-2">
             <span className="w-2 h-2 rounded-full bg-accent" />
             <span className="text-white font-bold text-xs uppercase tracking-wider">
-              DUAL FLIGHT PADS // 32 SLOTS
+              KNEEBOARDS // 32 SLOTS
             </span>
           </div>
           <span className="text-[11px] text-zinc-500 font-mono">
@@ -902,7 +903,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
             className={`h-7 px-4 rounded font-mono text-[11px] font-bold uppercase tracking-wider flex items-center space-x-2 shadow-lg transition-colors cursor-pointer ${
               commitState === 'success'
                 ? 'bg-emerald-600 text-white shadow-emerald-500/20'
-                : 'bg-accent hover:bg-emerald-400 text-black shadow-accent/20'
+                : 'bg-accent hover:brightness-110 active:brightness-95 text-black shadow-accent/20'
             }`}
           >
             <span>&#10003;</span>
@@ -917,7 +918,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
         </div>
       </div>
 
-      {/* 2. Dual Flight Kneeboard Stations Viewport */}
+      {/* 2. Dual Kneeboard Stations Viewport */}
       <div className="flex-1 w-full p-3 overflow-hidden min-h-0">
         <div className="h-full w-full grid grid-cols-2 gap-3">
           {/* ================= LEFT KNEEBOARD STATION ================= */}
@@ -1662,18 +1663,19 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                           </div>
 
                           <div className="pt-4">
-                            <label className="flex items-center space-x-2 cursor-pointer">
-                              <input
-                                type="checkbox"
+                            <div className="flex items-center space-x-3">
+                              <ShiningCheckbox
+                                size={22}
                                 checked={currentSlot.spaced !== undefined && currentSlot.spaced !== null ? currentSlot.spaced : true}
                                 onChange={(e) => updateField({ spaced: e.target.checked })}
-                                className="w-4 h-4 rounded bg-[#1E1E22] border-white/20 text-accent focus:ring-0"
                               />
-                              <span className="text-zinc-300 font-bold text-xs">Spaced Stripes (White Gaps)</span>
-                            </label>
-                            <span className="text-[10px] text-zinc-500 block mt-0.5">
-                              When enabled, alternates color with #FAFAF8 background gaps
-                            </span>
+                              <div>
+                                <span className="text-zinc-300 font-bold text-xs block">Spaced Stripes (White Gaps)</span>
+                                <span className="text-[10px] text-zinc-500 block">
+                                  When enabled, alternates color with #FAFAF8 background gaps
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
 
@@ -1738,7 +1740,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
               <button
                 type="button"
                 onClick={() => setSettingsSlotKey(null)}
-                className="h-7 px-4 rounded bg-accent hover:bg-emerald-400 text-black font-bold text-xs cursor-pointer transition-colors"
+                className="h-7 px-4 rounded bg-accent hover:brightness-110 active:brightness-95 text-black font-bold text-xs cursor-pointer transition-all"
               >
                 DONE
               </button>
@@ -1837,7 +1839,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                       setNewStampLabel('');
                       setNewStampTemplate('');
                     }}
-                    className="h-6 px-3 rounded bg-accent hover:bg-emerald-400 text-black font-bold text-[10px] disabled:opacity-40 cursor-pointer"
+                    className="h-6 px-3 rounded bg-accent hover:brightness-110 active:brightness-95 text-black font-bold text-[10px] disabled:opacity-40 cursor-pointer transition-all"
                   >
                     + ADD STAMP
                   </button>
@@ -1979,7 +1981,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                   setNewTmplDesc('');
                   setNewTmplContent('');
                 }}
-                className="h-7 px-4 rounded bg-accent hover:bg-emerald-400 text-black font-bold text-xs disabled:opacity-40 cursor-pointer"
+                className="h-7 px-4 rounded bg-accent hover:brightness-110 active:brightness-95 text-black font-bold text-xs disabled:opacity-40 cursor-pointer transition-all"
               >
                 SAVE TEMPLATE
               </button>
@@ -2004,7 +2006,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                 <button
                   type="button"
                   onClick={() => setNewTemplateModalOpen(true)}
-                  className="px-2.5 py-1 rounded bg-accent hover:bg-emerald-400 text-black font-bold text-[10px] cursor-pointer"
+                  className="px-2.5 py-1 rounded bg-accent hover:brightness-110 active:brightness-95 text-black font-bold text-[10px] cursor-pointer transition-all"
                 >
                   + CREATE TEMPLATE
                 </button>

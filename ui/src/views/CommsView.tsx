@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Ipc } from '../services/ipc';
 import { Sound } from '../services/sound';
 import { AppConfig, TelemetryData } from '../types/ipc';
+import { SpeakerToggle, MicrophoneToggle } from '../components/inputs';
 
 interface CommsViewProps {
   config: AppConfig;
@@ -163,25 +164,27 @@ export const CommsView: React.FC<CommsViewProps> = ({
             <button
               type="button"
               onClick={handleToggleVoice}
-              className={`h-7 px-3 rounded font-mono font-bold text-[11px] border uppercase transition-colors cursor-pointer ${
+              className={`h-7 px-2.5 rounded font-mono font-bold text-[11px] border uppercase transition-colors cursor-pointer flex items-center space-x-2 ${
                 config.voice_recognition
                   ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-400'
                   : 'bg-zinc-800 border-zinc-700 text-zinc-500'
               }`}
             >
-              {config.voice_recognition ? 'VOICE RECOGNITION: ON' : 'VOICE RECOGNITION: OFF'}
+              <SpeakerToggle checked={config.voice_recognition} size={15} interactive={false} />
+              <span>{config.voice_recognition ? 'VOICE RECOGNITION: ON' : 'VOICE RECOGNITION: OFF'}</span>
             </button>
 
             <button
               type="button"
               onClick={handleToggleListening}
-              className={`h-7 px-3 rounded font-mono font-bold text-[11px] border uppercase transition-colors cursor-pointer ${
+              className={`h-7 px-2.5 rounded font-mono font-bold text-[11px] border uppercase transition-colors cursor-pointer flex items-center space-x-2 ${
                 config.listening_enabled
                   ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-400'
                   : 'bg-amber-950/40 border-amber-500/40 text-amber-400'
               }`}
             >
-              {config.listening_enabled ? 'MIC LISTENING (UNMUTED)' : 'STANDBY (MUTED)'}
+              <MicrophoneToggle checked={config.listening_enabled} size={15} interactive={false} />
+              <span>{config.listening_enabled ? 'MIC LISTENING (UNMUTED)' : 'STANDBY (MUTED)'}</span>
             </button>
           </div>
         </div>
