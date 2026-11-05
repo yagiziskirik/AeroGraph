@@ -6,4 +6,5 @@ fmt-check = "fmt --all --check"
 # Native workspace tasks (runs src/bin/xtask.rs)
 xtask = "run --bin xtask --"
 check-all = "run --bin xtask -- check"
+ui-build = "run --bin xtask -- ui-build"
 installer = "run --bin xtask -- installer"
