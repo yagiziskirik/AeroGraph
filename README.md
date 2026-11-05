@@ -30,6 +30,7 @@
 - [Kneeboard Configuration (`kneeboards.json`)](#-kneeboard-configuration-kneeboardsjson)
 - [T.O. 1F-16 POH Custom Notes & Scratchpad Guide](#-to-1f-16-poh-custom-notes--scratchpad-guide)
 - [Crew Chief & Voice Commands Reference](#-crew-chief--voice-commands-reference)
+- [Tactical Avionics Console](#-tactical-avionics-console)
 - [System Tray Controls](#-system-tray-controls)
 - [What AeroGraph Is NOT Replacing](#-what-aerograph-is-not-replacing)
 - [Limitations & Operational Caveats](#-limitations--operational-caveats)
@@ -505,9 +506,43 @@ For a complete breakdown of all available voice interactions, dialogue trees, ha
 
 ---
 
+## 💻 Tactical Avionics Console
+
+AeroGraph includes a built-in **Tactical Avionics Console** designed as an interactive pre-flight station for Falcon BMS pilots.
+
+To open or close the console, simply **single left-click the AeroGraph icon in your Windows taskbar system tray**.
+
+### 1. Dual Kneepad Binder
+- **Left & Right Leg Stations**: Displays both cockpit kneepads side-by-side (`1L`–`16L` and `1R`–`16R`).
+- **Page Flipping & Radial Dial**: Step through pages with arrow keys, or click the page badge (`1L`, `6R`) to open the circular dial and jump directly to any page.
+- **Zoom & Panning**: Use `FIT`, `1:1`, and zoom buttons to inspect fine chart details or read notes easily.
+- **Editing Notes**: Switch to **Edit** mode on notes pages to write markdown directly in the console. Use the **Insert Stamp** menu to quickly stamp tactical info like `BINGO`, `LASER`, `ROE`, or SAM alerts.
+- **Custom Templates & Stamps**: Add and save your own reusable templates and stamps. All custom definitions are saved to your user files so they survive application updates.
+- **Commit to Cockpit**: Changes stay staged in memory. When you are ready, click the green **Commit to Cockpit** button to save to `kneeboards.json` and generate your textures for the jet.
+
+### 2. Crew Chief Flight Control BIT
+- **Axis & Control Check**: Test your physical stick (Pitch & Roll) and rudder pedals (Yaw) before taxiing to confirm your controller axes are working correctly.
+- **Toe Brakes**: Check your left and right wheel brakes independently to ensure proper braking before rolling.
+- **MPO & Switch Tests**: Verify your physical HOTAS Manual Pitch Override (MPO) switch and PTT radio buttons.
+
+### 3. FoxVox Voice Station
+- **Voice Status**: Check your active FoxVox profile, voice recognition status, and toggle listening on or off.
+- **Microphone VU Meter**: Speak normally to check your microphone levels on the continuous audio meter and confirm your voice triggers above the noise gate.
+- **Radio Check**: Click the test button to transmit a radio check and verify sound output through your headphones.
+
+### 4. Settings & Cockpit Preferences
+- **Smart 3D Flight Auto-Dock**: AeroGraph automatically closes the console when you enter 3D flight in Falcon BMS so zero GPU or CPU resources are used while you fly.
+- **Sound Effects & Volume**: Adjust mechanical switch sounds and volume levels to your preference.
+
+---
+
 ## 🖥️ System Tray Controls
 
-Right-click the AeroGraph icon in the Windows notification area to access:
+
+
+- **Left-Click Tray Icon**: Toggles the Tactical Avionics Console open or closed.
+
+- **Right-Click Tray Icon**: Opens the quick tray menu for background sim controls:
 
 - **Profile: [Profile Name]**: Displays currently active aircraft voice profile.
 - **🎙️ Voice Recognition**: Master toggle to completely enable or disable speech recognition and DirectInput controller sampling.
