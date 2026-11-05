@@ -372,6 +372,11 @@ impl DirectInputManager {
         self.devices.contains_key(&clean)
     }
 
+    /// Returns the list of opened device GUID strings for polling.
+    pub fn get_opened_guids(&self) -> Vec<String> {
+        self.devices.keys().cloned().collect()
+    }
+
     /// Dynamically enumerates all attached physical and virtual game controllers.
     /// Returns a list of (instance_guid, product_guid, product_name).
     /// Called once at startup, with minimal memory and no runtime polling impact.

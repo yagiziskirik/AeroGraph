@@ -47,6 +47,125 @@ impl LoadedProfile {
         })
     }
 
+    /// Saves a .fvx profile file to disk with compression and base64 encoding matching FoxVox format.
+    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
+        let json_bytes = serde_json::to_vec(&self.profile)?;
+        let uncompressed_len = (json_bytes.len() as u32).to_le_bytes();
+
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        use std::io::Write;
+        encoder.write_all(&json_bytes)?;
+        let gz_bytes = encoder.finish()?;
+
+        let mut payload = Vec::with_capacity(4 + gz_bytes.len());
+        payload.extend_from_slice(&uncompressed_len);
+        payload.extend_from_slice(&gz_bytes);
+
+        let b64 = BASE64.encode(&payload);
+        std::fs::write(path, b64)?;
+        Ok(())
+    }
+
+    /// Queries the current MPO Switch button binding from the profile definition.
+    pub fn get_mpo_binding(&self) -> (u32, String) {
+        if let Some(key_groups) = &self.profile.KeyCommandGroups {
+            for kg in key_groups {
+                for cmd in &kg.Commands {
+                    let name = cmd.Name.as_deref().unwrap_or("").to_lowercase();
+                    if name.contains("mpo") || name.contains("manual pitch override") {
+                        if let Some(trackers) = &cmd.InputTrackers {
+                            for t in trackers {
+                                if t.InputType == Some(2) {
+                                    let btn = t.Id.unwrap_or(8) as u32;
+                                    let dev = t
+                                        .Product
+                                        .clone()
+                                        .unwrap_or_else(|| "F16 TQS by YGZ".to_string());
+                                    return (btn, dev);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for cg in &self.profile.CommandGroups {
+            for cmd in &cg.Commands {
+                let name = cmd.Name.as_deref().unwrap_or("").to_lowercase();
+                if name.contains("mpo") || name.contains("manual pitch override") {
+                    if let Some(trackers) = &cmd.InputTrackers {
+                        for t in trackers {
+                            if t.InputType == Some(2) {
+                                let btn = t.Id.unwrap_or(8) as u32;
+                                let dev = t
+                                    .Product
+                                    .clone()
+                                    .unwrap_or_else(|| "F16 TQS by YGZ".to_string());
+                                return (btn, dev);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        (8, "F16 TQS by YGZ".to_string())
+    }
+
+    /// Updates the MPO Switch button binding in the profile definition.
+    pub fn set_mpo_binding(
+        &mut self,
+        button_id: u32,
+        product_name: Option<&str>,
+        device_id: Option<&str>,
+    ) -> bool {
+        let mut modified = false;
+        if let Some(key_groups) = &mut self.profile.KeyCommandGroups {
+            for kg in key_groups {
+                for cmd in &mut kg.Commands {
+                    let name = cmd.Name.as_deref().unwrap_or("").to_lowercase();
+                    if name.contains("mpo") || name.contains("manual pitch override") {
+                        if let Some(trackers) = &mut cmd.InputTrackers {
+                            for t in trackers.iter_mut() {
+                                if t.InputType == Some(2) {
+                                    t.Id = Some(button_id as i32);
+                                    if let Some(p) = product_name {
+                                        t.Product = Some(p.to_string());
+                                    }
+                                    if let Some(d) = device_id {
+                                        t.DeviceId = Some(d.to_string());
+                                    }
+                                    modified = true;
+                                }
+                            }
+                            if !modified {
+                                trackers.push(crate::fvx::models::InputTrackerDef {
+                                    InputType: Some(2),
+                                    Id: Some(button_id as i32),
+                                    DeviceId: device_id.map(|s| s.to_string()),
+                                    VendorId: None,
+                                    ProductId: None,
+                                    Product: product_name.map(|s| s.to_string()),
+                                });
+                                modified = true;
+                            }
+                        } else {
+                            cmd.InputTrackers = Some(vec![crate::fvx::models::InputTrackerDef {
+                                InputType: Some(2),
+                                Id: Some(button_id as i32),
+                                DeviceId: device_id.map(|s| s.to_string()),
+                                VendorId: None,
+                                ProductId: None,
+                                Product: product_name.map(|s| s.to_string()),
+                            }]);
+                            modified = true;
+                        }
+                    }
+                }
+            }
+        }
+        modified
+    }
+
     /// Resolves asset paths (e.g. .\VCC\Sounds\... or .\\\\VCC\\... or relative) against the profile base directory.
     pub fn resolve_asset_path(&self, relative_path: &str) -> PathBuf {
         let sanitized = relative_path.replace('\\', "/");
@@ -118,5 +237,36 @@ impl LoadedProfile {
         }
 
         axes
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_inspect_and_modify_mpo() {
+        let path = "assets/profiles/Falcon BMS 4.38 v1.3.1/Falcon BMS 4.38 v1.3.1.fvx";
+        if let Ok(mut lp) = LoadedProfile::load_from_file(path) {
+            let (initial_btn, initial_dev) = lp.get_mpo_binding();
+            assert_eq!(initial_btn, 8);
+            assert_eq!(initial_dev, "F16 TQS by YGZ");
+
+            // Test modifying MPO binding
+            assert!(lp.set_mpo_binding(50, Some("F16 TQS by YGZ"), None));
+            let (mod_btn, mod_dev) = lp.get_mpo_binding();
+            assert_eq!(mod_btn, 50);
+            assert_eq!(mod_dev, "F16 TQS by YGZ");
+
+            // Test round-trip serialization in memory
+            let temp_dir = std::env::temp_dir();
+            let temp_fvx = temp_dir.join("test_roundtrip.fvx");
+            lp.save_to_file(&temp_fvx).expect("Failed to save fvx");
+            let reloaded = LoadedProfile::load_from_file(&temp_fvx).expect("Failed to reload fvx");
+            let (r_btn, r_dev) = reloaded.get_mpo_binding();
+            assert_eq!(r_btn, 50);
+            assert_eq!(r_dev, "F16 TQS by YGZ");
+            let _ = std::fs::remove_file(temp_fvx);
+        }
     }
 }

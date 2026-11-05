@@ -61,6 +61,33 @@ pub struct AppConfig {
 
     #[serde(default = "default_github_repo")]
     pub github_repo: String,
+
+    // --- GUI Tactical Console Settings ---
+    #[serde(default = "default_false")]
+    pub gui_open_on_startup: bool,
+
+    #[serde(default = "default_true")]
+    pub gui_auto_dock_on_3d: bool,
+
+    #[serde(default = "default_true")]
+    pub gui_sound_effects: bool,
+
+    #[serde(default = "default_volume")]
+    pub gui_sound_volume: f32,
+
+    #[serde(default = "default_accent")]
+    pub gui_accent_color: String,
+
+    #[serde(default = "default_false")]
+    pub secondary_monitor_pin: bool,
+
+    #[serde(default = "default_window_size")]
+    pub window_size: (u32, u32),
+
+    #[serde(default)]
+    pub window_pos: Option<(i32, i32)>,
+    #[serde(default = "default_false")]
+    pub window_maximized: bool,
 }
 
 fn default_github_repo() -> String {
@@ -73,6 +100,22 @@ fn default_polling_rate() -> u32 {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_false() -> bool {
+    false
+}
+
+fn default_volume() -> f32 {
+    0.5
+}
+
+fn default_accent() -> String {
+    "#10B981".to_string()
+}
+
+fn default_window_size() -> (u32, u32) {
+    (1200, 740)
 }
 
 impl Default for AppConfig {
@@ -94,31 +137,126 @@ impl Default for AppConfig {
             custom_slots: HashMap::new(),
             check_updates_on_startup: true,
             github_repo: default_github_repo(),
+            gui_open_on_startup: default_false(),
+            gui_auto_dock_on_3d: default_true(),
+            gui_sound_effects: default_true(),
+            gui_sound_volume: default_volume(),
+            gui_accent_color: default_accent(),
+            secondary_monitor_pin: default_false(),
+            window_size: default_window_size(),
+            window_pos: None,
+            window_maximized: false,
         }
     }
 }
 
 impl AppConfig {
-    pub fn config_path() -> PathBuf {
+    pub fn config_dir() -> PathBuf {
         if let Some(proj_dirs) = ProjectDirs::from("com", "ygz", "AeroGraph") {
             let config_dir = proj_dirs.config_dir();
             let _ = fs::create_dir_all(config_dir);
-            config_dir.join("aerograph.toml")
+            config_dir.to_path_buf()
         } else {
-            PathBuf::from("aerograph.toml")
+            let _ = fs::create_dir_all("config");
+            PathBuf::from("config")
         }
+    }
+
+    pub fn config_path() -> PathBuf {
+        Self::config_dir().join("aerograph.toml")
     }
 
     pub fn log_file_path() -> PathBuf {
-        if let Some(proj_dirs) = ProjectDirs::from("com", "ygz", "AeroGraph") {
-            let config_dir = proj_dirs.config_dir();
-            let _ = fs::create_dir_all(config_dir);
-            config_dir.join("aerograph.log")
-        } else {
-            PathBuf::from("aerograph.log")
-        }
+        Self::config_dir().join("aerograph.log")
     }
 
+    pub fn user_templates_dir() -> PathBuf {
+        let dir = Self::config_dir().join("templates");
+        let _ = fs::create_dir_all(&dir);
+        dir
+    }
+
+    pub fn custom_templates_path() -> PathBuf {
+        Self::config_dir().join("custom_templates.json")
+    }
+
+    pub fn custom_stamps_path() -> PathBuf {
+        Self::config_dir().join("custom_stamps.json")
+    }
+
+    pub fn default_stamps() -> Vec<crate::gui::ipc::QuickStamp> {
+        vec![
+            crate::gui::ipc::QuickStamp {
+                id: "bingo".into(),
+                label: "BINGO 2500".into(),
+                template: "BINGO FUEL: {red: 2500 LBS} // JOKER: {yellow: 3200 LBS}".into(),
+            },
+            crate::gui::ipc::QuickStamp {
+                id: "laser".into(),
+                label: "LASER 1688".into(),
+                template: "PRIMARY LASER PRF: {green: 1688}".into(),
+            },
+            crate::gui::ipc::QuickStamp {
+                id: "ramrod".into(),
+                label: "RAMROD".into(),
+                template: "RAMROD CODE: {blue: CHARLIE}".into(),
+            },
+            crate::gui::ipc::QuickStamp {
+                id: "roe".into(),
+                label: "ROE 25NM".into(),
+                template: "ROE: Weapons Free beyond {green: 25NM} from Bullseye".into(),
+            },
+            crate::gui::ipc::QuickStamp {
+                id: "threat".into(),
+                label: "SAM THREAT".into(),
+                template: "WARNING: {highlight: Active SA-10 Grumble} tracking near STPT".into(),
+            },
+            crate::gui::ipc::QuickStamp {
+                id: "ip_vector".into(),
+                label: "IP VECTOR".into(),
+                template: "TGT IP: Bearing {blue: 045} / Distance {blue: 12NM} / Pullup 18,000 FT"
+                    .into(),
+            },
+        ]
+    }
+
+    pub fn load_custom_stamps() -> Vec<crate::gui::ipc::QuickStamp> {
+        let path = Self::custom_stamps_path();
+        if path.exists() {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(stamps) = serde_json::from_str(&content) {
+                    return stamps;
+                }
+            }
+        }
+        Self::default_stamps()
+    }
+
+    pub fn save_custom_stamps(stamps: &[crate::gui::ipc::QuickStamp]) -> std::io::Result<()> {
+        let path = Self::custom_stamps_path();
+        let content = serde_json::to_string_pretty(stamps)?;
+        fs::write(path, content)
+    }
+
+    pub fn load_custom_templates() -> Vec<crate::gui::ipc::TemplateMetadata> {
+        let path = Self::custom_templates_path();
+        if path.exists() {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(templates) = serde_json::from_str(&content) {
+                    return templates;
+                }
+            }
+        }
+        Vec::new()
+    }
+
+    pub fn save_custom_templates(
+        templates: &[crate::gui::ipc::TemplateMetadata],
+    ) -> std::io::Result<()> {
+        let path = Self::custom_templates_path();
+        let content = serde_json::to_string_pretty(templates)?;
+        fs::write(path, content)
+    }
     pub fn load() -> Self {
         let path = Self::config_path();
         if path.exists() {
