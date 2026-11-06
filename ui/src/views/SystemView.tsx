@@ -223,7 +223,7 @@ export const SystemView: React.FC<SystemViewProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 font-mono text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 font-mono text-xs">
           {/* 3D Auto-Dock */}
           <div
             onClick={() => toggleSetting('gui_auto_dock_on_3d')}
@@ -255,6 +255,24 @@ export const SystemView: React.FC<SystemViewProps> = ({
               <MechanicalToggle
                 size="sm"
                 checked={config.auto_kneeboards}
+                interactive={false}
+              />
+            </div>
+          </div>
+
+          {/* BMS Auto-Engage Voice */}
+          <div
+            onClick={() => toggleSetting('auto_engage_voice')}
+            className="p-3 rounded bg-[#18181B] border border-white/[0.06] hover:border-white/[0.15] flex items-center justify-between cursor-pointer transition-colors"
+          >
+            <div>
+              <div className="text-white font-semibold">AUTO-ENGAGE VOICE</div>
+              <div className="text-[10px] text-zinc-500">Engage on BMS detect</div>
+            </div>
+            <div className="pointer-events-none">
+              <MechanicalToggle
+                size="sm"
+                checked={config.auto_engage_voice ?? true}
                 interactive={false}
               />
             </div>

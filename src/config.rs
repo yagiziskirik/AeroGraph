@@ -90,6 +90,8 @@ pub struct AppConfig {
     pub window_maximized: bool,
     #[serde(default = "default_false")]
     pub start_with_windows: bool,
+    #[serde(default = "default_true")]
+    pub auto_engage_voice: bool,
 }
 
 fn default_github_repo() -> String {
@@ -149,6 +151,7 @@ impl Default for AppConfig {
             window_pos: None,
             window_maximized: false,
             start_with_windows: false,
+            auto_engage_voice: default_true(),
         }
     }
 }
@@ -267,6 +270,11 @@ impl AppConfig {
             .and_then(|c| toml::from_str(&c).ok())
             .unwrap_or_default();
         cfg.start_with_windows = Self::is_auto_start_enabled();
+        if cfg.auto_engage_voice
+            && !crate::bms::shared_memory::BmsSharedMemoryClient::is_bms_running()
+        {
+            cfg.voice_recognition = false;
+        }
         cfg
     }
 

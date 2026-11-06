@@ -1863,13 +1863,50 @@ fn run_voice_worker_loop(
     let mut last_bms_connect_attempt = std::time::Instant::now();
     let mut last_sampler_attempt = std::time::Instant::now();
     let mut initial_chirp_played = false;
+    let mut last_bms_connected = false;
 
     while running.load(Ordering::SeqCst) {
-        let (polling_rate, voice_enabled) = {
+        let (polling_rate, voice_enabled, auto_engage) = {
             let cfg = config_lock.lock().unwrap();
-            (cfg.polling_rate_hz.clamp(10, 100), cfg.voice_recognition)
+            (
+                cfg.polling_rate_hz.clamp(10, 100),
+                cfg.voice_recognition,
+                cfg.auto_engage_voice,
+            )
         };
         let poll_interval = Duration::from_millis((1000 / polling_rate) as u64);
+
+        // Check BMS shared memory connection (throttled to 1s when disconnected)
+        if !bms_client.is_connected()
+            && last_bms_connect_attempt.elapsed() >= Duration::from_secs(1)
+        {
+            last_bms_connect_attempt = Instant::now();
+            if bms_client.connect() {
+                log::info!("Connected to Falcon BMS Shared Memory!");
+            }
+        }
+
+        let bms_conn = bms_client.is_connected();
+
+        // Edge detection for Auto-Engage Voice Automation
+        if auto_engage {
+            if bms_conn && !last_bms_connected && !voice_enabled {
+                log::info!(
+                    "Auto-Engage: Falcon BMS detected! Automatically engaging voice recognition."
+                );
+                let _ = proxy.send_event(AppEvent::IpcMessage(
+                    crate::gui::ipc::IpcRequest::SetVoiceRecognition { enabled: true },
+                ));
+            } else if !bms_conn && last_bms_connected && voice_enabled {
+                log::info!(
+                    "Auto-Engage: Falcon BMS closed. Automatically disengaging voice recognition."
+                );
+                let _ = proxy.send_event(AppEvent::IpcMessage(
+                    crate::gui::ipc::IpcRequest::SetVoiceRecognition { enabled: false },
+                ));
+            }
+        }
+        last_bms_connected = bms_conn;
 
         if !voice_enabled {
             if sapi.is_some() {
@@ -1879,9 +1916,6 @@ fn run_voice_worker_loop(
             if axis_sampler.is_some() {
                 log::info!("Voice recognition disabled: releasing DirectInput axis sampler");
                 axis_sampler = None;
-            }
-            if bms_client.is_connected() {
-                bms_client.disconnect();
             }
             active_profile_name = None;
             last_compiled_config = None;
@@ -1917,17 +1951,6 @@ fn run_voice_worker_loop(
             last_chief_engaged = false;
         }
 
-        // Check BMS shared memory connection (throttled to 1s when disconnected)
-        if !bms_client.is_connected()
-            && last_bms_connect_attempt.elapsed() >= Duration::from_secs(1)
-        {
-            last_bms_connect_attempt = Instant::now();
-            if bms_client.connect() {
-                log::info!("Connected to Falcon BMS Shared Memory!");
-            }
-        }
-
-        let bms_conn = bms_client.is_connected();
         state_engine.set_bms_connected(bms_conn);
 
         if let Some(flight_data) = bms_client.read_primary_data() {

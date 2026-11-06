@@ -26,6 +26,7 @@ export interface AppConfig {
   window_size?: [number, number];
   window_pos?: [number, number] | null;
   start_with_windows?: boolean;
+  auto_engage_voice?: boolean;
 }
 
 export interface SlotConfig {

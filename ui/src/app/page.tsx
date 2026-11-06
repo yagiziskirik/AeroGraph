@@ -29,6 +29,7 @@ const DEFAULT_CONFIG: AppConfig = {
   gui_sound_volume: 0.5,
   gui_accent_color: '#10B981',
   start_with_windows: false,
+  auto_engage_voice: true,
 };
 
 const DEFAULT_TELEMETRY: TelemetryData = {
