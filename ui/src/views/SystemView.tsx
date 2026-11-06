@@ -223,7 +223,7 @@ export const SystemView: React.FC<SystemViewProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 font-mono text-xs">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 font-mono text-xs">
           {/* 3D Auto-Dock */}
           <div
             onClick={() => toggleSetting('gui_auto_dock_on_3d')}
@@ -260,19 +260,37 @@ export const SystemView: React.FC<SystemViewProps> = ({
             </div>
           </div>
 
-          {/* Tray Startup */}
+          {/* Foreground Startup */}
           <div
             onClick={() => toggleSetting('gui_open_on_startup')}
             className="p-3 rounded bg-[#18181B] border border-white/[0.06] hover:border-white/[0.15] flex items-center justify-between cursor-pointer transition-colors"
           >
             <div>
-              <div className="text-white font-semibold">START IN FOREGROUND</div>
-              <div className="text-[10px] text-zinc-500">Default boots to tray</div>
+              <div className="text-white font-semibold">FOREGROUND BOOT</div>
+              <div className="text-[10px] text-zinc-500">Open UI on launch</div>
             </div>
             <div className="pointer-events-none">
               <MechanicalToggle
                 size="sm"
                 checked={config.gui_open_on_startup}
+                interactive={false}
+              />
+            </div>
+          </div>
+
+          {/* Start with Windows Auto-Start */}
+          <div
+            onClick={() => toggleSetting('start_with_windows')}
+            className="p-3 rounded bg-[#18181B] border border-white/[0.06] hover:border-white/[0.15] flex items-center justify-between cursor-pointer transition-colors"
+          >
+            <div>
+              <div className="text-white font-semibold">START WITH WINDOWS</div>
+              <div className="text-[10px] text-zinc-500">Auto-run on Windows login</div>
+            </div>
+            <div className="pointer-events-none">
+              <MechanicalToggle
+                size="sm"
+                checked={config.start_with_windows ?? false}
                 interactive={false}
               />
             </div>
