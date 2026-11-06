@@ -118,6 +118,41 @@ cargo ui-build
 > [!TIP]
 > `cargo ui-build` is a native Cargo alias configured in `.cargo/config.toml` that invokes `src/bin/xtask.rs ui-build`. It exports the optimized web application to `ui/out/`. Subsequent Rust builds (`cargo build` or `cargo build --release`) automatically link these compiled static assets directly into `aerograph.exe`.
 
+### 5. Local Binary Build & Testing Workflow
+
+After generating the static UI assets with `cargo ui-build`, compile the backend Rust binary using standard Cargo commands:
+
+- **Debug Build** (fast compilation with debug symbols):
+  ```powershell
+  cargo build
+  ```
+  Generates `target\debug\aerograph.exe`.
+
+- **Release Build** (optimized for live flight sim usage):
+  ```powershell
+  cargo build --release
+  ```
+  Generates `target\release\aerograph.exe`.
+
+#### Rapid Local Testing (Moving Executable to Root):
+The recommended workflow for testing AeroGraph locally is to run the compiled `.exe` directly from the main project root folder (`.\AeroGraph.exe`). This ensures it operates against live local resources (`assets\`, `images\`, `notes\`, and local `kneeboards.json`):
+
+```powershell
+# Automated: compiles release binary and deploys to .\AeroGraph.exe
+cargo local
+
+# Or for debug profile:
+cargo local -- --debug
+
+# Manual alternative via PowerShell:
+cargo build --release
+Copy-Item target\release\aerograph.exe .\AeroGraph.exe
+```
+
+> [!IMPORTANT]
+> **Ensure AeroGraph is Closed Before Deploying**:  
+> If `AeroGraph.exe` is currently running, Windows will lock the executable file and prevent overwriting with a `SharingViolation` error. `cargo local` automatically verifies the target file is writable before copying. Always close any running instance from the system tray or Task Manager before copying.
+
 ---
 
 ## 🧪 4. Pre-Flight Quality Checks & Cargo Aliases
@@ -130,6 +165,7 @@ AeroGraph provides native Cargo aliases configured in `.cargo/config.toml` for s
 | :--- | :--- |
 | `cargo check-all` | Runs `fmt`, `clippy -D warnings`, and the complete unit test suite. |
 | `cargo ui-build` | Compiles and exports the Next.js Tactical Console into `ui/out/`. |
+| `cargo local` | Compiles `--release` binary and deploys directly to `./AeroGraph.exe`. |
 | `cargo installer` | Compiles the release binary and packages the Inno Setup installer. |
 | `cargo lint` | Runs `cargo clippy -- -D warnings`. |
 | `cargo fmt-check` | Verifies code formatting without altering files. |

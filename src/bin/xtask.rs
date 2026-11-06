@@ -11,6 +11,7 @@ fn main() {
         "check" | "check-all" => run_check_all(),
         "ui-dev" => run_ui_dev(),
         "ui-build" => run_ui_build(),
+        "local" => run_local(args.contains(&"--debug".to_string())),
         "installer" => {
             let mut custom_version = None;
             let mut iter = args.iter().skip(1);
@@ -35,10 +36,51 @@ fn main() {
                 "  cargo xtask ui-dev              Start Next.js GUI development server (pnpm dev)"
             );
             println!("  cargo xtask ui-build            Export Next.js static assets to ui/out (pnpm export)");
+            println!("  cargo local                     Build release binary & deploy to ./AeroGraph.exe");
             println!("  cargo installer                 Compile release binary & build Inno Setup installer");
             println!(
                 "  cargo installer --version <ver> Build installer with custom version string"
             );
+        }
+    }
+}
+
+fn run_local(debug_mode: bool) {
+    sync_ui_package_version();
+    let profile = if debug_mode { "debug" } else { "release" };
+    println!("Building AeroGraph ({} profile)...", profile);
+    let mut build_args = vec!["build"];
+    if !debug_mode {
+        build_args.push("--release");
+    }
+    let status = Command::new("cargo")
+        .args(&build_args)
+        .status()
+        .expect("Failed to execute cargo build");
+    check_status(status, "cargo build");
+
+    let src_exe = PathBuf::from("target").join(profile).join("aerograph.exe");
+    let dst_exe = PathBuf::from("AeroGraph.exe");
+
+    if dst_exe.exists() {
+        if let Err(e) = fs::OpenOptions::new().write(true).open(&dst_exe) {
+            eprintln!("\n⚠️ WARNING: Cannot overwrite AeroGraph.exe in project root ({e}).");
+            eprintln!("AeroGraph.exe appears to be running! Please close AeroGraph and run this command again.");
+            std::process::exit(1);
+        }
+    }
+
+    match fs::copy(&src_exe, &dst_exe) {
+        Ok(bytes) => {
+            println!(
+                "\n✔ Successfully deployed {:?} -> {:?} ({} bytes).",
+                src_exe, dst_exe, bytes
+            );
+            println!("Ready for local testing in root with assets/ and kneeboards.json!");
+        }
+        Err(e) => {
+            eprintln!("⚠️ Failed to copy executable to project root: {e}");
+            std::process::exit(1);
         }
     }
 }
