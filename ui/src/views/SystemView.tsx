@@ -42,7 +42,7 @@ export const SystemView: React.FC<SystemViewProps> = ({
 }) => {
   const [consoleLogsOpen, setConsoleLogsOpen] = useState(false);
   const [logLines, setLogLines] = useState<string[]>([]);
-
+  const logContainerRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const unsub = Ipc.on('ConsoleLogs', (data: { lines: string[] }) => {
@@ -52,6 +52,23 @@ export const SystemView: React.FC<SystemViewProps> = ({
     });
     return unsub;
   }, []);
+
+  // Auto-refresh logs periodically while the console viewer modal is open
+  useEffect(() => {
+    if (!consoleLogsOpen) return;
+    Ipc.getConsoleLogs();
+    const interval = setInterval(() => {
+      Ipc.getConsoleLogs();
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [consoleLogsOpen]);
+
+  // Keep terminal scrolled to the bottom (latest logs) by default
+  useEffect(() => {
+    if (consoleLogsOpen && logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logLines, consoleLogsOpen]);
 
   const handleOpenConsoleLogsModal = () => {
     Sound.playClick();
@@ -87,9 +104,6 @@ export const SystemView: React.FC<SystemViewProps> = ({
               Calibrated phosphor palettes across HUD readouts, DED indicators, and kneepad tabs.
             </p>
           </div>
-          <span className="font-mono text-[10px] text-zinc-400 px-2 py-0.5 rounded bg-[#18181B] border border-white/[0.06]">
-            HEX: {accentColor.toUpperCase()}
-          </span>
         </div>
 
         <div className="grid grid-cols-3 gap-3">
@@ -428,13 +442,9 @@ export const SystemView: React.FC<SystemViewProps> = ({
                 </span>
               </div>
               <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={() => Ipc.getConsoleLogs()}
-                  className="px-2.5 py-1 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.08] text-white text-[10px] font-bold cursor-pointer"
-                >
-                  REFRESH
-                </button>
+                <span className="text-[10px] text-zinc-500 font-mono tracking-wider mr-2">
+                  AUTO-REFRESHING (1.5S)
+                </span>
                 <button
                   type="button"
                   onClick={() => setConsoleLogsOpen(false)}
@@ -446,7 +456,10 @@ export const SystemView: React.FC<SystemViewProps> = ({
             </div>
 
             {/* Log Terminal Body */}
-            <div className="flex-1 p-4 overflow-y-auto space-y-1 bg-[#0E0E10] text-zinc-300 font-mono text-[11px] leading-relaxed">
+            <div
+              ref={logContainerRef}
+              className="flex-1 p-4 overflow-y-auto space-y-1 bg-[#0E0E10] text-zinc-300 font-mono text-[11px] leading-relaxed"
+            >
               {logLines.length > 0 ? (
                 logLines.map((line, idx) => (
                   <div
