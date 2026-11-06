@@ -66,8 +66,9 @@ impl LoadedProfile {
         Ok(())
     }
 
-    /// Queries the current MPO Switch button binding from the profile definition.
-    pub fn get_mpo_binding(&self) -> (u32, String) {
+    /// Queries the current MPO Switch button or key binding from the profile definition.
+    /// Returns (id, device_or_key_name, device_guid, is_keyboard_key).
+    pub fn get_mpo_binding(&self) -> (u32, String, String, bool) {
         if let Some(key_groups) = &self.profile.KeyCommandGroups {
             for kg in key_groups {
                 for cmd in &kg.Commands {
@@ -75,13 +76,21 @@ impl LoadedProfile {
                     if name.contains("mpo") || name.contains("manual pitch override") {
                         if let Some(trackers) = &cmd.InputTrackers {
                             for t in trackers {
-                                if t.InputType == Some(2) {
+                                if t.InputType == Some(0)
+                                    || t.Product.as_deref() == Some("Keyboard")
+                                {
+                                    let key_id = t.Id.unwrap_or(0) as u32;
+                                    let name =
+                                        t.Product.clone().unwrap_or_else(|| "Keyboard".to_string());
+                                    return (key_id, name, "KEYBOARD".to_string(), true);
+                                } else if t.InputType == Some(2) {
                                     let btn = t.Id.unwrap_or(8) as u32;
                                     let dev = t
                                         .Product
                                         .clone()
                                         .unwrap_or_else(|| "F16 TQS by YGZ".to_string());
-                                    return (btn, dev);
+                                    let guid = t.DeviceId.clone().unwrap_or_default();
+                                    return (btn, dev, guid, false);
                                 }
                             }
                         }
@@ -95,20 +104,26 @@ impl LoadedProfile {
                 if name.contains("mpo") || name.contains("manual pitch override") {
                     if let Some(trackers) = &cmd.InputTrackers {
                         for t in trackers {
-                            if t.InputType == Some(2) {
+                            if t.InputType == Some(0) || t.Product.as_deref() == Some("Keyboard") {
+                                let key_id = t.Id.unwrap_or(0) as u32;
+                                let name =
+                                    t.Product.clone().unwrap_or_else(|| "Keyboard".to_string());
+                                return (key_id, name, "KEYBOARD".to_string(), true);
+                            } else if t.InputType == Some(2) {
                                 let btn = t.Id.unwrap_or(8) as u32;
                                 let dev = t
                                     .Product
                                     .clone()
                                     .unwrap_or_else(|| "F16 TQS by YGZ".to_string());
-                                return (btn, dev);
+                                let guid = t.DeviceId.clone().unwrap_or_default();
+                                return (btn, dev, guid, false);
                             }
                         }
                     }
                 }
             }
         }
-        (8, "F16 TQS by YGZ".to_string())
+        (8, "F16 TQS by YGZ".to_string(), String::new(), false)
     }
 
     /// Updates the MPO Switch button binding in the profile definition.
@@ -126,16 +141,15 @@ impl LoadedProfile {
                     if name.contains("mpo") || name.contains("manual pitch override") {
                         if let Some(trackers) = &mut cmd.InputTrackers {
                             for t in trackers.iter_mut() {
-                                if t.InputType == Some(2) {
-                                    t.Id = Some(button_id as i32);
-                                    if let Some(p) = product_name {
-                                        t.Product = Some(p.to_string());
-                                    }
-                                    if let Some(d) = device_id {
-                                        t.DeviceId = Some(d.to_string());
-                                    }
-                                    modified = true;
+                                t.InputType = Some(2);
+                                t.Id = Some(button_id as i32);
+                                if let Some(p) = product_name {
+                                    t.Product = Some(p.to_string());
                                 }
+                                if let Some(d) = device_id {
+                                    t.DeviceId = Some(d.to_string());
+                                }
+                                modified = true;
                             }
                             if !modified {
                                 trackers.push(crate::fvx::models::InputTrackerDef {
@@ -159,6 +173,130 @@ impl LoadedProfile {
                             }]);
                             modified = true;
                         }
+                    }
+                }
+            }
+        }
+        for cg in &mut self.profile.CommandGroups {
+            for cmd in &mut cg.Commands {
+                let name = cmd.Name.as_deref().unwrap_or("").to_lowercase();
+                if name.contains("mpo") || name.contains("manual pitch override") {
+                    if let Some(trackers) = &mut cmd.InputTrackers {
+                        for t in trackers.iter_mut() {
+                            t.InputType = Some(2);
+                            t.Id = Some(button_id as i32);
+                            if let Some(p) = product_name {
+                                t.Product = Some(p.to_string());
+                            }
+                            if let Some(d) = device_id {
+                                t.DeviceId = Some(d.to_string());
+                            }
+                            modified = true;
+                        }
+                        if !modified {
+                            trackers.push(crate::fvx::models::InputTrackerDef {
+                                InputType: Some(2),
+                                Id: Some(button_id as i32),
+                                DeviceId: device_id.map(|s| s.to_string()),
+                                VendorId: None,
+                                ProductId: None,
+                                Product: product_name.map(|s| s.to_string()),
+                            });
+                            modified = true;
+                        }
+                    } else {
+                        cmd.InputTrackers = Some(vec![crate::fvx::models::InputTrackerDef {
+                            InputType: Some(2),
+                            Id: Some(button_id as i32),
+                            DeviceId: device_id.map(|s| s.to_string()),
+                            VendorId: None,
+                            ProductId: None,
+                            Product: product_name.map(|s| s.to_string()),
+                        }]);
+                        modified = true;
+                    }
+                }
+            }
+        }
+        modified
+    }
+
+    /// Updates the MPO Switch keyboard key binding in the profile definition.
+    pub fn set_mpo_key_binding(&mut self, key_code: u32, key_name: Option<&str>) -> bool {
+        let mut modified = false;
+        let product_str = key_name.unwrap_or("Keyboard").to_string();
+        if let Some(key_groups) = &mut self.profile.KeyCommandGroups {
+            for kg in key_groups {
+                for cmd in &mut kg.Commands {
+                    let name = cmd.Name.as_deref().unwrap_or("").to_lowercase();
+                    if name.contains("mpo") || name.contains("manual pitch override") {
+                        if let Some(trackers) = &mut cmd.InputTrackers {
+                            for t in trackers.iter_mut() {
+                                t.InputType = Some(0);
+                                t.Id = Some(key_code as i32);
+                                t.Product = Some(product_str.clone());
+                                t.DeviceId = Some("KEYBOARD".to_string());
+                                modified = true;
+                            }
+                            if !modified {
+                                trackers.push(crate::fvx::models::InputTrackerDef {
+                                    InputType: Some(0),
+                                    Id: Some(key_code as i32),
+                                    DeviceId: Some("KEYBOARD".to_string()),
+                                    VendorId: None,
+                                    ProductId: None,
+                                    Product: Some(product_str.clone()),
+                                });
+                                modified = true;
+                            }
+                        } else {
+                            cmd.InputTrackers = Some(vec![crate::fvx::models::InputTrackerDef {
+                                InputType: Some(0),
+                                Id: Some(key_code as i32),
+                                DeviceId: Some("KEYBOARD".to_string()),
+                                VendorId: None,
+                                ProductId: None,
+                                Product: Some(product_str.clone()),
+                            }]);
+                            modified = true;
+                        }
+                    }
+                }
+            }
+        }
+        for cg in &mut self.profile.CommandGroups {
+            for cmd in &mut cg.Commands {
+                let name = cmd.Name.as_deref().unwrap_or("").to_lowercase();
+                if name.contains("mpo") || name.contains("manual pitch override") {
+                    if let Some(trackers) = &mut cmd.InputTrackers {
+                        for t in trackers.iter_mut() {
+                            t.InputType = Some(0);
+                            t.Id = Some(key_code as i32);
+                            t.Product = Some(product_str.clone());
+                            t.DeviceId = Some("KEYBOARD".to_string());
+                            modified = true;
+                        }
+                        if !modified {
+                            trackers.push(crate::fvx::models::InputTrackerDef {
+                                InputType: Some(0),
+                                Id: Some(key_code as i32),
+                                DeviceId: Some("KEYBOARD".to_string()),
+                                VendorId: None,
+                                ProductId: None,
+                                Product: Some(product_str.clone()),
+                            });
+                            modified = true;
+                        }
+                    } else {
+                        cmd.InputTrackers = Some(vec![crate::fvx::models::InputTrackerDef {
+                            InputType: Some(0),
+                            Id: Some(key_code as i32),
+                            DeviceId: Some("KEYBOARD".to_string()),
+                            VendorId: None,
+                            ProductId: None,
+                            Product: Some(product_str.clone()),
+                        }]);
+                        modified = true;
                     }
                 }
             }
@@ -248,24 +386,37 @@ mod tests {
     fn test_inspect_and_modify_mpo() {
         let path = "assets/profiles/Falcon BMS 4.38 v1.3.1/Falcon BMS 4.38 v1.3.1.fvx";
         if let Ok(mut lp) = LoadedProfile::load_from_file(path) {
-            let (initial_btn, initial_dev) = lp.get_mpo_binding();
+            let (initial_btn, initial_dev, _initial_guid, initial_is_key) = lp.get_mpo_binding();
             assert_eq!(initial_btn, 8);
             assert_eq!(initial_dev, "F16 TQS by YGZ");
+            assert!(!initial_is_key);
 
             // Test modifying MPO binding
             assert!(lp.set_mpo_binding(50, Some("F16 TQS by YGZ"), None));
-            let (mod_btn, mod_dev) = lp.get_mpo_binding();
+            let (mod_btn, mod_dev, _mod_guid, mod_is_key) = lp.get_mpo_binding();
             assert_eq!(mod_btn, 50);
             assert_eq!(mod_dev, "F16 TQS by YGZ");
+            assert!(!mod_is_key);
+
+            // Test setting keyboard key binding
+            assert!(lp.set_mpo_key_binding(79, Some("Key O")));
+            let (key_btn, key_name, _key_guid, is_key) = lp.get_mpo_binding();
+            assert_eq!(key_btn, 79);
+            assert_eq!(key_name, "Key O");
+            assert!(is_key);
+
+            // Restore button 50 for round-trip test
+            assert!(lp.set_mpo_binding(50, Some("F16 TQS by YGZ"), None));
 
             // Test round-trip serialization in memory
             let temp_dir = std::env::temp_dir();
             let temp_fvx = temp_dir.join("test_roundtrip.fvx");
             lp.save_to_file(&temp_fvx).expect("Failed to save fvx");
             let reloaded = LoadedProfile::load_from_file(&temp_fvx).expect("Failed to reload fvx");
-            let (r_btn, r_dev) = reloaded.get_mpo_binding();
+            let (r_btn, r_dev, _r_guid, r_is_key) = reloaded.get_mpo_binding();
             assert_eq!(r_btn, 50);
             assert_eq!(r_dev, "F16 TQS by YGZ");
+            assert!(!r_is_key);
             let _ = std::fs::remove_file(temp_fvx);
         }
     }

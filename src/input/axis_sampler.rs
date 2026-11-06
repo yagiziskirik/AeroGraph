@@ -13,7 +13,7 @@ pub struct InputSnapshot {
     pub left_brake: f32,
     pub right_brake: f32,
     pub pressed_buttons: Vec<u32>,
-    pub pressed_device_buttons: Vec<(u32, String)>,
+    pub pressed_device_buttons: Vec<(u32, String, String)>, // (button_id, device_name, device_guid)
     pub mpo_active: bool,
 }
 
@@ -45,6 +45,7 @@ pub struct AxisSampler {
     deadband_threshold: f32,
     last_hotplug_check: std::time::Instant,
     device_names: HashMap<String, String>,
+    mpo_binding: Option<(u32, String, String, bool)>, // (button_id, device_name, device_guid, is_key)
 }
 
 impl AxisSampler {
@@ -124,7 +125,13 @@ impl AxisSampler {
             deadband_threshold: 0.02, // 2% deadband for AS5600 encoder filtering
             last_hotplug_check: std::time::Instant::now(),
             device_names,
+            mpo_binding: None,
         })
+    }
+
+    /// Configures the active MPO binding (from active .fvx profile) to sample against.
+    pub fn set_mpo_binding(&mut self, binding: (u32, String, String, bool)) {
+        self.mpo_binding = Some(binding);
     }
 
     /// Checks for newly attached USB game controllers (hotplug) and binds them if missing.
@@ -167,6 +174,7 @@ impl AxisSampler {
                 &mut self.bms_config.devices,
                 &mut self.bms_config.ptt_com1,
                 &mut self.bms_config.ptt_com2,
+                &mut self.bms_config.mpo_button,
                 &mut self.bms_config.axes,
             );
 
@@ -239,9 +247,11 @@ impl AxisSampler {
                         if !snapshot.pressed_buttons.contains(&btn_u32) {
                             snapshot.pressed_buttons.push(btn_u32);
                         }
-                        snapshot
-                            .pressed_device_buttons
-                            .push((btn_u32, dev_name.clone()));
+                        snapshot.pressed_device_buttons.push((
+                            btn_u32,
+                            dev_name.clone(),
+                            guid.clone(),
+                        ));
                         snapshot
                             .active_variables
                             .insert(format!("Btn_{}", btn_idx), "True".to_string());
@@ -292,19 +302,43 @@ impl AxisSampler {
             }
         }
 
-        // MPO detection: check if active variables, hardware buttons or key combinations indicate MPO toggle
-        if snapshot.pressed_buttons.contains(&50)
-            || snapshot.pressed_buttons.contains(&8)
-            || snapshot
-                .active_variables
-                .contains_key("AFManualPitchOverride")
-            || snapshot.active_variables.contains_key("SimMPOSwitch")
-            || snapshot
-                .active_variables
-                .values()
-                .any(|v| v.contains("MPO"))
-        {
-            snapshot.mpo_active = true;
+        // MPO detection: strictly evaluate against the active FVX profile binding
+        if let Some((id, ref dev_name, ref dev_guid, is_key)) = self.mpo_binding {
+            if is_key {
+                #[cfg(target_os = "windows")]
+                unsafe {
+                    use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
+                    if (GetAsyncKeyState(id as i32) as u16 & 0x8000) != 0 {
+                        snapshot.mpo_active = true;
+                    }
+                }
+            } else {
+                let is_pressed =
+                    snapshot
+                        .pressed_device_buttons
+                        .iter()
+                        .any(|(btn, d_name, d_guid)| {
+                            if *btn != id {
+                                return false;
+                            }
+                            if !dev_guid.is_empty() && d_guid.eq_ignore_ascii_case(dev_guid) {
+                                return true;
+                            }
+                            if !dev_name.is_empty() && d_name.eq_ignore_ascii_case(dev_name) {
+                                return true;
+                            }
+                            if dev_guid.is_empty()
+                                && (dev_name.is_empty()
+                                    || dev_name.eq_ignore_ascii_case("Profile Default"))
+                            {
+                                return true;
+                            }
+                            false
+                        });
+                if is_pressed {
+                    snapshot.mpo_active = true;
+                }
+            }
         }
 
         snapshot

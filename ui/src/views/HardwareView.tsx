@@ -11,6 +11,8 @@ interface HardwareViewProps {
   telemetry: TelemetryData;
   mpoButton?: number;
   mpoDevice?: string;
+  mpoIsKey?: boolean;
+  bmsMpoBinding?: string | null;
 }
 
 export const HardwareView: React.FC<HardwareViewProps> = ({
@@ -18,46 +20,76 @@ export const HardwareView: React.FC<HardwareViewProps> = ({
   telemetry,
   mpoButton,
   mpoDevice,
+  mpoIsKey,
+  bmsMpoBinding,
 }) => {
   const [listeningForMpo, setListeningForMpo] = useState(false);
   const [mpoBindingStatus, setMpoBindingStatus] = useState<string>(() => {
+    if (mpoIsKey) {
+      return `Key: ${mpoDevice || 'Keyboard'} (${mpoButton ?? 0})`;
+    }
     const btn = mpoButton !== undefined ? mpoButton : 8;
     const dev = mpoDevice || 'F16 TQS by YGZ / Profile Default';
-    return `Active: JoyBtn ${btn} (${dev})`;
+    return `JoyBtn ${btn} (${dev})`;
   });
   const [manualMpoOverride, setManualMpoOverride] = useState<boolean | null>(null);
 
   // Synchronize binding status when props update from StateSnapshot
   useEffect(() => {
     if (mpoButton !== undefined && !listeningForMpo) {
-      setMpoBindingStatus(
-        `Active: JoyBtn ${mpoButton} (${mpoDevice || 'F16 TQS by YGZ / Profile Default'})`
-      );
+      if (mpoIsKey) {
+        setMpoBindingStatus(`Key: ${mpoDevice || 'Keyboard'} (${mpoButton})`);
+      } else {
+        setMpoBindingStatus(
+          `JoyBtn ${mpoButton} (${mpoDevice || 'F16 TQS by YGZ / Profile Default'})`
+        );
+      }
     }
-  }, [mpoButton, mpoDevice, listeningForMpo]);
+  }, [mpoButton, mpoDevice, mpoIsKey, listeningForMpo]);
 
-  // Listen for real-time MPO binding capture from DirectInput hardware
+  // Listen for real-time MPO binding capture from DirectInput hardware or keyboard
   useEffect(() => {
-    const unsub = Ipc.on('MpoBindingCaptured', (data: { button: number; device: string }) => {
-      setListeningForMpo(false);
-      setMpoBindingStatus(
-        `Bound to controller: JoyBtn ${data.button} (${data.device}) [Saved to .fvx]`
-      );
-      Sound.playCommit();
-    });
+    const unsub = Ipc.on(
+      'MpoBindingCaptured',
+      (data: { button: number; device: string; is_key?: boolean }) => {
+        setListeningForMpo(false);
+        const prefix = data.is_key ? 'Bound to keyboard' : 'Bound to controller';
+        const label = data.is_key
+          ? `${data.device} (${data.button})`
+          : `JoyBtn ${data.button} (${data.device})`;
+        setMpoBindingStatus(`${prefix}: ${label} [Saved to .fvx]`);
+        Sound.playCommit();
+      }
+    );
     return unsub;
   }, []);
 
-  // Cancel binding on Escape key or unmount
+  // Capture keyboard key or cancel binding on Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && listeningForMpo) {
+      if (!listeningForMpo) return;
+
+      if (e.key === 'Escape') {
         setListeningForMpo(false);
         Ipc.cancelMpoBinding();
         setMpoBindingStatus(
-          `Active: JoyBtn ${mpoButton ?? 8} (${mpoDevice || 'F16 TQS by YGZ / Profile Default'})`
+          mpoIsKey
+            ? `Key: ${mpoDevice || 'Keyboard'} (${mpoButton ?? 0})`
+            : `JoyBtn ${mpoButton ?? 8} (${mpoDevice || 'F16 TQS by YGZ / Profile Default'})`
         );
+        return;
       }
+
+      // Rebind to keyboard key
+      e.preventDefault();
+      const keyCode = e.keyCode || e.which;
+      const keyName = `Key ${e.key.toUpperCase()} (${keyCode})`;
+      const modifiers = (e.ctrlKey ? 2 : 0) | (e.shiftKey ? 1 : 0) | (e.altKey ? 4 : 0);
+      setListeningForMpo(false);
+      Ipc.cancelMpoBinding();
+      Ipc.setMpoKey(keyCode, modifiers);
+      setMpoBindingStatus(`Bound to keyboard: ${keyName} [Saved to .fvx]`);
+      Sound.playCommit();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
@@ -66,7 +98,7 @@ export const HardwareView: React.FC<HardwareViewProps> = ({
         Ipc.cancelMpoBinding();
       }
     };
-  }, [listeningForMpo, mpoButton, mpoDevice]);
+  }, [listeningForMpo, mpoButton, mpoDevice, mpoIsKey]);
 
   // Baseline resting values for toe brakes to ensure monotonic linear deflection
   const [leftResting, setLeftResting] = useState<number | null>(null);
@@ -89,15 +121,11 @@ export const HardwareView: React.FC<HardwareViewProps> = ({
     setRightResting(telemetry.right_brake > 0.5 ? 1.0 : 0.0);
   }
 
-  // Effective MPO state: controller telemetry (including bound button from F16 TQS or other controllers) or interactive manual switch toggle
+  // Effective MPO state: controller telemetry (strictly evaluated against active FVX binding) or interactive manual switch toggle
   const isMpoActive =
     manualMpoOverride !== null
       ? manualMpoOverride
-      : telemetry.mpo_active ||
-        (mpoButton !== undefined && telemetry.active_buttons?.includes(mpoButton)) ||
-        telemetry.active_buttons?.includes(8) ||
-        telemetry.active_buttons?.includes(50) ||
-        false;
+      : (telemetry.mpo_active || false);
 
   // 1. PITCH (Elevator) Axis Alignment
   const pitchDisplay = 1.0 - rawPitch;
@@ -458,19 +486,25 @@ export const HardwareView: React.FC<HardwareViewProps> = ({
 
             {/* Authentic Physical F-16 MPO Switch Simulation */}
             <div className="p-3 rounded bg-[#18181B] border border-white/[0.06] flex items-center justify-between">
-              <div className="space-y-1 font-mono text-xs">
+              <div className="space-y-1.5 font-mono text-xs">
                 <div className="flex items-center space-x-2">
-                  <span className="text-zinc-400">PROFILE BINDING:</span>
+                  <span className="text-zinc-400">FVX PROFILE:</span>
                   <span className="text-white font-bold">{mpoBindingStatus}</span>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-zinc-400">BMS KEY MAPPING:</span>
+                  <span className="text-emerald-400 font-bold">
+                    {bmsMpoBinding || 'Not configured in Falcon BMS .key'}
+                  </span>
+                </div>
                 <div className="text-[11px] text-zinc-500">
-                  Click switch or trigger mapped controller button to verify mechanical movement.
+                  AeroGraph strictly monitors the FVX profile binding for mechanical switch animation.
                 </div>
               </div>
 
               {/* Mechanical MPO Toggle Lever (Telemetry-Driven Indicator) */}
               <div
-                title="MPO hardware state (driven by flight stick telemetry)"
+                title="MPO hardware state (driven strictly by active FVX binding)"
                 className="flex flex-col items-center justify-center p-2 rounded bg-black/40 border border-white/[0.08] select-none pointer-events-none"
               >
                 <div className="flex items-center space-x-1 mb-1 font-mono text-[9px] font-bold">
@@ -487,6 +521,51 @@ export const HardwareView: React.FC<HardwareViewProps> = ({
                 />
               </div>
             </div>
+
+            {/* Mismatch Warning Alert */}
+            {bmsMpoBinding &&
+              ((mpoIsKey && (!bmsMpoBinding.toLowerCase().includes('key') || !bmsMpoBinding.includes(String(mpoButton ?? 0)))) ||
+                (!mpoIsKey &&
+                  (!bmsMpoBinding.toLowerCase().includes(`joybtn ${mpoButton !== undefined ? mpoButton : 8}`) ||
+                    (mpoDevice &&
+                      !mpoDevice.toLowerCase().includes('default') &&
+                      !bmsMpoBinding.toLowerCase().includes(mpoDevice.toLowerCase()))))) && (
+                <div className="p-3 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono text-[11px] flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-base">⚠️</span>
+                    <div>
+                      <div className="font-bold">BINDING MISMATCH DETECTED</div>
+                      <div className="text-[10px] text-amber-200/80">
+                        Falcon BMS is mapped to <span className="font-semibold text-white">{bmsMpoBinding}</span>, but your FVX profile uses <span className="font-semibold text-white">{mpoBindingStatus}</span>. In-game MPO will not activate with this switch unless synchronized.
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      Sound.playSwitch();
+                      Ipc.importMpoFromBms();
+                    }}
+                    className="px-2.5 py-1 rounded bg-amber-400 hover:bg-amber-300 text-black font-bold text-[10px] uppercase cursor-pointer shrink-0 ml-3 transition-colors"
+                  >
+                    SYNC FROM BMS
+                  </button>
+                </div>
+              )}
+
+            {/* Warning when activating MPO with misconfigured BMS */}
+            {isMpoActive &&
+              bmsMpoBinding &&
+              ((mpoIsKey && (!bmsMpoBinding.toLowerCase().includes('key') || !bmsMpoBinding.includes(String(mpoButton ?? 0)))) ||
+                (!mpoIsKey &&
+                  (!bmsMpoBinding.toLowerCase().includes(`joybtn ${mpoButton !== undefined ? mpoButton : 8}`) ||
+                    (mpoDevice &&
+                      !mpoDevice.toLowerCase().includes('default') &&
+                      !bmsMpoBinding.toLowerCase().includes(mpoDevice.toLowerCase()))))) && (
+                <div className="p-2 rounded bg-rose-500/20 border border-rose-500/40 text-rose-300 font-mono text-[10px] animate-pulse">
+                  ⚠️ NOTICE: MPO Switch is OVERRIDE (ACTIVE) in AeroGraph, but your Falcon BMS key file does not match this binding! Sync bindings to ensure in-sim override engages.
+                </div>
+              )}
           </div>
 
           <div className="flex items-center space-x-3 pt-3">
@@ -500,8 +579,22 @@ export const HardwareView: React.FC<HardwareViewProps> = ({
                   : 'bg-[#1E1E22] hover:bg-[#27272A] border-accent text-accent shadow-[0_0_10px_rgba(16,185,129,0.2)]'
               }`}
             >
-              {listeningForMpo ? 'AWAITING BUTTON PRESS...' : 'REBIND MPO SWITCH TO FVX'}
+              {listeningForMpo ? 'AWAITING BUTTON OR KEY PRESS...' : 'REBIND MPO SWITCH TO FVX'}
             </button>
+
+            {bmsMpoBinding && (
+              <button
+                type="button"
+                onClick={() => {
+                  Sound.playSwitch();
+                  Ipc.importMpoFromBms();
+                }}
+                className="h-9 px-3 rounded bg-[#18181B] hover:bg-[#1E1E22] border border-amber-400/40 text-amber-300 hover:text-white font-mono text-xs uppercase cursor-pointer transition-colors"
+                title="Copy the button or key configured in Falcon BMS directly into the active FVX profile"
+              >
+                BIND FROM BMS CONFIG
+              </button>
+            )}
 
             <button
               type="button"
