@@ -24,7 +24,7 @@ pub struct AppConfig {
     #[serde(default)]
     pub bms_key_file: Option<String>,
 
-    #[serde(default)]
+    #[serde(default = "default_false")]
     pub sapi_earcons: bool,
 
     #[serde(default)]
@@ -88,6 +88,8 @@ pub struct AppConfig {
     pub window_pos: Option<(i32, i32)>,
     #[serde(default = "default_false")]
     pub window_maximized: bool,
+    #[serde(default = "default_false")]
+    pub start_with_windows: bool,
 }
 
 fn default_github_repo() -> String {
@@ -146,6 +148,7 @@ impl Default for AppConfig {
             window_size: default_window_size(),
             window_pos: None,
             window_maximized: false,
+            start_with_windows: false,
         }
     }
 }
@@ -259,14 +262,12 @@ impl AppConfig {
     }
     pub fn load() -> Self {
         let path = Self::config_path();
-        if path.exists() {
-            if let Ok(content) = fs::read_to_string(&path) {
-                if let Ok(config) = toml::from_str(&content) {
-                    return config;
-                }
-            }
-        }
-        Self::default()
+        let mut cfg: Self = fs::read_to_string(path)
+            .ok()
+            .and_then(|c| toml::from_str(&c).ok())
+            .unwrap_or_default();
+        cfg.start_with_windows = Self::is_auto_start_enabled();
+        cfg
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {

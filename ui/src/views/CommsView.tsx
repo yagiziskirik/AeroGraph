@@ -8,6 +8,7 @@ import { SpeakerToggle, MicrophoneToggle } from '../components/inputs';
 
 interface CommsViewProps {
   config: AppConfig;
+  onUpdateConfig: (config: AppConfig) => void;
   profileName: string;
   profilePath?: string;
   telemetry: TelemetryData;
@@ -15,6 +16,7 @@ interface CommsViewProps {
 
 export const CommsView: React.FC<CommsViewProps> = ({
   config,
+  onUpdateConfig,
   profileName,
   profilePath,
   telemetry,
@@ -142,6 +144,20 @@ export const CommsView: React.FC<CommsViewProps> = ({
     Ipc.setListening(!config.listening_enabled);
   };
 
+  const handleTogglePilotGender = (female: boolean) => {
+    Sound.playSwitch();
+    const updated = { ...config, pilot_female: female };
+    onUpdateConfig(updated);
+    Ipc.updateConfig(updated);
+  };
+
+  const handleSetPollingRate = (hz: number) => {
+    Sound.playClick();
+    const updated = { ...config, polling_rate_hz: hz };
+    onUpdateConfig(updated);
+    Ipc.updateConfig(updated);
+  };
+
 
   return (
     <div className="h-full w-full p-5 bg-[#0A0A0C] flex flex-col space-y-4 select-none overflow-y-auto font-sans">
@@ -217,6 +233,94 @@ export const CommsView: React.FC<CommsViewProps> = ({
             >
               RESET TO DEFAULT
             </button>
+          </div>
+        </div>
+
+        {/* FoxVox Engine Calibration: Pilot Voice & Polling Frequency */}
+        <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-white/[0.06] font-mono text-xs">
+          {/* Pilot Voice Gender */}
+          <div className="p-3 rounded bg-[#18181B] border border-white/[0.06] flex flex-col justify-between space-y-2">
+            <div>
+              <div className="text-white font-semibold flex items-center justify-between">
+                <span>PILOT VOICE GENDER</span>
+                <span className="text-[10px] text-zinc-500 uppercase">
+                  {config.pilot_female ? 'FEMALE CALLSIGN' : 'MALE (DEFAULT)'}
+                </span>
+              </div>
+              <div className="text-[10px] text-zinc-500 mt-0.5">
+                Controls crew chief and wingman voice response phrasing
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => handleTogglePilotGender(false)}
+                className={`h-8 px-2 rounded font-mono font-bold text-[11px] border uppercase transition-colors cursor-pointer flex items-center justify-center space-x-1.5 ${
+                  !config.pilot_female
+                    ? 'bg-accent/15 border-accent text-accent shadow-[0_0_8px_rgba(16,185,129,0.2)]'
+                    : 'bg-[#1E1E22] border-white/[0.08] text-zinc-400 hover:text-white hover:bg-[#27272A]'
+                }`}
+              >
+                <span>♂</span>
+                <span>MALE (DEFAULT)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTogglePilotGender(true)}
+                className={`h-8 px-2 rounded font-mono font-bold text-[11px] border uppercase transition-colors cursor-pointer flex items-center justify-center space-x-1.5 ${
+                  config.pilot_female
+                    ? 'bg-accent/15 border-accent text-accent shadow-[0_0_8px_rgba(16,185,129,0.2)]'
+                    : 'bg-[#1E1E22] border-white/[0.08] text-zinc-400 hover:text-white hover:bg-[#27272A]'
+                }`}
+              >
+                <span>♀</span>
+                <span>FEMALE</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Telemetry Polling Rate Hz */}
+          <div className="p-3 rounded bg-[#18181B] border border-white/[0.06] flex flex-col justify-between space-y-2">
+            <div>
+              <div className="text-white font-semibold flex items-center justify-between">
+                <span>TELEMETRY POLLING RATE</span>
+                <span className="text-[10px] text-accent font-bold">
+                  {config.polling_rate_hz || 25} HZ ({Math.round(1000 / (config.polling_rate_hz || 25))}ms)
+                </span>
+              </div>
+              <div className="text-[10px] text-zinc-500 mt-0.5">
+                Falcon BMS shared memory &amp; DirectInput sampling frequency
+              </div>
+            </div>
+
+            <div className="grid grid-cols-5 gap-1.5 pt-1">
+              {[
+                { hz: 20, label: '20 HZ' },
+                { hz: 25, label: '25 HZ' },
+                { hz: 30, label: '30 HZ' },
+                { hz: 50, label: '50 HZ' },
+                { hz: 60, label: '60 HZ' },
+              ].map(({ hz, label }) => {
+                const isActive = config.polling_rate_hz === hz;
+                return (
+                  <button
+                    key={hz}
+                    type="button"
+                    onClick={() => handleSetPollingRate(hz)}
+                    className={`h-8 rounded font-mono font-bold text-[10px] border transition-colors cursor-pointer flex flex-col items-center justify-center ${
+                      isActive
+                        ? 'bg-accent/15 border-accent text-accent shadow-[0_0_8px_rgba(16,185,129,0.2)]'
+                        : 'bg-[#1E1E22] border-white/[0.08] text-zinc-400 hover:text-white hover:bg-[#27272A]'
+                    }`}
+                  >
+                    <span>{label}</span>
+                    <span className="text-[8px] opacity-60">{Math.round(1000 / hz)}ms</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

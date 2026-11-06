@@ -25,6 +25,7 @@ export interface AppConfig {
   window_maximized?: boolean;
   window_size?: [number, number];
   window_pos?: [number, number] | null;
+  start_with_windows?: boolean;
 }
 
 export interface SlotConfig {

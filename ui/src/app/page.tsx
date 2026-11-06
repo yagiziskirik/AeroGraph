@@ -28,6 +28,7 @@ const DEFAULT_CONFIG: AppConfig = {
   gui_sound_effects: true,
   gui_sound_volume: 0.5,
   gui_accent_color: '#10B981',
+  start_with_windows: false,
 };
 
 const DEFAULT_TELEMETRY: TelemetryData = {
@@ -253,6 +254,7 @@ export default function Home() {
           <div className="h-full w-full">
             <CommsView
               config={config}
+              onUpdateConfig={setConfig}
               profileName={profileName}
               profilePath={profilePath}
               telemetry={telemetry}

@@ -628,6 +628,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let new_auto = !cur_auto;
                         let _ = AppConfig::set_auto_start_enabled(new_auto);
                         tray.set_autostart_enabled(new_auto);
+                        {
+                            let mut cfg = shared_config.lock().unwrap();
+                            cfg.start_with_windows = new_auto;
+                            let _ = cfg.save();
+                        }
+                        if let Some(win) = tactical_console.active_window() {
+                            let cfg = shared_config.lock().unwrap().clone();
+                            push_snapshot_helper(win, &cfg, &shared_profile, &mut main_bms_client);
+                        }
                         log::info!("Start with Windows set to: {}", new_auto);
                     } else if menu_event.id == tray.item_console.id() {
                         let mut cfg = shared_config.lock().unwrap();
@@ -667,6 +676,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             if cfg.pilot_female { "Female" } else { "Male" }
                         );
                         reload_trigger.store(true, Ordering::SeqCst);
+                        if let Some(win) = tactical_console.active_window() {
+                            let cfg_clone = cfg.clone();
+                            push_snapshot_helper(win, &cfg_clone, &shared_profile, &mut main_bms_client);
+                        }
                     } else if menu_event.id == tray.item_select.id() {
                         if let Some(path) = AppTray::prompt_select_profile() {
                             log::info!("Selected new profile: {:?}", path);
@@ -925,6 +938,10 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
             let needs_reload = cfg.profile_path != new_cfg.profile_path
                 || cfg.pilot_female != new_cfg.pilot_female
                 || cfg.bms_key_file != new_cfg.bms_key_file;
+            if cfg.start_with_windows != new_cfg.start_with_windows {
+                let _ = AppConfig::set_auto_start_enabled(new_cfg.start_with_windows);
+                ctx.tray.set_autostart_enabled(new_cfg.start_with_windows);
+            }
             *cfg = *new_cfg;
             let _ = cfg.save();
             ctx.voice_recognition_enabled
@@ -932,7 +949,9 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
             ctx.tray
                 .set_voice_recognition_enabled(cfg.voice_recognition);
             ctx.tray.set_listening_active(cfg.listening_enabled);
+            ctx.tray.set_gender(cfg.pilot_female);
             ctx.tray.set_auto_kneeboards_enabled(cfg.auto_kneeboards);
+            ctx.tray.set_autostart_enabled(cfg.start_with_windows);
             *ctx.last_tray_listening = cfg.listening_enabled;
             if needs_reload {
                 ctx.reload_trigger.store(true, Ordering::SeqCst);
