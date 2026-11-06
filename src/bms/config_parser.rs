@@ -14,6 +14,7 @@ pub struct DeviceInfo {
 pub struct ButtonBinding {
     pub callback: String,
     pub device_guid: String,
+    pub device_name: Option<String>,
     pub button_index: u32,
 }
 
@@ -36,26 +37,104 @@ pub struct AxisBinding {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct ParsedKeyBindings {
+    pub ptt_com1: Option<ButtonBinding>,
+    pub ptt_com2: Option<ButtonBinding>,
+    pub mpo_button: Option<ButtonBinding>,
+    pub mpo_key: Option<(i32, i32)>,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct BmsConfig {
     pub base_dir: PathBuf,
     pub devices: Vec<DeviceInfo>,
     pub ptt_com1: Option<ButtonBinding>,
     pub ptt_com2: Option<ButtonBinding>,
+    pub mpo_button: Option<ButtonBinding>,
+    pub mpo_key: Option<(i32, i32)>,
     pub axes: HashMap<String, AxisBinding>,
 }
 
-impl BmsConfig {
-    /// Attempts to locate the Falcon BMS installation directory.
-    pub fn find_bms_directory() -> Option<PathBuf> {
-        // 1. Try standard installation path
-        let standard = PathBuf::from(r"C:\Games\Falcon BMS 4.38");
-        if standard.exists() && standard.join("User").exists() {
-            return Some(standard);
-        }
+fn dik_to_name(code: i32) -> String {
+    match code {
+        0x01 => "Escape".to_string(),
+        0x02..=0x0A => format!("{}", code - 1),
+        0x0B => "0".to_string(),
+        0x10 => "Q".to_string(),
+        0x11 => "W".to_string(),
+        0x12 => "E".to_string(),
+        0x13 => "R".to_string(),
+        0x14 => "T".to_string(),
+        0x15 => "Y".to_string(),
+        0x16 => "U".to_string(),
+        0x17 => "I".to_string(),
+        0x18 => "O".to_string(),
+        0x19 => "P".to_string(),
+        0x1E => "A".to_string(),
+        0x1F => "S".to_string(),
+        0x20 => "D".to_string(),
+        0x21 => "F".to_string(),
+        0x22 => "G".to_string(),
+        0x23 => "H".to_string(),
+        0x24 => "J".to_string(),
+        0x25 => "K".to_string(),
+        0x26 => "L".to_string(),
+        0x2C => "Z".to_string(),
+        0x2D => "X".to_string(),
+        0x2E => "C".to_string(),
+        0x2F => "V".to_string(),
+        0x30 => "B".to_string(),
+        0x31 => "N".to_string(),
+        0x32 => "M".to_string(),
+        0x39 => "Space".to_string(),
+        _ => format!("0x{:X}", code),
+    }
+}
 
-        // 2. Check Windows registry HKLM\SOFTWARE\WOW6432Node\Benchmark Sims\Falcon BMS 4.38 -> baseDir
-        // (Fallback to standard path)
-        None
+impl BmsConfig {
+    /// Lots of comments here, since it is hard to understand what is going on in the BMS config files without context. Hopefully this helps future maintainers.
+    /// Returns human-readable string of the MPO binding configured in Falcon BMS.
+    pub fn get_mpo_display(&self) -> Option<String> {
+        let btn_str = self.mpo_button.as_ref().map(|btn| {
+            let dev_name = btn
+                .device_name
+                .as_ref()
+                .cloned()
+                .or_else(|| {
+                    self.devices
+                        .iter()
+                        .find(|d| d.guid.eq_ignore_ascii_case(&btn.device_guid))
+                        .map(|d| d.name.clone())
+                })
+                .unwrap_or_else(|| "Controller".to_string());
+            format!("JoyBtn {} ({})", btn.button_index, dev_name)
+        });
+
+        let key_str = self.mpo_key.map(|(code, mods)| {
+            let mod_str = match mods {
+                1 => "Shift+",
+                2 => "Ctrl+",
+                4 => "Alt+",
+                3 => "Ctrl+Shift+",
+                5 => "Alt+Shift+",
+                6 => "Ctrl+Alt+",
+                7 => "Ctrl+Alt+Shift+",
+                _ => "",
+            };
+            format!("Key {}{}", mod_str, dik_to_name(code))
+        });
+
+        match (btn_str, key_str) {
+            (Some(b), Some(k)) => Some(format!("{} / {}", b, k)),
+            (Some(b), None) => Some(b),
+            (None, Some(k)) => Some(k),
+            (None, None) => None,
+        }
+    }
+
+    /// Attempts to locate the Falcon BMS installation directory strictly via the Windows Registry.
+    pub fn find_bms_directory() -> Option<PathBuf> {
+        crate::config::AppConfig::default().get_bms_base_dir()
     }
 
     /// Loads and parses DeviceSorting.txt, Key file, axismapping.dat, and joystick.cal,
@@ -72,8 +151,7 @@ impl BmsConfig {
 
         let key_file_name = custom_key_file.unwrap_or("BMS - Auto.key");
         let key_file_path = config_dir.join(key_file_name);
-        let (mut ptt_com1, mut ptt_com2) =
-            Self::parse_key_file(&key_file_path, &devices).unwrap_or((None, None));
+        let mut key_bindings = Self::parse_key_file(&key_file_path, &devices).unwrap_or_default();
 
         let axis_calibrations =
             Self::parse_joystick_cal(config_dir.join("joystick.cal")).unwrap_or_default();
@@ -88,16 +166,19 @@ impl BmsConfig {
         let _ = Self::enrich_from_setup_xmls(
             &config_dir,
             &mut devices,
-            &mut ptt_com1,
-            &mut ptt_com2,
+            &mut key_bindings.ptt_com1,
+            &mut key_bindings.ptt_com2,
+            &mut key_bindings.mpo_button,
             &mut axes,
         );
 
         Ok(Self {
             base_dir: bms_path.to_path_buf(),
             devices,
-            ptt_com1,
-            ptt_com2,
+            ptt_com1: key_bindings.ptt_com1,
+            ptt_com2: key_bindings.ptt_com2,
+            mpo_button: key_bindings.mpo_button,
+            mpo_key: key_bindings.mpo_key,
             axes,
         })
     }
@@ -109,6 +190,7 @@ impl BmsConfig {
         devices: &mut Vec<DeviceInfo>,
         ptt_com1: &mut Option<ButtonBinding>,
         ptt_com2: &mut Option<ButtonBinding>,
+        mpo_button: &mut Option<ButtonBinding>,
         axes: &mut HashMap<String, AxisBinding>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let entries = match fs::read_dir(config_dir) {
@@ -145,7 +227,9 @@ impl BmsConfig {
                     }
 
                     if let Ok(content) = fs::read_to_string(&path) {
-                        Self::parse_setup_xml(&content, &dev_guid, ptt_com1, ptt_com2, axes);
+                        Self::parse_setup_xml(
+                            &content, &dev_guid, &dev_name, ptt_com1, ptt_com2, mpo_button, axes,
+                        );
                     }
                 }
             }
@@ -158,8 +242,10 @@ impl BmsConfig {
     fn parse_setup_xml(
         content: &str,
         dev_guid: &str,
+        dev_name: &str,
         ptt_com1: &mut Option<ButtonBinding>,
         ptt_com2: &mut Option<ButtonBinding>,
+        mpo_button: &mut Option<ButtonBinding>,
         axes: &mut HashMap<String, AxisBinding>,
     ) {
         // Parse <dx> section for PTT button callbacks
@@ -184,6 +270,7 @@ impl BmsConfig {
                     *ptt_com1 = Some(ButtonBinding {
                         callback: "SimTransmitCom1".to_string(),
                         device_guid: dev_guid.to_string(),
+                        device_name: Some(dev_name.to_string()),
                         button_index: btn_idx,
                     });
                 }
@@ -191,6 +278,24 @@ impl BmsConfig {
                     *ptt_com2 = Some(ButtonBinding {
                         callback: "SimTransmitCom2".to_string(),
                         device_guid: dev_guid.to_string(),
+                        device_name: Some(dev_name.to_string()),
+                        button_index: btn_idx,
+                    });
+                }
+                let is_mpo_hold = block.contains("<Callback>SimMPO</Callback>")
+                    || block.contains("<Callback>AFManualPitchOverride</Callback>")
+                    || block.contains("<Callback>SimMPOSwitch</Callback>");
+                let is_mpo_toggle = block.contains("<Callback>SimMPOToggle</Callback>");
+
+                if is_mpo_hold || (is_mpo_toggle && mpo_button.is_none()) {
+                    *mpo_button = Some(ButtonBinding {
+                        callback: if is_mpo_hold {
+                            "SimMPO".to_string()
+                        } else {
+                            "SimMPOToggle".to_string()
+                        },
+                        device_guid: dev_guid.to_string(),
+                        device_name: Some(dev_name.to_string()),
                         button_index: btn_idx,
                     });
                 }
@@ -248,7 +353,8 @@ impl BmsConfig {
     }
 
     /// Parses DeviceSorting.txt into a list of devices indexed by order.
-    /// Lines format: {00091209-0000-0000-0000-504944564944} "F16 Pedals by YGZ" weird flex, but I know. I made my own controllers okay?
+    /// Lines format: {00091209-0000-0000-0000-504944564944} "F16 Pedals by YGZ"
+    /// Weird flex, but I know. I made my own controllers, okay?
     pub fn parse_device_sorting<P: AsRef<Path>>(
         path: P,
     ) -> Result<Vec<DeviceInfo>, Box<dyn std::error::Error>> {
@@ -280,16 +386,15 @@ impl BmsConfig {
         Ok(devices)
     }
 
-    /// Parses BMS key file to resolve SimTransmitCom1 and SimTransmitCom2 button bindings.
+    /// Parses BMS key file to resolve SimTransmitCom1, SimTransmitCom2, and MPO Switch button/key bindings.
     /// Lines format: CallbackName ButtonID SoundId KeyCode Modifiers ...
     /// ButtonID encoding: device_index * 32 (or 128) + button_num
     pub fn parse_key_file<P: AsRef<Path>>(
         path: P,
         devices: &[DeviceInfo],
-    ) -> Result<(Option<ButtonBinding>, Option<ButtonBinding>), Box<dyn std::error::Error>> {
+    ) -> Result<ParsedKeyBindings, Box<dyn std::error::Error>> {
         let content = fs::read_to_string(path)?;
-        let mut ptt1 = None;
-        let mut ptt2 = None;
+        let mut bindings = ParsedKeyBindings::default();
 
         for line in content.lines() {
             let line = line.trim();
@@ -314,20 +419,70 @@ impl BmsConfig {
                                 ((btn_id / 32) as usize, btn_id % 32)
                             };
 
-                            let guid = devices
+                            let (guid, name) = devices
                                 .get(dev_idx)
-                                .map(|d| d.guid.clone())
-                                .unwrap_or_default();
+                                .map(|d| (d.guid.clone(), Some(d.name.clone())))
+                                .unwrap_or_else(|| (String::new(), None));
                             let binding = ButtonBinding {
                                 callback: callback.to_string(),
                                 device_guid: guid,
+                                device_name: name,
                                 button_index,
                             };
 
                             if callback == "SimTransmitCom1" {
-                                ptt1 = Some(binding);
+                                bindings.ptt_com1 = Some(binding);
                             } else {
-                                ptt2 = Some(binding);
+                                bindings.ptt_com2 = Some(binding);
+                            }
+                        }
+                    }
+                } else if callback == "SimMPO"
+                    || callback == "SimMPOToggle"
+                    || callback == "AFManualPitchOverride"
+                    || callback == "SimMPOSwitch"
+                {
+                    let is_hold = callback == "SimMPO"
+                        || callback == "AFManualPitchOverride"
+                        || callback == "SimMPOSwitch";
+                    let is_dx_button = tokens.len() >= 4 && tokens[2] == "-1" && tokens[3] == "-2";
+
+                    if is_dx_button {
+                        if let Ok(btn_id) = tokens[1].parse::<i32>() {
+                            if btn_id >= 0 && (bindings.mpo_button.is_none() || is_hold) {
+                                let btn_id = btn_id as u32;
+                                let (dev_idx, button_index) = if btn_id >= 128 {
+                                    ((btn_id / 128) as usize, btn_id % 128)
+                                } else {
+                                    ((btn_id / 32) as usize, btn_id % 32)
+                                };
+
+                                let (guid, name) = devices
+                                    .get(dev_idx)
+                                    .map(|d| (d.guid.clone(), Some(d.name.clone())))
+                                    .unwrap_or_else(|| (String::new(), None));
+                                bindings.mpo_button = Some(ButtonBinding {
+                                    callback: callback.to_string(),
+                                    device_guid: guid,
+                                    device_name: name,
+                                    button_index,
+                                });
+                            }
+                        }
+                    } else if tokens.len() >= 4 {
+                        let raw_kc = tokens[3];
+                        let kc_opt = if raw_kc.starts_with("0x") || raw_kc.starts_with("0X") {
+                            u32::from_str_radix(&raw_kc[2..], 16).ok().map(|v| v as i32)
+                        } else {
+                            raw_kc.parse::<i32>().ok()
+                        };
+                        if let Some(kc) = kc_opt {
+                            if kc > 0 && (bindings.mpo_key.is_none() || is_hold) {
+                                let mods = tokens
+                                    .get(4)
+                                    .and_then(|m| m.parse::<i32>().ok())
+                                    .unwrap_or(0);
+                                bindings.mpo_key = Some((kc, mods));
                             }
                         }
                     }
@@ -335,7 +490,7 @@ impl BmsConfig {
             }
         }
 
-        Ok((ptt1, ptt2))
+        Ok(bindings)
     }
 
     /// Parses joystick.cal (720 bytes, 30 records of 6x int32 = 24 bytes).

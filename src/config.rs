@@ -371,11 +371,6 @@ impl AppConfig {
             }
         }
 
-        let default_path = PathBuf::from(r"C:\Games\Falcon BMS 4.38");
-        if default_path.exists() {
-            return Some(default_path);
-        }
-
         None
     }
 
