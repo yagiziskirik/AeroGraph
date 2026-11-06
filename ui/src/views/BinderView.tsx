@@ -87,6 +87,42 @@ export const BinderView: React.FC<BinderViewProps> = ({
     };
   }, []);
 
+  // Interactive Ctrl + Mouse Wheel Zoom on Kneeboards
+  useEffect(() => {
+    const handleLeftWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setLeftZoom((current) => {
+        const base = current === 'fit' ? leftFitScale : current;
+        const delta = e.deltaY < 0 ? 0.05 : -0.05;
+        const next = Math.round((base + delta) * 100) / 100;
+        return Math.max(0.25, Math.min(1.5, next));
+      });
+    };
+
+    const handleRightWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setRightZoom((current) => {
+        const base = current === 'fit' ? rightFitScale : current;
+        const delta = e.deltaY < 0 ? 0.05 : -0.05;
+        const next = Math.round((base + delta) * 100) / 100;
+        return Math.max(0.25, Math.min(1.5, next));
+      });
+    };
+
+    const leftEl = leftContainerRef.current;
+    const rightEl = rightContainerRef.current;
+
+    if (leftEl) leftEl.addEventListener('wheel', handleLeftWheel, { passive: false });
+    if (rightEl) rightEl.addEventListener('wheel', handleRightWheel, { passive: false });
+
+    return () => {
+      if (leftEl) leftEl.removeEventListener('wheel', handleLeftWheel);
+      if (rightEl) rightEl.removeEventListener('wheel', handleRightWheel);
+    };
+  }, [leftFitScale, rightFitScale]);
+
   // Template Library Popover State & Categorization
   const [libraryOpenFor, setLibraryOpenFor] = useState<'left' | 'right' | null>(null);
   const [libraryCategory, setLibraryCategory] = useState<'all' | 'notes' | 'checklist' | 'chart'>('all');
@@ -201,6 +237,22 @@ export const BinderView: React.FC<BinderViewProps> = ({
           [data.path]: data.content,
         }));
       }
+    });
+    return unsub;
+  }, []);
+
+  // Listen for backend kneeboard generation completion cue (synchronized with audio)
+  useEffect(() => {
+    const unsub = Ipc.on('KneeboardRegenFinished', () => {
+      setRegenState('idle');
+      setCommitState((prev) => {
+        if (prev === 'committing') {
+          setTimeout(() => setCommitState('idle'), 2500);
+          return 'success';
+        }
+        return prev;
+      });
+      Sound.playPageTurn();
     });
     return unsub;
   }, []);
@@ -357,11 +409,10 @@ export const BinderView: React.FC<BinderViewProps> = ({
     Ipc.commitKneeboardLayout(preparedSlots);
     Ipc.regenerateKneeboards();
 
+    // Fallback watchdog in case host encounters an error
     setTimeout(() => {
-      setCommitState('success');
-      Sound.playPageTurn();
-      setTimeout(() => setCommitState('idle'), 2500);
-    }, 1400);
+      setCommitState((prev) => (prev === 'committing' ? 'idle' : prev));
+    }, 35000);
   };
 
   // Trigger manual chart regeneration
@@ -370,10 +421,10 @@ export const BinderView: React.FC<BinderViewProps> = ({
     setRegenState('running');
     Ipc.regenerateKneeboards();
 
+    // Fallback watchdog in case host encounters an error
     setTimeout(() => {
-      setRegenState('idle');
-      Sound.playPageTurn();
-    }, 1500);
+      setRegenState((prev) => (prev === 'running' ? 'idle' : prev));
+    }, 35000);
   };
 
   // Stamp Insertion at current text cursor position
@@ -385,7 +436,7 @@ export const BinderView: React.FC<BinderViewProps> = ({
     if (textarea && textarea.selectionStart !== undefined) {
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
-      const insertText = `\n- ${stampTemplate}\n`;
+      const insertText = '\n' + stampTemplate;
       const updated = currentContent.substring(0, start) + insertText + currentContent.substring(end);
       handleUpdateSlotContent(side, updated);
       setTimeout(() => {
@@ -394,7 +445,7 @@ export const BinderView: React.FC<BinderViewProps> = ({
         textarea.setSelectionRange(nextPos, nextPos);
       }, 20);
     } else {
-      const updated = currentContent + '\n- ' + stampTemplate;
+      const updated = currentContent + '\n' + stampTemplate;
       handleUpdateSlotContent(side, updated);
     }
     setEditStampDropdownOpen(null);
@@ -1132,6 +1183,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                         height: `${Math.round(1554 * activeLeftScale)}px`,
                       }}
                     >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={leftImgSrc}
                         alt={`Slot ${leftSlotIndex}L Chart`}
@@ -1439,6 +1491,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                         height: `${Math.round(1554 * activeRightScale)}px`,
                       }}
                     >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={rightImgSrc}
                         alt={`Slot ${rightSlotIndex}R Chart`}
@@ -1781,14 +1834,6 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                     <span className="text-zinc-400 text-[11px] font-mono block truncate">{st.template}</span>
                   </div>
                   <div className="flex items-center space-x-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => handleInsertStamp(activeSide, st.template)}
-                      className="px-2 py-1 rounded bg-[#27272A] hover:bg-[#323238] border border-white/[0.08] text-accent text-[10px] font-bold cursor-pointer"
-                      title="Insert into active pad"
-                    >
-                      INSERT
-                    </button>
                     <button
                       type="button"
                       onClick={() => handleDeleteStamp(st.id)}

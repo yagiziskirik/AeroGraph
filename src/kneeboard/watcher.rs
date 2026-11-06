@@ -38,9 +38,10 @@ impl KneeboardWatcher {
         running: Arc<AtomicBool>,
         config: Arc<std::sync::Mutex<AppConfig>>,
         manual_rx: std::sync::mpsc::Receiver<()>,
+        on_complete: Option<Arc<dyn Fn() + Send + Sync>>,
     ) {
         thread::spawn(move || {
-            Self::start_watcher(config, running, manual_rx, None);
+            Self::start_watcher(config, running, manual_rx, None, on_complete);
         });
     }
 
@@ -50,6 +51,7 @@ impl KneeboardWatcher {
         running: Arc<AtomicBool>,
         manual_rx: std::sync::mpsc::Receiver<()>,
         audio_player: Option<AudioPlayer>,
+        on_complete: Option<Arc<dyn Fn() + Send + Sync>>,
     ) {
         log::info!("KneeboardWatcher thread started (Pure Rust + WebKit Pipeline)");
 
@@ -93,6 +95,9 @@ impl KneeboardWatcher {
                         log::info!("📋 [Kneeboards] Briefing change triggered! Regenerating kneeboards in pure Rust...");
                         let cfg = config.lock().unwrap().clone();
                         Self::execute_pipeline(&cfg, bms_dir, audio_player.as_ref());
+                        if let Some(ref cb) = on_complete {
+                            cb();
+                        }
                         let elapsed = t0.elapsed();
                         log::info!(
                             "✅ [Kneeboards] Kneeboards successfully updated in {:.2}s",
