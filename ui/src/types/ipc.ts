@@ -100,6 +100,8 @@ export interface StateSnapshot {
   custom_stamps?: QuickStamp[];
   mpo_button?: number;
   mpo_device?: string;
+  mpo_is_key?: boolean;
+  bms_mpo_binding?: string | null;
 }
 
 export type MasterMode = 'binder' | 'comms' | 'hardware' | 'system';

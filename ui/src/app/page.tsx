@@ -79,6 +79,8 @@ export default function Home() {
   const [customStamps, setCustomStamps] = useState<QuickStamp[]>([]);
   const [mpoButton, setMpoButton] = useState<number | undefined>(undefined);
   const [mpoDevice, setMpoDevice] = useState<string | undefined>(undefined);
+  const [mpoIsKey, setMpoIsKey] = useState<boolean>(false);
+  const [bmsMpoBinding, setBmsMpoBinding] = useState<string | null>(null);
 
   useEffect(() => {
     // Request initial state on mount
@@ -95,6 +97,8 @@ export default function Home() {
       if (data.custom_stamps) setCustomStamps(data.custom_stamps);
       if (data.mpo_button !== undefined) setMpoButton(data.mpo_button);
       if (data.mpo_device) setMpoDevice(data.mpo_device);
+      if (data.mpo_is_key !== undefined) setMpoIsKey(data.mpo_is_key);
+      if (data.bms_mpo_binding !== undefined) setBmsMpoBinding(data.bms_mpo_binding);
       if (data.config?.gui_accent_color) {
         setAccentColor(data.config.gui_accent_color);
         applyAccentColor(data.config.gui_accent_color);
@@ -128,12 +132,21 @@ export default function Home() {
     });
 
     // Listen for MPO binding captured from hardware
-    const unsubMpo = Ipc.on('MpoBindingCaptured', (data: { button: number; device: string }) => {
+    const unsubMpo = Ipc.on('MpoBindingCaptured', (data: { button: number; device: string; is_key?: boolean }) => {
       if (data && data.button !== undefined) {
         setMpoButton(data.button);
         if (data.device) setMpoDevice(data.device);
+        setMpoIsKey(!!data.is_key);
       }
     });
+
+    // Remove instant splash screen smoothly & signal backend that window is ready
+    const splash = document.getElementById('aerograph-splash');
+    if (splash) {
+      splash.style.opacity = '0';
+      setTimeout(() => splash.remove(), 250);
+    }
+    Ipc.windowReady();
 
     return () => {
       unsubState();
@@ -230,6 +243,8 @@ export default function Home() {
               telemetry={telemetry}
               mpoButton={mpoButton}
               mpoDevice={mpoDevice}
+              mpoIsKey={mpoIsKey}
+              bmsMpoBinding={bmsMpoBinding}
             />
           </div>
         )}

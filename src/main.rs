@@ -18,6 +18,7 @@ pub enum AppEvent {
     ToggleConsole,
     CloseConsole,
     SpeechRecognized { text: String, confidence: f32 },
+    KneeboardRegenFinished,
 }
 
 use std::path::PathBuf;
@@ -221,6 +222,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.auto_kneeboards
     );
 
+    // Strict Falcon BMS registry check: require valid installation in registry
+    if config.get_bms_base_dir().is_none() {
+        log::error!("Falcon BMS 4.38 installation could not be detected in the Windows Registry.");
+        #[cfg(target_os = "windows")]
+        unsafe {
+            use windows::core::HSTRING;
+            use windows::Win32::UI::WindowsAndMessaging::{
+                MessageBoxW, MB_ICONERROR, MB_OK, MB_SYSTEMMODAL,
+            };
+            let text = HSTRING::from(
+                "Falcon BMS 4.38 was not detected in your Windows Registry (HKLM\\SOFTWARE\\WOW6432Node\\Benchmark Sims\\Falcon BMS 4.38).\n\nPlease verify that Falcon BMS 4.38 is installed and has been launched at least once.",
+            );
+            let title = HSTRING::from("AeroGraph - Falcon BMS Detection Error");
+            let _ = MessageBoxW(None, &text, &title, MB_ICONERROR | MB_OK | MB_SYSTEMMODAL);
+        }
+        std::process::exit(1);
+    }
+
     if config.show_console {
         set_console_visible(true);
     }
@@ -312,8 +331,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 5. Spawn background kneeboard watcher thread
     let w_config = shared_config.clone();
+    let proxy_regen = proxy.clone();
+    let on_regen_complete = Arc::new(move || {
+        let _ = proxy_regen.send_event(AppEvent::KneeboardRegenFinished);
+    });
 
-    KneeboardWatcher::spawn_loop(r_watcher, w_config, manual_trigger_rx);
+    KneeboardWatcher::spawn_loop(
+        r_watcher,
+        w_config,
+        manual_trigger_rx,
+        Some(on_regen_complete),
+    );
 
     // 6. Check for updates on startup if enabled (flight-safe, runs in background thread)
     if config.check_updates_on_startup {
@@ -341,8 +369,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tray_channel = TrayIconEvent::receiver();
     let mut last_tray_listening = config.listening_enabled;
     let mut last_tray_click_instant = Instant::now() - Duration::from_secs(1);
-    let mut mpo_baseline_snapshot: Option<std::collections::HashSet<(u32, String)>> = None;
-    let mut mpo_prev_pressed: std::collections::HashSet<(u32, String)> =
+    let mut mpo_baseline_snapshot: Option<std::collections::HashSet<(u32, String, String)>> = None;
+    let mut mpo_prev_pressed: std::collections::HashSet<(u32, String, String)> =
         std::collections::HashSet::new();
 
     event_loop.run(move |event, event_loop_target, control_flow| {
@@ -403,8 +431,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         ui_visible.store(opened, Ordering::Relaxed);
                         if opened {
                             if let Some(win) = tactical_console.active_window() {
-                                win.window().set_visible(true);
-                                win.window().set_focus();
                                 push_snapshot_helper(
                                     win,
                                     &cfg,
@@ -421,10 +447,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Event::UserEvent(AppEvent::CloseConsole) => {
                 if let Some(win) = tactical_console.active_window() {
+                    win.window().set_visible(false);
                     save_window_geometry(win, &shared_config);
                 }
                 tactical_console.teardown();
                 ui_visible.store(false, Ordering::Relaxed);
+            }
+            Event::UserEvent(AppEvent::KneeboardRegenFinished) => {
+                log::info!("Kneeboard regeneration finished, notifying Tactical Console");
+                if let Some(win) = tactical_console.active_window() {
+                    win.send_event("KneeboardRegenFinished", "{}");
+                }
             }
             Event::UserEvent(AppEvent::IpcMessage(req)) => {
                 let mut ctx = IpcContext {
@@ -735,7 +768,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         });
                         win.push_audio_level(current_mic_peak);
 
-                        let current_pressed_set: std::collections::HashSet<(u32, String)> =
+                        let current_pressed_set: std::collections::HashSet<(u32, String, String)> =
                             hw_snap.pressed_device_buttons.iter().cloned().collect();
 
                         if mpo_binding_active.load(Ordering::Relaxed) {
@@ -754,22 +787,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                                 // Find any button that transitioned to pressed (rising edge) and wasn't in baseline
                                 let newly_activated =
-                                    hw_snap.pressed_device_buttons.iter().find(|pair| {
-                                        !baseline.contains(pair) && !mpo_prev_pressed.contains(pair)
+                                    hw_snap.pressed_device_buttons.iter().find(|triple| {
+                                        !baseline.contains(triple) && !mpo_prev_pressed.contains(triple)
                                     });
 
-                                if let Some((btn, dev)) = newly_activated.cloned() {
+                                if let Some((btn, dev, guid)) = newly_activated.cloned() {
                                     mpo_binding_active.store(false, Ordering::Relaxed);
                                     mpo_baseline_snapshot = None;
                                     log::info!(
-                                        "MPO button activation detected on hardware: btn={}, dev={}",
+                                        "MPO button activation detected on hardware: btn={}, dev={}, guid={}",
                                         btn,
-                                        dev
+                                        dev,
+                                        guid
                                     );
                                     {
                                         let mut prof_guard = shared_profile.lock().unwrap();
                                         if let Some(ref mut lp) = *prof_guard {
-                                            lp.set_mpo_binding(btn, Some(&dev), None);
+                                            lp.set_mpo_binding(btn, Some(&dev), Some(&guid));
                                             if let Err(e) = lp.save_to_file(&lp.profile_path) {
                                                 log::error!(
                                                     "Failed to save profile with new MPO binding: {:?}",
@@ -777,8 +811,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 );
                                             } else {
                                                 log::info!(
-                                                    "Successfully updated .fvx profile with MPO JoyBtn {}",
-                                                    btn
+                                                    "Successfully updated .fvx profile with MPO JoyBtn {} on {} ({})",
+                                                    btn,
+                                                    dev,
+                                                    guid
                                                 );
                                             }
                                         }
@@ -795,7 +831,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         "MpoBindingCaptured",
                                         &serde_json::json!({
                                             "button": btn,
-                                            "device": dev
+                                            "device": dev,
+                                            "guid": guid,
+                                            "is_key": false,
                                         })
                                         .to_string(),
                                     );
@@ -856,6 +894,13 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
         IpcRequest::DragWindow | IpcRequest::ResizeWindow { .. } | IpcRequest::MinimizeWindow => {
             // Handled directly inside window event callback
         }
+        IpcRequest::WindowReady => {
+            ctx.tactical_console.close_splash();
+            if let Some(win) = ctx.tactical_console.active_window() {
+                win.window().set_visible(true);
+                win.window().set_focus();
+            }
+        }
         IpcRequest::ToggleMaximize => {
             if let Some(win) = ctx.tactical_console.active_window() {
                 win.window().set_maximized(!win.window().is_maximized());
@@ -863,6 +908,7 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
         }
         IpcRequest::CloseWindow => {
             if let Some(win) = ctx.tactical_console.active_window() {
+                win.window().set_visible(false);
                 save_window_geometry(win, ctx.shared_config);
             }
             ctx.tactical_console.teardown();
@@ -876,6 +922,9 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
         }
         IpcRequest::UpdateConfig(new_cfg) => {
             let mut cfg = ctx.shared_config.lock().unwrap();
+            let needs_reload = cfg.profile_path != new_cfg.profile_path
+                || cfg.pilot_female != new_cfg.pilot_female
+                || cfg.bms_key_file != new_cfg.bms_key_file;
             *cfg = *new_cfg;
             let _ = cfg.save();
             ctx.voice_recognition_enabled
@@ -885,7 +934,9 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
             ctx.tray.set_listening_active(cfg.listening_enabled);
             ctx.tray.set_auto_kneeboards_enabled(cfg.auto_kneeboards);
             *ctx.last_tray_listening = cfg.listening_enabled;
-            ctx.reload_trigger.store(true, Ordering::SeqCst);
+            if needs_reload {
+                ctx.reload_trigger.store(true, Ordering::SeqCst);
+            }
             if let Some(win) = ctx.tactical_console.active_window() {
                 push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
             }
@@ -1235,6 +1286,87 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
                 push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
             }
         }
+        IpcRequest::ImportMpoFromBms => {
+            log::info!("Importing MPO binding from Falcon BMS configuration...");
+            let bms_dir = {
+                let cfg = ctx.shared_config.lock().unwrap();
+                cfg.get_bms_base_dir()
+            };
+            if let Some(ref dir) = bms_dir {
+                let bms_cfg = crate::bms::config_parser::BmsConfig::load_from_bms(dir, None)
+                    .unwrap_or_default();
+                let mut updated = false;
+                if let Some(ref btn) = bms_cfg.mpo_button {
+                    let dev_name = btn
+                        .device_name
+                        .as_ref()
+                        .cloned()
+                        .or_else(|| {
+                            bms_cfg
+                                .devices
+                                .iter()
+                                .find(|d| d.guid.eq_ignore_ascii_case(&btn.device_guid))
+                                .map(|d| d.name.clone())
+                        })
+                        .unwrap_or_else(|| "Controller".to_string());
+                    let dev_guid = if !btn.device_guid.is_empty() {
+                        btn.device_guid.clone()
+                    } else {
+                        bms_cfg
+                            .devices
+                            .iter()
+                            .find(|d| d.name.eq_ignore_ascii_case(&dev_name))
+                            .map(|d| d.guid.clone())
+                            .unwrap_or_default()
+                    };
+                    let mut prof_guard = ctx.shared_profile.lock().unwrap();
+                    if let Some(ref mut lp) = *prof_guard {
+                        lp.set_mpo_binding(btn.button_index, Some(&dev_name), Some(&dev_guid));
+                        let _ = lp.save_to_file(&lp.profile_path);
+                        updated = true;
+                    }
+                    if let Some(win) = ctx.tactical_console.active_window() {
+                        win.send_event(
+                            "MpoBindingCaptured",
+                            &serde_json::json!({
+                                "button": btn.button_index,
+                                "device": dev_name,
+                                "guid": dev_guid,
+                                "is_key": false,
+                            })
+                            .to_string(),
+                        );
+                    }
+                } else if let Some((kc, _mods)) = bms_cfg.mpo_key {
+                    let key_name = format!("Key {}", kc);
+                    let mut prof_guard = ctx.shared_profile.lock().unwrap();
+                    if let Some(ref mut lp) = *prof_guard {
+                        lp.set_mpo_key_binding(kc as u32, Some(&key_name));
+                        let _ = lp.save_to_file(&lp.profile_path);
+                        updated = true;
+                    }
+                    if let Some(win) = ctx.tactical_console.active_window() {
+                        win.send_event(
+                            "MpoBindingCaptured",
+                            &serde_json::json!({
+                                "button": kc,
+                                "device": key_name,
+                                "guid": "KEYBOARD",
+                                "is_key": true,
+                            })
+                            .to_string(),
+                        );
+                    }
+                }
+                if updated {
+                    ctx.reload_trigger.store(true, Ordering::SeqCst);
+                    if let Some(win) = ctx.tactical_console.active_window() {
+                        let cfg = ctx.shared_config.lock().unwrap().clone();
+                        push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+                    }
+                }
+            }
+        }
         IpcRequest::SetMpoKey {
             key_code,
             modifiers,
@@ -1244,6 +1376,28 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
                 key_code,
                 modifiers
             );
+            let key_name = format!("Key {}", key_code);
+            {
+                let mut prof_guard = ctx.shared_profile.lock().unwrap();
+                if let Some(ref mut lp) = *prof_guard {
+                    lp.set_mpo_key_binding(key_code, Some(&key_name));
+                    let _ = lp.save_to_file(&lp.profile_path);
+                }
+            }
+            ctx.reload_trigger.store(true, Ordering::SeqCst);
+            if let Some(win) = ctx.tactical_console.active_window() {
+                let cfg = ctx.shared_config.lock().unwrap().clone();
+                push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+                win.send_event(
+                    "MpoBindingCaptured",
+                    &serde_json::json!({
+                        "button": key_code,
+                        "device": key_name,
+                        "is_key": true,
+                    })
+                    .to_string(),
+                );
+            }
         }
         IpcRequest::OpenLogFile => {
             let log_p = AppConfig::log_file_path();
@@ -1323,14 +1477,18 @@ fn push_snapshot_helper(
             )
         }
     };
-    let (mpo_button, mpo_device) = {
+    let (mpo_button, mpo_device, _mpo_guid, mpo_is_key) = {
         let guard = shared_profile.lock().unwrap();
         if let Some(ref lp) = *guard {
             lp.get_mpo_binding()
         } else {
-            (8, "F16 TQS by YGZ".to_string())
+            (8, "F16 TQS by YGZ".to_string(), "".to_string(), false)
         }
     };
+    let bms_mpo_binding = cfg.get_bms_base_dir().and_then(|dir| {
+        let bms_cfg = crate::bms::config_parser::BmsConfig::load_from_bms(&dir, None).ok()?;
+        bms_cfg.get_mpo_display()
+    });
     let layout = crate::kneeboard::layout::KneeboardLayoutConfig::load_or_create_default();
     win.push_snapshot(&crate::gui::ipc::StateSnapshot {
         config: cfg.clone(),
@@ -1347,6 +1505,8 @@ fn push_snapshot_helper(
         custom_stamps: AppConfig::load_custom_stamps(),
         mpo_button,
         mpo_device,
+        mpo_is_key,
+        bms_mpo_binding,
     });
 }
 
@@ -1826,7 +1986,8 @@ fn run_voice_worker_loop(
                 let req_axes = loaded.extract_required_axes();
                 log::info!("Required axes for this profile: {:?}", req_axes);
                 match AxisSampler::new(bms_cfg, &req_axes) {
-                    Ok(sampler) => {
+                    Ok(mut sampler) => {
+                        sampler.set_mpo_binding(loaded.get_mpo_binding());
                         log::info!("DirectInput axis sampler initialized successfully");
                         axis_sampler = Some(sampler);
                     }
@@ -1846,9 +2007,16 @@ fn run_voice_worker_loop(
                     BmsConfig::default()
                 };
                 let req_axes = loaded.extract_required_axes();
-                if let Ok(sampler) = AxisSampler::new(bms_cfg, &req_axes) {
+                if let Ok(mut sampler) = AxisSampler::new(bms_cfg, &req_axes) {
+                    sampler.set_mpo_binding(loaded.get_mpo_binding());
                     log::info!("DirectInput axis sampler re-connected successfully");
                     axis_sampler = Some(sampler);
+                }
+            }
+
+            if profile_changed {
+                if let Some(ref mut sampler) = axis_sampler {
+                    sampler.set_mpo_binding(loaded.get_mpo_binding());
                 }
             }
 

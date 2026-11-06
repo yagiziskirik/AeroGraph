@@ -15,6 +15,7 @@ pub enum IpcRequest {
     MinimizeWindow,
     ToggleMaximize,
     CloseWindow,
+    WindowReady,
 
     // Initial state & Configuration
     GetInitialState,
@@ -90,6 +91,7 @@ pub enum IpcRequest {
         device: Option<String>,
     },
     ResetMpoBinding,
+    ImportMpoFromBms,
     SetMpoKey {
         key_code: u32,
         modifiers: u32,
@@ -158,6 +160,10 @@ pub struct StateSnapshot {
     pub custom_stamps: Vec<QuickStamp>,
     pub mpo_button: u32,
     pub mpo_device: String,
+    #[serde(default)]
+    pub mpo_is_key: bool,
+    #[serde(default)]
+    pub bms_mpo_binding: Option<String>,
 }
 
 impl IpcRequest {

@@ -213,6 +213,9 @@ export const Ipc = {
   resetMpoBinding() {
     this.send('ResetMpoBinding');
   },
+  importMpoFromBms() {
+    this.send('ImportMpoFromBms');
+  },
   setMpoKey(keyCode: number, modifiers: number) {
     this.send('SetMpoKey', { key_code: keyCode, modifiers });
   },
@@ -235,5 +238,8 @@ export const Ipc = {
   },
   editKneeboards() {
     this.send('EditKneeboards');
+  },
+  windowReady() {
+    this.send('WindowReady');
   },
 };

@@ -34,6 +34,7 @@ impl TacticalConsoleWindow {
             .with_min_inner_size(LogicalSize::new(1024.0, 680.0))
             .with_decorations(false)
             .with_resizable(true)
+            .with_visible(false)
             .with_maximized(config.window_maximized);
 
         if let Some((x, y)) = config.window_pos {
@@ -41,8 +42,6 @@ impl TacticalConsoleWindow {
         }
 
         let window = Arc::new(builder.build(target)?);
-        window.set_visible(true);
-        window.set_focus();
 
         let win_drag = window.clone();
         let ipc_callback = move |request: wry::http::Request<String>| {
@@ -67,6 +66,10 @@ impl TacticalConsoleWindow {
                     win_drag.set_minimized(true);
                 } else if matches!(ipc_req, IpcRequest::ToggleMaximize) {
                     win_drag.set_maximized(!win_drag.is_maximized());
+                } else if matches!(ipc_req, IpcRequest::WindowReady) {
+                    win_drag.set_visible(true);
+                    win_drag.set_focus();
+                    ipc_handler(ipc_req, &win_drag);
                 } else {
                     ipc_handler(ipc_req, &win_drag);
                 }
@@ -79,6 +82,7 @@ impl TacticalConsoleWindow {
             .with_additional_browser_args(
                 "--disable-web-security --allow-file-access-from-files --use-fake-ui-for-media-stream --enable-features=MediaStream --unsafely-treat-insecure-origin-as-secure=aerograph://app",
             )
+            .with_background_color((10, 10, 12, 255))
             .with_autoplay(true)
             .with_ipc_handler(ipc_callback);
 
@@ -137,6 +141,13 @@ impl TacticalConsoleWindow {
         }
 
         let webview = webview_builder.build(&*window)?;
+
+        // Fallback watchdog: ensure window becomes visible even if IPC message is delayed
+        let win_fallback = window.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            win_fallback.set_visible(true);
+        });
 
         log::info!("Tactical Console window & WebView2 instantiated successfully");
         Ok(Self { window, webview })

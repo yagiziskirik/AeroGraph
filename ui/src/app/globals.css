@@ -18,7 +18,9 @@
   --text-dim: #52525B;
 }
 
+html,
 body {
+  background-color: #0A0A0C;
   font-family: 'Chakra Petch', 'Share Tech Mono', sans-serif;
   letter-spacing: 0.02em;
 }
