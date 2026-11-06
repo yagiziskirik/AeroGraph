@@ -43,10 +43,8 @@ pub fn is_bms_running() -> bool {
                 let exe_name =
                     String::from_utf16_lossy(&entry.szExeFile[..null_pos]).to_lowercase();
 
-                if exe_name == "falcon bms.exe"
-                    || exe_name == "falcon bms_avx.exe"
-                    || exe_name == "falcon bms_avx2.exe"
-                {
+                let clean = exe_name.replace([' ', '_'], "");
+                if clean.starts_with("falconbms") && clean.ends_with(".exe") {
                     let _ = CloseHandle(snapshot);
                     return true;
                 }
