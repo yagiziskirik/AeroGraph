@@ -17,6 +17,7 @@ use crate::kneeboard::dds::{
 pub struct TacticalConsoleWindow {
     window: Arc<Window>,
     webview: WebView,
+    _context: wry::WebContext,
 }
 
 impl TacticalConsoleWindow {
@@ -83,7 +84,8 @@ impl TacticalConsoleWindow {
             }
         };
 
-        let mut webview_builder = WebViewBuilder::new()
+        let mut web_context = wry::WebContext::new(Some(AppConfig::webview_data_dir()));
+        let mut webview_builder = WebViewBuilder::with_web_context(&mut web_context)
             .with_additional_browser_args(
                 "--disable-web-security --allow-file-access-from-files --use-fake-ui-for-media-stream --enable-features=MediaStream --unsafely-treat-insecure-origin-as-secure=aerograph://app",
             )
@@ -199,6 +201,12 @@ impl TacticalConsoleWindow {
                             }
                         }
                     }
+
+                    // Dynamic / user images must not fall back to embedded UI assets
+                    return wry::http::Response::builder()
+                        .status(wry::http::StatusCode::NOT_FOUND)
+                        .body(Cow::Borrowed(b"404 Not Found" as &[u8]))
+                        .unwrap();
                 }
 
                 match UiAssets::get_file_content(clean_path) {
@@ -233,7 +241,11 @@ impl TacticalConsoleWindow {
         });
 
         log::info!("Tactical Console window & WebView2 instantiated successfully");
-        Ok(Self { window, webview })
+        Ok(Self {
+            window,
+            webview,
+            _context: web_context,
+        })
     }
 
     pub fn window(&self) -> &Window {

@@ -18,6 +18,7 @@ interface BinderViewProps {
   customPresets?: CustomPreset[];
   accentColor?: string;
   onSelectAccent?: (color: string) => void;
+  generatedImages?: string[];
 }
 
 const DEFAULT_STAMPS: QuickStamp[] = [
@@ -37,6 +38,7 @@ export const BinderView: React.FC<BinderViewProps> = ({
   customPresets: initialCustomPresets = [],
   accentColor = '#10B981',
   onSelectAccent,
+  generatedImages = [],
 }) => {
   const [leftSlotIndex, setLeftSlotIndex] = useState(1);
   const [rightSlotIndex, setRightSlotIndex] = useState(1);
@@ -140,6 +142,8 @@ export const BinderView: React.FC<BinderViewProps> = ({
   // Commit to Cockpit Pipeline State
   const [commitState, setCommitState] = useState<'idle' | 'committing' | 'success'>('idle');
   const [regenState, setRegenState] = useState<'idle' | 'running'>('idle');
+  const [imageRevision, setImageRevision] = useState(0);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   // Slot Customization Inspector Modal
   const [settingsSlotKey, setSettingsSlotKey] = useState<string | null>(null);
@@ -276,6 +280,8 @@ export const BinderView: React.FC<BinderViewProps> = ({
   useEffect(() => {
     const unsub = Ipc.on('KneeboardRegenFinished', () => {
       setRegenState('idle');
+      setImageRevision((rev) => rev + 1);
+      setFailedImages({});
       setCommitState((prev) => {
         if (prev === 'committing') {
           setTimeout(() => setCommitState('idle'), 2500);
@@ -323,31 +329,33 @@ export const BinderView: React.FC<BinderViewProps> = ({
   };
 
   // Maps a slot to a high-res pre-rendered PNG, extracted DDS texture, or user image
-  const getSlotImagePath = (slotKey: string, slot: SlotConfig): string | null => {
+  const getSlotImagePath = (slotKey: string, slot: SlotConfig, rev = imageRevision): string | null => {
+    const withRev = (url: string) => (rev > 0 ? `${url}?v=${rev}` : url);
+
     // When restore_original or pass_through is selected, serve the extracted DDS texture
     if (slot.type === 'restore_original') {
-      return `/dds-page/restore/${slotKey}.png`;
+      return withRev(`/dds-page/restore/${slotKey}.png`);
     }
     if (slot.type === 'pass_through') {
-      return `/dds-page/passthrough/${slotKey}.png`;
+      return withRev(`/dds-page/passthrough/${slotKey}.png`);
     }
 
-    if (slot.type === 'briefing_roster') return '/images/page_1.png';
-    if (slot.type === 'briefing_steerpoints') return '/images/page_2.png';
-    if (slot.type === 'mission_route') return '/images/mission_route.png';
-    if (slot.type === 'mission_target') return '/images/mission_target.png';
-    if (slot.type === 'dep_taxi') return '/images/dep_gnd.png';
-    if (slot.type === 'arr_taxi') return '/images/arr_gnd.png';
-    if (slot.type === 'arr_ils_primary') return '/images/arr_ils.png';
-    if (slot.type === 'arr_ils_secondary') return '/images/arr_ils_sec.png';
+    if (slot.type === 'briefing_roster') return withRev('/images/page_1.png');
+    if (slot.type === 'briefing_steerpoints') return withRev('/images/page_2.png');
+    if (slot.type === 'mission_route') return withRev('/images/mission_route.png');
+    if (slot.type === 'mission_target') return withRev('/images/mission_target.png');
+    if (slot.type === 'dep_taxi') return withRev('/images/dep_gnd.png');
+    if (slot.type === 'arr_taxi') return withRev('/images/arr_gnd.png');
+    if (slot.type === 'arr_ils_primary') return withRev('/images/arr_ils.png');
+    if (slot.type === 'arr_ils_secondary') return withRev('/images/arr_ils_sec.png');
     if (slot.type === 'custom_html') {
-      if (slot.path?.includes('checklist-1')) return '/images/checklist-1.png';
-      if (slot.path?.includes('checklist-2')) return '/images/checklist-2.png';
-      if (slot.path?.includes('checklist-3')) return '/images/checklist-3.png';
-      if (slot.path?.includes('checklist-4')) return '/images/checklist-4.png';
-      if (slot.path?.includes('checklist-5')) return '/images/checklist-5.png';
-      if (slot.path?.includes('threats-air')) return '/images/threats-air.png';
-      if (slot.path?.includes('threats-gnd')) return '/images/threats-gnd.png';
+      if (slot.path?.includes('checklist-1')) return withRev('/images/checklist-1.png');
+      if (slot.path?.includes('checklist-2')) return withRev('/images/checklist-2.png');
+      if (slot.path?.includes('checklist-3')) return withRev('/images/checklist-3.png');
+      if (slot.path?.includes('checklist-4')) return withRev('/images/checklist-4.png');
+      if (slot.path?.includes('checklist-5')) return withRev('/images/checklist-5.png');
+      if (slot.path?.includes('threats-air')) return withRev('/images/threats-air.png');
+      if (slot.path?.includes('threats-gnd')) return withRev('/images/threats-gnd.png');
     }
 
     // User PNG/JPG image slot type: covers the entire kneeboard page
@@ -359,13 +367,34 @@ export const BinderView: React.FC<BinderViewProps> = ({
         }
         const clean = p.replace(/\\/g, '/');
         if (clean.startsWith('/')) {
-          return clean;
+          return withRev(clean);
         }
-        return `/local-image/${clean}`;
+        return withRev(`/local-image/${clean}`);
       }
       return null;
     }
 
+    return null;
+  };
+
+  const getSlotImageFilename = (slot: SlotConfig): string | null => {
+    if (slot.type === 'briefing_roster') return 'page_1.png';
+    if (slot.type === 'briefing_steerpoints') return 'page_2.png';
+    if (slot.type === 'mission_route') return 'mission_route.png';
+    if (slot.type === 'mission_target') return 'mission_target.png';
+    if (slot.type === 'dep_taxi') return 'dep_gnd.png';
+    if (slot.type === 'arr_taxi') return 'arr_gnd.png';
+    if (slot.type === 'arr_ils_primary') return 'arr_ils.png';
+    if (slot.type === 'arr_ils_secondary') return 'arr_ils_sec.png';
+    if (slot.type === 'custom_html') {
+      if (slot.path?.includes('checklist-1')) return 'checklist-1.png';
+      if (slot.path?.includes('checklist-2')) return 'checklist-2.png';
+      if (slot.path?.includes('checklist-3')) return 'checklist-3.png';
+      if (slot.path?.includes('checklist-4')) return 'checklist-4.png';
+      if (slot.path?.includes('checklist-5')) return 'checklist-5.png';
+      if (slot.path?.includes('threats-air')) return 'threats-air.png';
+      if (slot.path?.includes('threats-gnd')) return 'threats-gnd.png';
+    }
     return null;
   };
 
@@ -620,38 +649,50 @@ export const BinderView: React.FC<BinderViewProps> = ({
     text-align: center;
   }
   .main-title {
-    font-size: 48px;
+    font-size: 50px;
     font-weight: 900;
     color: #263238;
     margin-bottom: 25px;
     text-align: center;
-    text-transform: uppercase;
   }
   .rule {
     width: 320px;
     height: 4px;
     background: #B0BEC5;
     margin: 0 auto 30px auto;
+    border-radius: 2px;
   }
-  .reason {
-    font-size: 26px;
-    font-weight: 700;
-    color: #546E7A;
-    line-height: 1.4;
-    letter-spacing: 2px;
+  .ap-title {
+    font-size: 38px;
+    font-weight: 900;
+    color: #0D47A1;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .reason-desc {
+    font-size: 24px;
+    font-weight: 800;
+    color: #C62828;
     text-transform: uppercase;
+    text-align: center;
   }
 </style>
 </head>
 <body>
-<div class="outer-card">
-  <div class="badge">AERONAUTICAL KNEEBOARD</div>
-  <div class="main-title">${title}</div>
-  <div class="rule"></div>
-  <div class="reason">${reason}</div>
-</div>
+  <div class="outer-card">
+    <div class="badge">AERONAUTICAL KNEEBOARD</div>
+    <div class="main-title">[INTENTIONALLY LEFT BLANK]</div>
+    <div class="rule"></div>
+    <div class="ap-title">${title.toUpperCase()}</div>
+    <div class="reason-desc">${reason.toUpperCase()}</div>
+  </div>
 </body>
 </html>`;
+  };
+
+  const generatePendingChartCardHtml = (slotKey: string, slot: SlotConfig): string => {
+    const title = (slot.title || slot.description || `SLOT ${slotKey}`).toUpperCase();
+    return generateBlankCardHtml(title, 'CHART PENDING GENERATION // LOAD MISSION IN BMS OR REGENERATE IN UI');
   };
 
   // Authentic HTML generator matching notes_html.rs and kneeboard.css
@@ -1005,6 +1046,12 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
 
   const leftImgSrc = getSlotImagePath(leftKey, leftSlot);
   const rightImgSrc = getSlotImagePath(rightKey, rightSlot);
+  const leftFilename = getSlotImageFilename(leftSlot);
+  const rightFilename = getSlotImageFilename(rightSlot);
+
+  // If a slot requires a generated chart/checklist image, verify it exists in generatedImages
+  const isLeftImageMissing = leftFilename !== null && !generatedImages.includes(leftFilename);
+  const isRightImageMissing = rightFilename !== null && !generatedImages.includes(rightFilename);
 
   // Combine built-in templates catalog with user-created custom templates
   const allTemplates = useMemo(() => {
@@ -1361,7 +1408,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                 </div>
               ) : (
                 <div className="w-fit min-w-full min-h-full flex items-start justify-start">
-                  {leftImgSrc ? (
+                  {leftImgSrc && !isLeftImageMissing && !failedImages[leftKey] ? (
                     /* High-Resolution Pre-Rendered Flight Chart or User Image Surface */
                     <div
                       className="bg-[#18181B] rounded shadow-2xl overflow-hidden relative border border-white/[0.06] m-auto shrink-0"
@@ -1372,17 +1419,14 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
+                        key={`${leftKey}-${imageRevision}-${leftImgSrc}`}
                         src={leftImgSrc}
                         alt={`Slot ${leftSlotIndex}L Chart`}
                         className={`w-full h-full pointer-events-none select-none ${
                           leftSlot.type === 'image' ? 'object-cover' : 'object-contain'
                         }`}
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          const fallback = '/images/blank_F16_16L.png';
-                          if (target.src !== fallback && !target.src.endsWith(fallback)) {
-                            target.src = fallback;
-                          }
+                        onError={() => {
+                          setFailedImages((prev) => ({ ...prev, [leftKey]: true }));
                         }}
                       />
                       {(leftSlot.type === 'restore_original' || leftSlot.type === 'pass_through') && (
@@ -1403,6 +1447,27 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                           </span>
                         </div>
                       )}
+                    </div>
+                  ) : leftImgSrc && (isLeftImageMissing || failedImages[leftKey]) ? (
+                    /* Authentic 1024x1554 Paper Fallback when chart image is not yet generated or failed */
+                    <div
+                      className="bg-[#FAFAF8] rounded shadow-2xl overflow-hidden relative m-auto shrink-0"
+                      style={{
+                        width: `${Math.round(1024 * activeLeftScale)}px`,
+                        height: `${Math.round(1554 * activeLeftScale)}px`,
+                      }}
+                    >
+                      <iframe
+                        title="Left Kneeboard Pending Generation View"
+                        srcDoc={generatePendingChartCardHtml(leftKey, leftSlot)}
+                        className="w-[1024px] h-[1554px] border-none pointer-events-none select-none"
+                        style={{
+                          transform: `scale(${activeLeftScale})`,
+                          transformOrigin: '0 0',
+                          width: '1024px',
+                          height: '1554px',
+                        }}
+                      />
                     </div>
                   ) : leftSlot.type === 'image' ? (
                     /* User Image Placeholder when file path not found or empty */
@@ -1725,7 +1790,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                 </div>
               ) : (
                 <div className="w-fit min-w-full min-h-full flex items-start justify-start">
-                  {rightImgSrc ? (
+                  {rightImgSrc && !isRightImageMissing && !failedImages[rightKey] ? (
                     /* High-Resolution Pre-Rendered Flight Chart or User Image Surface */
                     <div
                       className="bg-[#18181B] rounded shadow-2xl overflow-hidden relative border border-white/[0.06] m-auto shrink-0"
@@ -1736,17 +1801,14 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
+                        key={`${rightKey}-${imageRevision}-${rightImgSrc}`}
                         src={rightImgSrc}
                         alt={`Slot ${rightSlotIndex}R Chart`}
                         className={`w-full h-full pointer-events-none select-none ${
                           rightSlot.type === 'image' ? 'object-cover' : 'object-contain'
                         }`}
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          const fallback = '/images/blank_F16_16L.png';
-                          if (target.src !== fallback && !target.src.endsWith(fallback)) {
-                            target.src = fallback;
-                          }
+                        onError={() => {
+                          setFailedImages((prev) => ({ ...prev, [rightKey]: true }));
                         }}
                       />
                       {(rightSlot.type === 'restore_original' || rightSlot.type === 'pass_through') && (
@@ -1767,6 +1829,27 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                           </span>
                         </div>
                       )}
+                    </div>
+                  ) : rightImgSrc && (isRightImageMissing || failedImages[rightKey]) ? (
+                    /* Authentic 1024x1554 Paper Fallback when chart image is not yet generated or failed */
+                    <div
+                      className="bg-[#FAFAF8] rounded shadow-2xl overflow-hidden relative m-auto shrink-0"
+                      style={{
+                        width: `${Math.round(1024 * activeRightScale)}px`,
+                        height: `${Math.round(1554 * activeRightScale)}px`,
+                      }}
+                    >
+                      <iframe
+                        title="Right Kneeboard Pending Generation View"
+                        srcDoc={generatePendingChartCardHtml(rightKey, rightSlot)}
+                        className="w-[1024px] h-[1554px] border-none pointer-events-none select-none"
+                        style={{
+                          transform: `scale(${activeRightScale})`,
+                          transformOrigin: '0 0',
+                          width: '1024px',
+                          height: '1554px',
+                        }}
+                      />
                     </div>
                   ) : rightSlot.type === 'image' ? (
                     /* User Image Placeholder when file path not found or empty */

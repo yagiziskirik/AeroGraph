@@ -88,6 +88,7 @@ export default function Home() {
   const [mpoDevice, setMpoDevice] = useState<string | undefined>(undefined);
   const [mpoIsKey, setMpoIsKey] = useState<boolean>(false);
   const [bmsMpoBinding, setBmsMpoBinding] = useState<string | null>(null);
+  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
 
   useEffect(() => {
     // Request initial state on mount
@@ -107,6 +108,7 @@ export default function Home() {
       if (data.mpo_device) setMpoDevice(data.mpo_device);
       if (data.mpo_is_key !== undefined) setMpoIsKey(data.mpo_is_key);
       if (data.bms_mpo_binding !== undefined) setBmsMpoBinding(data.bms_mpo_binding);
+      if (data.generated_images) setGeneratedImages(data.generated_images);
       if (data.config?.gui_accent_color) {
         setAccentColor(data.config.gui_accent_color);
         applyAccentColor(data.config.gui_accent_color);
@@ -243,6 +245,7 @@ export default function Home() {
             customPresets={customPresets}
             accentColor={accentColor}
             onSelectAccent={handleSelectAccent}
+            generatedImages={generatedImages}
           />
         </div>
 

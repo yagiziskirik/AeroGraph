@@ -595,6 +595,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 log::info!("Kneeboard regeneration finished, notifying Tactical Console");
                 if let Some(win) = tactical_console.active_window() {
                     win.send_event("KneeboardRegenFinished", "{}");
+                    let cfg = shared_config.lock().unwrap().clone();
+                    push_snapshot_helper(win, &cfg, &shared_profile, &mut main_bms_client);
                 }
             }
             Event::UserEvent(AppEvent::ImportPresetFile(path)) => {
@@ -1868,6 +1870,21 @@ fn push_snapshot_helper(
         bms_cfg.get_mpo_display()
     });
     let layout = crate::kneeboard::layout::KneeboardLayoutConfig::load_or_create_default();
+    let assets_dir = AppConfig::find_assets_dir();
+    let images_dir = assets_dir.join("images");
+    let mut generated_images = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&images_dir) {
+        for entry in entries.flatten() {
+            if let Ok(ft) = entry.file_type() {
+                if ft.is_file() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.ends_with(".png") {
+                        generated_images.push(name);
+                    }
+                }
+            }
+        }
+    }
     win.push_snapshot(&crate::gui::ipc::StateSnapshot {
         config: cfg.clone(),
         profile_name: prof_name,
@@ -1886,6 +1903,7 @@ fn push_snapshot_helper(
         mpo_is_key,
         bms_mpo_binding,
         custom_presets: AppConfig::load_custom_presets(),
+        generated_images,
     });
 }
 
