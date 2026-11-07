@@ -27,6 +27,7 @@
 - [Detailed Performance Optimizations & SAPI Compaction](#-detailed-performance-optimizations--sapi-compaction)
 - [Tested & Verified Versions](#-tested--verified-versions)
 - [Setup & First-Time Configuration Guide](#-setup--first-time-configuration-guide)
+- [Usage & Tactical Avionics Console (TAC) Guide](#-usage--tactical-avionics-console-tac-guide)
 - [Kneeboard Configuration (`kneeboards.json`)](#-kneeboard-configuration-kneeboardsjson)
 - [T.O. 1F-16 POH Custom Notes & Scratchpad Guide](#-to-1f-16-poh-custom-notes--scratchpad-guide)
 - [Crew Chief & Voice Commands Reference](#-crew-chief--voice-commands-reference)
@@ -234,11 +235,24 @@ Whenever you plan a mission in Campaign or Tactical Engagement:
 
 ### 2. HOTAS & Controller Configuration (MPO Switch Mapping)
 
-Flight controls, PTT, and cockpit keybindings are mapped inside Falcon BMS directly, and requires no further configuration.
+Flight controls, PTT, and cockpit keybindings are mapped inside Falcon BMS directly, and require no further configuration.
 
-> **Note:** This is the way I could make it work. If your instance can check the MPO switch out of the box, you can keep you current configuration, or skip this step entirely.
+During the cold ramp start checklist, you initiate the Big Movements check with the ground crew chief. To validate the physical **MPO (Manual Pitch Override)** kick test during the FLCS BIT, you can map your physical MPO toggle switch using one of two methods:
 
-During the cold ramp start checklist, you initiate the Big Movements check with the crew chief. To validate the physical **MPO (Manual Pitch Override)** kick test, map your physical MPO toggle switch in your FoxVox profile:
+#### Method A: Tactical Avionics Console (Recommended & Instant)
+
+<p align="center">
+  <img src="docs/images/mpo-setup-page-example.webp" alt="Interactive MPO Setup Page Example" width="850" /><br />
+  <em>Interactive MPO hardware rebinding: Detect rising-edge controller clicks or import keybindings directly from Falcon BMS.</em>
+</p>
+
+Inside AeroGraph's graphical interface (**[02] CREW CHIEF BIT**), setting up your physical MPO toggle switch is completely automated:
+- **Detect from Hardware**: Click **Bind Hardware Button**, then flip your physical HOTAS MPO toggle switch or press your assigned controller button. AeroGraph captures the rising-edge event, resolves the device GUID and button index, and immediately updates your active FoxVox `.fvx` profile.
+- **Import from BMS (.key)**: Click **Import from BMS (.key)** to automatically parse your active Falcon BMS `.key` file and synchronize the `SimMPO` keybinding and keyboard modifiers.
+- **Manual Key Combination**: Allows specifying custom key codes and modifiers, or resetting back to profile defaults.
+
+#### Method B: Manual Mapping via FoxVox Profile (Legacy / Standalone)
+If you prefer configuring bindings directly inside FoxVox, you can still map the MPO switch manually:
 
 1. Launch FoxVox and ensure your active profile (`Falcon BMS 4.38 v1.3.1.fvx`) is loaded.
 2. Click the **Voice Configuration** toggle button on the left sidebar to switch to **Key Configuration** mode:
@@ -267,46 +281,313 @@ During the cold ramp start checklist, you initiate the Big Movements check with 
 > The MPO kick test is completely optional. If unmapped or skipped, ground crew operations proceed without interruption.
 
 ### 3. Application Preferences (`aerograph.toml`)
+
 AeroGraph automatically creates and manages its settings file at:
 ```
 %APPDATA%\ygz\AeroGraph\config\aerograph.toml
 ```
 
-Key configuration options include:
+All settings can be configured visually through the **Tactical Avionics Console** (`[03] FOXVOX STATION` and `[04] COCKPIT SETTINGS`) or via the Windows system tray menu. Key configuration options include:
+
 ```toml
-# Path to the active FoxVox aircraft profile (.fvx), it automatically changes this via the selected profile
+# Path to the active FoxVox aircraft profile (.fvx), automatically managed by AeroGraph
 profile_path = 'C:\Games\Falcon BMS 4.38\FoxVox\Falcon BMS 4.38 v1.3.1\Falcon BMS 4.38 v1.3.1.fvx'
 
-# DirectInput hardware sampling rate (Hz), in case your controllers making the program run slow
+# DirectInput hardware sampling rate (Hz: 10, 20, 25, 33, 50, 100), optimized for zero CPU impact
 polling_rate_hz = 25
 
-# Pilot response voice (false = Male, true = Female), required for FoxVox profile
+# Pilot response voice (false = Male, true = Female), selectable via UI and tray
 pilot_female = false
 
-# SAPI audio feedback cues, the default "beeps" of the Microsoft voice detection. Quite annoying if on, hence off by default.
+# SAPI audio feedback cues (false = mute default Windows voice recognition beeps)
 sapi_earcons = false
 
-# Show console diagnostic window on launch, editable via tray icon
+# Show console diagnostic window on launch
 show_console = false
 
-# Master toggle for voice recognition and controller sampling, editable via tray icon
+# Master toggle for speech recognition and controller sampling
 voice_recognition = true
 
-# Voice recognition listening state (active/standby), editable via tray icon
+# Voice recognition listening state (active/standby, toggled via UI or "Stand by" / "Radio check")
 listening_enabled = true
+
+# Intelligent flight automation: Auto-engages voice recognition on BMS start, disengages on game close
+auto_engage_voice = true
+
+# Start AeroGraph minimized to system tray when Windows boots
+start_with_windows = false
 
 # Live file monitoring on User/Briefings/briefing.txt
 auto_kneeboards = true
 
-# Sound cue playback ("DATA" sound effect) on kneeboard updates
+# Sound cue playback ("DATA" sound effect) on kneeboard texture regeneration
 play_sound_on_update = true
 
-# Auto-Updater Settings
+# Graphical Tactical Avionics Console preferences
+gui_open_on_startup = false
+gui_auto_dock_on_3d = true
+gui_sound_effects = true
+gui_sound_volume = 0.5
+gui_accent_color = "#10B981"
+secondary_monitor_pin = false
+window_size = [1200, 740]
+
+# Flight-safe Auto-Updater settings
 check_updates_on_startup = true
 github_repo = "yagiziskirik/AeroGraph"
 ```
 
-Some of these settings like `voice_recognition`, `listening_enabled`, `auto_kneeboards`, and `show_console` can be altered via the tray menu. In case you need to change something manually (like for the future, you want to fetch the updates from another fork), this is where you change it.
+---
+
+## 💻 Usage & Tactical Avionics Console (TAC) Guide
+
+The **Tactical Avionics Console (TAC)** is the primary operational interface and mission preparation suite for AeroGraph. Rather than alt-tabbing or manually editing text files, TAC gives virtual Viper pilots a dedicated pre-flight preparation workstation before stepping into the jet:
+- **Pre-Flight Mission Preparation**: Review and organize all 32 kneeboard cards side-by-side, inspect dynamic SkyVector theater maps and ground taxi charts, tailor pilot flight notes, and commit high-resolution textures into Falcon BMS before ramp start.
+- **Pre-Flight Control Surface & BIT Diagnostics**: Live DirectInput telemetry gauges for elevator, ailerons, rudder, differential toe brakes, and HOTAS switches during Crew Chief pre-flight checks.
+- **Audio & Comms Personalization**: Check microphone levels, configure controller polling rates, select pilot voice genders, and test SAPI speech recognition.
+- **Flight Sim Automation & Auto-Docking**: Personalize cockpit luminescence themes and enable 3D auto-docking so the console automatically docks during 3D flight to leave 100% sim performance to BMS.
+
+The chassis top bar provides persistent telemetry at a glance:
+- **Station Selector**: Rapidly switch between the 4 primary consoles: `[01] KNEEBOARD BINDER`, `[02] CREW CHIEF BIT`, `[03] FOXVOX STATION`, and `[04] COCKPIT SETTINGS`.
+- **BMS Status**: Indicates whether Falcon BMS shared memory is active (`CONNECTED`) or awaiting launch (`STANDBY`).
+- **Voice Recognition Status**: Shows whether speech recognition is listening, or in standby sleep (`LISTENING`, `STANDBY`, or `DISABLED`).
+- **Microphone Peak Level**: Live CoreAudio peak VU-meter indicating incoming voice amplitude.
+- **Window Controls**: Native borderless window drag area, 8-directional edge resize handles, and minimize, maximize, and close controls.
+
+---
+
+### 1. Kneeboard Binder (`[01] KNEEBOARD BINDER`)
+
+<p align="center">
+  <img src="docs/images/kneeboards.webp" alt="Tactical Avionics Console - Kneeboard Binder" width="950" /><br />
+  <em>The Dual Kneepad Binder view: Side-by-side Left Leg and Right Leg stations with daytime high-contrast rendering and asymmetric cockpit clip tabs.</em>
+</p>
+
+The **Kneeboard Binder** is an interactive dual-station kneepad viewer and layout manager:
+- **Dual Leg Stations**: Displays both cockpit kneepads side-by-side: **Left Leg (`1L`–`16L`)** and **Right Leg (`1R`–`16R`)**, matching the physical F-16 cockpit layout.
+- **Interactive Zoom & Canvas Panning**:
+  - **`FIT`**: Automatically fits pages to your console viewport.
+  - **`1:1`**: Displays unscaled 1024×1554 textures for inspection of high-resolution SkyVector maps or fine runway taxi labels.
+  - **Zoom In (`+`) & Zoom Out (`-`)**: Smooth granular zoom with click-and-drag canvas panning. You can also use `CTRL+Scroll Wheel` to control zoom levels.
+- **Rapid Navigation & Radial Dial**:
+  - Step forward and backward through pages using the navigation arrows or the `Left` / `Right` keyboard arrow keys.
+  - Click any page badge (e.g. `1L`, `5R`) to open the **Circular Page Dial**, enabling instant 1-click jumps across all 16 slots.
+- **Staged In-Memory Editing**: Any adjustments made to slots, notes, or layouts remain safely staged in memory without writing directly to game files until you commit.
+- **Action Ribbon Controls**:
+  - **Active Preset Pill**: Displays current preset name and status (`ACTIVE` when untouched, or `CUSTOMIZED` / `MODIFIED` upon any edit). Clicking the pill opens the Mission Presets manager.
+  - **Quick Stamps (`STAMPS (6)`)**: Opens the tactical stamps flyout for rapid snippet insertion.
+  - **Refresh Charts (`REFRESH CHARTS`)**: Re-renders and updates dynamic airport taxi charts and briefing maps.
+  - **Commit to Cockpit (`COMMIT TO COCKPIT`)**: Prominent action button that compiles `kneeboards.json`, triggers multi-threaded BC1/DXT1 compression, and injects `7982.dds` through `7997.dds` directly into your Falcon BMS directory.
+
+---
+
+### 2. Slot Configuration & Page Settings Drawer
+
+<p align="center">
+  <img src="docs/images/kneeboard-page-settings.webp" alt="Kneeboard Slot Configuration Drawer" width="950" /><br />
+  <em>Slot Configuration drawer: Assign dynamic briefing maps, custom notes, checklists, or plates to any of the 32 slots.</em>
+</p>
+
+Clicking the settings gear icon on any kneepad slot opens the **Slot Configuration** slide-over drawer:
+- **Slot Type Assignment**: Choose from any of AeroGraph's dynamic or static card generators:
+  - **`briefing_roster`**: Active package callsigns, tail numbers, TACAN channels, laser codes, and comm presets.
+  - **`briefing_steerpoints`**: Steerpoint route table, CAS, headings, distances, action points, and weather.
+  - **`mission_route`**: High-resolution 16k SkyVector base crop with flight path polyline and SAM threat rings.
+  - **`mission_target`**: Tactical combat zoom around Target STPT, IP vector, and egress heading.
+  - **`dep_taxi` / `arr_taxi`**: Vector airfield ground taxi diagrams with active runway badges and wind indicator.
+  - **`arr_ils_primary` / `arr_ils_secondary`**: Theater ILS approach plates with frequencies, glidepath, and inbound course.
+  - **`notes`**: T.O. 1F-16 POH-style custom flight scratchpad with hazard stripes and asymmetric notch clearance.
+  - **`custom_html`**: Renders custom HTML templates.
+  - **`image`**: Full-page custom user graphics (PNG, JPG, BMP, WebP), calibrated to scale cleanly across the full $1024 \times 1554$ surface.
+  - **`restore_original`**: Restores the authentic stock Falcon BMS texture directly from official game backup files on disk (`<bms_dir>\Docs\07 Kneeboard Templates\F-16\DDS_Backup\<filename>.dds`, fallback `<assets_dir>\data\DDS_Backup\<filename>.dds`). In the preview console, extracts and displays the actual DDS half-texture with an emerald status badge (`RESTORE ORIGINAL // STOCK BMS TEXTURE PREVIEW`).
+  - **`pass_through`**: Preserves and leaves that half of the cockpit DDS texture untouched in the active theater directory (`<bms_dir>\Data\TerrData\Objects\<Theater>Obj\<filename>.dds`). In the preview console, reads the current on-disk DDS texture, crops the respective page half, and displays it with an amber status badge (`PASS-THROUGH // UNTOUCHED BMS TEXTURE`).
+  - **`blank`**: Clean daylight Intentionally Left Blank card (`#FAFAF8`).
+- **Metadata Editing**: Customize Document Title, Subtitle, Header Code (e.g. `T.O. BMS1F-16CM-1`), and Page Number.
+
+---
+
+### 3. Template Catalog Library
+
+<p align="center">
+  <img src="docs/images/kneeboard-templates.webp" alt="Template Catalog Library" width="950" /><br />
+  <em>The Template Catalog library: Browse, preview, and duplicate dynamic briefing and static reference cards.</em>
+</p>
+
+The **Template Catalog** provides a unified visual browser for all available kneeboard cards:
+- **Card Categories**: Easily filter between *Dynamic Briefing & Flight Data*, *Flight Reference Cards & Checklists* (Before Start, After Start, Flameout / SFO Emergency, Weapons Profiles), and *Aeronautical Charts & Plates*.
+- **Search & Filter**: Real-time keyword filtering across template names, header codes, and descriptions.
+
+---
+
+### 4. Interactive Live Markdown Editor
+
+<p align="center">
+  <img src="docs/images/kneeboard-editor.webp" alt="Interactive Live Markdown Editor" width="950" /><br />
+  <em>Split-screen live Markdown editor: Instant keystroke rendering with semantic color tags and POH hazard stripe styling.</em>
+</p>
+
+Clicking **Edit** on any notes slot switches the console into a real-time, side-by-side Markdown editor:
+- **Split-Screen Live Rendering**: Type in the left editor pane and see the exact 1024×1554 cockpit texture update in real time on the right preview pane.
+- **Header Customization**: Set the top header title, subtitle, T.O. code, and page identifier.
+- **Hazard Stripe Presets**: Select from `standard` (black/white), `caution` (yellow), `warning` (red), `emergency` (solid red), `tactical` (navy/blue), or `green` (forest green), with optional `spaced` stripe styling.
+- **Full Semantic Markdown Syntax**:
+
+| Syntax | Description | Visual Output |
+| :--- | :--- | :--- |
+| `# Title` | **Primary Section Banner** | High-contrast banner bar with dark accent border |
+| `## Section` | **Secondary Section Header** | Bold dark section header with horizontal divider |
+| `### Subheader` | **Minor Subhead** | Compact slate-gray subhead |
+| `[SECTION]` | **Category Pill Badge** | Dark rectangular badge with bold white text |
+| `WARNING: text` | **Safety Alert Box** | Red-bordered callout box with bold `WARNING` badge |
+| `CAUTION: text` | **Advisory Caution Box** | Amber-bordered callout box with bold `CAUTION` badge |
+| `[ ] Item` or `- [ ] Item` | **Pending Checkbox** | Square checkbox for pending cockpit checklist items |
+| `[x] Item` or `- [x] Item` | **Checked Box** | Green square with checkmark for completed items |
+| `- Item` or `* Item` | **Bullet Point** | Clean list item with square bullet dot |
+| `KEY: VALUE` | **Two-Column Data Card** | Monospace highlight badge (e.g. `BULLSEYE: 045 / 60NM`) |
+
+- **Aviation Semantic Inline Color Tags**:
+  - `{green: text}`: Active states, primary laser codes, authorized clearances.
+  - `{yellow: text}`: Caution advisories, standby frequencies, secondary codes.
+  - `{red: text}`: Danger warnings, SAM threat types, emergency bingo levels.
+  - `{blue: text}`: Tactical navigation coordinates, Bullseye vectors, VHF frequencies.
+  - `{orange: text}` / `{cyan: text}` / `{gray: text}`: Tactical color coding.
+  - `{#HEX: text}`: Any custom hex color (e.g. `{#E91E63: strike}`).
+  - `{highlight: text}` or `{bg-yellow: text}`: High-visibility black-on-yellow callout.
+  - `{bg-red: text}` / `{bg-green: text}` / `{bg-blue: text}`: Tinted background pill badges.
+  - `{white: text}`: White text on dark high-contrast badge.
+
+---
+
+### 5. Quick Tactical Stamps
+
+<p align="center">
+  <img src="docs/images/quick-stamps.webp" alt="Quick Tactical Stamps Drawer" width="950" /><br />
+  <em>Quick Tactical Stamps: One-click insertion of formatted flight snippets like Bingo fuel, laser codes, and ROE.</em>
+</p>
+
+The **Quick Stamps** drawer eliminates repetitive typing by letting pilots insert pre-formatted tactical snippets directly at the editor cursor:
+- **Default Tactical Stamps**: Includes `BINGO 2500` fuel ladder, `LASER 1688` PRF code, `RAMROD` code, `ROE 25NM` engagement threshold, `SAM THREAT` alert warning, and `IP VECTOR` target ingress instructions.
+- **Custom Stamp Manager**: Create new custom stamps for your squadron, edit existing snippets, or reset to defaults. All custom stamps are automatically persisted to `%APPDATA%\ygz\AeroGraph\config\custom_stamps.json`.
+
+---
+
+### 6. Mission Presets & `.aeropreset` Management
+
+AeroGraph introduces a dedicated mission preset system, allowing pilots and virtual squadrons to instantly configure all 32 cockpit kneeboard slots and share entire mission binder setups via compressed `.aeropreset` bundles.
+
+#### 6.1 Pre-Built Combat Presets
+
+<p align="center">
+  <img src="docs/images/mission-presets.webp" alt="Pre-Built Combat Presets Modal" width="950" /><br />
+  <em>Pre-Built Combat Presets: Select ready-to-fly combat configurations or re-apply default setups with one click.</em>
+</p>
+
+AeroGraph comes pre-loaded with optimized tactical presets tailored for core mission profiles (_even though there is nothing interesting about them yet, the concept is there_):
+- **Standard Viper Combat** (`KOREA`): Standard operational roster, engine start flows, taxi diagrams, SkyVector theater route map, and ILS charts for Korea. That's what I use on daily bases.
+- **SEAD / Precision Strike Package** (`STRIKE`): Dedicated ground-strike loadout with SAM threat matrix, AGM-88 ALIC codes, GBU PGM release parameters, and ballistic ordnance.
+- **Combat Air Patrol / BVR Sweep** (`CAP / BVR`): Air-to-air intercept setup with AIM-120 pitbull gates, MAR envelopes, RWR defensive CMS programs, and comms/laser matrix.
+- **Training / Instrument Flight** (`IFR / TRAINING`): IFR holding patterns, theater divert airfields, approach speeds, flameout SFO profiles, and dual ILS runway charts.
+
+Clicking **Load Preset** applies all 32 slot configurations instantly in-memory, synchronizes the UI theme luminescence, and highlights the active preset badge.
+
+#### 6.2 Custom Presets Workspace
+
+<p align="center">
+  <img src="docs/images/custom-presets.webp" alt="Custom Presets Workspace" width="950" /><br />
+  <em>Custom Presets Workspace: Save current 32-slot setups, assign theater tags, select curated luminescence colors, and manage saved layouts.</em>
+</p>
+
+Virtual pilots can save their customized cockpit layouts for recurring campaigns or squadron flights:
+- **Save Current Setup**: Enter a Preset Name, Theater Tag (e.g. `KOREA`, `BALKANS`, `ALL`), and Description.
+- **Curated Avionics Color Palette**: Select from 8 authentic cockpit luminescence colors (Viper Green, NVG Night Vision, Tactical Amber, Stealth Cyan, Combat Purple, Tactical Cobalt, Titanium Silver, Combat Crimson) to theme the preset.
+- **Saved Presets Management**:
+  - **Override**: Updates a saved preset with your current in-memory modifications.
+  - **Export**: Generates a shareable `.aeropreset` archive.
+  - **Load Preset**: Immediately restores the 32 slots and associated theme color.
+  - **Delete**: Cleans up unused custom presets.
+
+#### 6.3 Community Bundles & Standalone Archives (Import / Export)
+
+<p align="center">
+  <img src="docs/images/import-export-presets.webp" alt="Import and Export Bundles" width="950" /><br />
+  <em>Community Bundles: Export standalone archives with embedded custom notes and images, or import community .aeropreset files.</em>
+</p>
+
+Sharing customized kneeboards with wingmen is effortless and complete:
+- **Standalone Archive Export**: Packages your active 32 kneeboard slots **plus all referenced custom notes, custom HTML templates, and user images** into a single, self-contained `.aeropreset` file. Custom files are encoded in base64 binary chunks and compressed with gzip, ensuring wingmen receive all custom assets without manual file copying.
+- **Browse & Import**: Select any `.aeropreset` file from disk (or double-click it in Windows Explorer). AeroGraph verifies file contents with **byte-level de-duplication** (skipping identical files to preserve disk longevity), unpacks custom assets to the user's template directories, and activates the preset layout immediately.
+
+---
+
+### 7. Crew Chief Built-In Test (BIT) & Flight Controls (`[02] CREW CHIEF BIT`)
+
+<p align="center">
+  <img src="docs/images/crew-chief-bit.webp" alt="Crew Chief BIT and Hardware Diagnostics" width="950" /><br />
+  <em>Crew Chief BIT view: Real-time DirectInput flight control surface gauges, differential toe brakes, and HOTAS switch diagnostics.</em>
+</p>
+
+The **Crew Chief BIT** view is a dedicated pre-flight diagnostic station for flight controls and hardware switches:
+- **Interactive Control Surface Telemetry**: Real-time visual gauges display live **Pitch (Elevator)**, **Roll (Ailerons)**, and **Yaw (Rudder)** axis deflections.
+- **Differential Toe Brakes**: Independent visual meters display Left and Right wheel brake pedal pressures to confirm differential braking before taxi.
+- **HOTAS & PTT Status**: Live indicators display active DirectInput game controllers, pressed button numbers, and PTT COM1 (UHF) and COM2 (VHF) switches.
+- **FLCS MPO Status**: Visual confirmation of whether the physical Manual Pitch Override switch is currently engaged or centered.
+- **Zero-Friction Controller Sampling**: DirectInput controller monitoring automatically activates whenever viewing Crew Chief BIT even if master voice recognition is disabled, enabling seamless pre-flight hardware checks at any time. When switching away to other tabs, controller sampling cleanly suspends to ensure 0% background CPU usage.
+- **Interactive MPO Hardware & BMS Keybinding Configuration**:
+  <p align="center"><img src="docs/images/mpo-setup-page-example.webp" alt="MPO Hardware Rebinding" width="850" /></p>
+
+  - **Bind Hardware Button**: Click and flip your physical HOTAS MPO toggle switch; AeroGraph captures the rising edge and saves it to your active FoxVox `.fvx` profile.
+  - **Import from BMS (.key)**: Automatically parses your active Falcon BMS key file and synchronizes the `SimMPO` keybinding and modifiers.
+
+---
+
+### 8. FoxVox Communications Station & Voice Terminal (`[03] FOXVOX STATION`)
+
+<p align="center">
+  <img src="docs/images/foxvox-station.webp" alt="FoxVox Communications Station" width="950" /><br />
+  <em>FoxVox Station: Real-time CoreAudio microphone VU-meter, polling rate selector, pilot voice toggle, and live speech terminal.</em>
+</p>
+
+The **FoxVox Station** is a dedicated comms operations center and real-time speech terminal:
+- **High-Precision Microphone VU-Meter**: Direct CoreAudio peak sampling provides a smooth, real-time volume bar with visual noise-gate threshold.
+- **Master Voice Engine Controls**: Master Speech Recognition toggle and hands-free Listening switch (Active vs Standby).
+- **Hardware Polling Rate Hz**: Select discrete sampling rates (**10 Hz, 20 Hz, 25 Hz, 33 Hz, 50 Hz, 100 Hz**) to balance controller responsiveness with minimal CPU impact.
+- **Pilot Voice Gender**: One-click toggle between Male and Female pilot voice responses.
+- **Active Profile Card**: Displays currently loaded `.fvx` profile name, command count, profile path, and buttons to browse profiles (`Select Profile`), recompile binary grammar (`Reload Grammar`), or restore default profile.
+- **Terminal & Audio Tester**: Real-time diagnostic terminal displaying recognized phrases and confidence values. Includes a voice test transmission box to play test phrases through your headphones without speaking.
+
+---
+
+### 9. Cockpit Settings & Flight Sim Automation (`[04] COCKPIT SETTINGS`)
+
+<p align="center">
+  <img src="docs/images/cockpit-settings.webp" alt="Cockpit Settings and Automation" width="950" /><br />
+  <em>Cockpit Settings: Avionics luminescence color themes, mechanical switch sound relays, and simulation automation options.</em>
+</p>
+
+The **Cockpit Settings** view provides console personalization and background simulation automation preferences:
+- **Avionics Luminescence Theme Engine**: Switch between 8 authentic cockpit HUD color schemes:
+  - **Classic Viper Green** (`#10B981`): F-16 HUD & MFD CRT phosphor green.
+  - **NVG Night Vision** (`#22C55E`): Gen-III night vision high-transmittance green.
+  - **Tactical Amber** (`#F59E0B`): High-contrast DED amber avionics display.
+  - **Stealth Cyan** (`#06B6D4`): Modernized glass cockpit tactical data link blue.
+  - **Combat Purple** (`#A855F7`): Tactical electronic warfare & ECM violet.
+  - **Tactical Cobalt** (`#0284C7`): Strike package BVR horizon tactical blue.
+  - **Titanium Silver** (`#F1F5F9`): Minimalist stealth monochrome digital atelier.
+  - **Combat Crimson** (`#F43F5E`): High-urgency master caution emergency lighting.
+- **Cockpit Acoustic Feedback Relays**: Realistic mechanical toggle clicks on switch movements synthesized via Web Audio API, with adjustable master volume slider and a **Test Relay Clunk / Chime** button.
+- **Flight Sim Automation & Zero-Cost Dormancy**:
+  - **3D Cockpit Auto-Dock**: Automatically closes / docks the console window when Falcon BMS enters 3D flight (`in_3d != 0`), ensuring zero GPU or CPU competition during the game runtime. Restores automatically when exiting back to the 2D UI.
+  - **Auto-Engage Voice Recognition**: Automatically engages voice recognition and controller polling when Falcon BMS launches, and automatically disengages voice recognition into zero-CPU sleep when BMS closes. You can still manually engage voice anytime for offline testing!
+  - **Auto-Kneeboards**: Continuously monitors `User/Briefings/briefing.txt` and plays the "DATA" sound effect upon regeneration.
+  - **Foreground Boot**: Opens the Tactical Console window automatically on application launch.
+  - **Start with Windows**: Automatically runs AeroGraph minimized to system tray on Windows startup.
+- **Diagnostics & System Logs**:
+  - **Open Log File**: Opens `aerograph.log` in Notepad for troubleshooting.
+  - **View Console Logs**: Real-time inline terminal view within TAC.
+  - **Console Window**: Toggle the native Windows terminal host console.
+  - **Images Directory**: Opens your custom images directory (`assets/images`).
+  - **Check For Updates**: Queries GitHub Releases for new AeroGraph versions.
+  - **Edit Kneeboards.json**: Directly opens your active `kneeboards.json` configuration file in your default editor.
 
 ---
 
@@ -341,8 +622,8 @@ When AeroGraph starts, if `kneeboards.json` is missing from the application fold
 | `custom_html` | Renders a custom HTML template. | `"path": "custom/checklist.html"` |
 | `blank` | Calibrated daylight Intentionally Left Blank card (`#FAFAF8`). | `"title": "...", "reason": "..."` |
 | `image` | Displays any external PNG or JPG image directly. | `"path": "path/to/image.png"` |
-| `restore_original` | Restores stock BMS texture directly from `Docs/07 Kneeboard Templates/F-16/DDS_Backup`. | None |
-| `pass_through` | Preserves existing texture on that half untouched. | None |
+| `restore_original` | Restores authentic stock BMS texture directly from `<bms_dir>\Docs\07 Kneeboard Templates\F-16\DDS_Backup\<filename>.dds` (fallback: `assets/data/DDS_Backup/<filename>.dds`). Preview extracts and displays the exact DDS half-texture under an emerald status badge. | None |
+| `pass_through` | Preserves the active theater's DDS texture on disk (`<bms_dir>\Data\TerrData\Objects\<Theater>Obj\<filename>.dds`) completely untouched. Preview extracts and renders the live on-disk DDS half-texture under an amber status badge. | None |
 
 ---
 
@@ -507,7 +788,11 @@ For a complete breakdown of all available voice interactions, dialogue trees, ha
 
 ## 🖥️ System Tray Controls
 
-Right-click the AeroGraph icon in the Windows notification area to access:
+
+
+- **Left-Click Tray Icon**: Toggles the Tactical Avionics Console open or closed.
+
+- **Right-Click Tray Icon**: Opens the quick tray menu for background sim controls:
 
 - **Profile: [Profile Name]**: Displays currently active aircraft voice profile.
 - **🎙️ Voice Recognition**: Master toggle to completely enable or disable speech recognition and DirectInput controller sampling.
@@ -620,7 +905,7 @@ A massive thank you to:
 - **[FoxVox by Foxster](https://foxster.itch.io/foxvox)**: Creator of the [FoxVox](https://foxster.itch.io/foxvox) application and author of the FoxVox Falcon BMS VCC profile library (`Falcon BMS 4.38 v1.3.1.fvx`). AeroGraph executes these profiles natively in Rust for zero background footprint and sub-millisecond response. For comprehensive video guides on configuring voice keys and controller bindings, visit **[Foxster's YouTube Channel](https://www.youtube.com/@foxster2)** and the **[FoxVox Video Tutorials](https://foxster.itch.io/foxvox/devlog/870907/foxvox-tutorial-videos)**. This project wouldn't be possible without Foxster, and I am incredibly grateful for his blessing to let me integrate and build upon his brilliant work.
 - **Voice Audio & Sound Design by [Bogey Dope](https://www.youtube.com/@BogeyDope)**: The incredible and immersive pilot response audio, ground crew recordings, and sound design. I'm a huge fan, by the way, and I want to extend a special thank you to him for graciously allowing me to include these legendary recordings that bring the sim to life!
 - **Startup Procedure Contribution by Tomcattwo**: The brains behind the updated cold start checklist and ground crew flow contributed to the original FoxVox. Before creating this program, I also relied heavily on his fantastic [WDP map and airport integrations](https://forum.falcon-bms.com/topic/30760/updated-4.38-maps-and-airports-for-weapon-delivery-planner-wdp). A huge thank you to him for creating that amazing flow!
-- **EZBoards / EZCharts by "Logic"**: Original concept, dynamic data generation from the `briefing.txt` file, the checklist and package pages designs, and kneeboard layout templates ([Falcon BMS Forum](https://forum.falcon-bms.com/topic/19901/ezboards-instant-single-click-briefing-to-kneeboards-conversion)). AeroGraph features a ground-up pure Rust rewrite of the chart generation pipeline for automated, sub-second cockpit delivery with its own new features. Without Logic, you wouldn't see those automated first two pages and the quality checklists. A huge thank you to him for giving me the green light and permission to rewrite and evolve his original creation. An amazing person to chat with!
+- **[EZBoards / EZCharts by Logic](https://forum.falcon-bms.com/topic/19901/ezboards-instant-single-click-briefing-to-kneeboards-conversion)**: Original concept, dynamic data generation from the `briefing.txt` file, the checklist and package pages designs, and kneeboard layout templates ([Falcon BMS Forum](https://forum.falcon-bms.com/topic/19901/ezboards-instant-single-click-briefing-to-kneeboards-conversion)). AeroGraph features a ground-up pure Rust rewrite of the chart generation pipeline for automated, sub-second cockpit delivery with its own new features. Without Logic, you wouldn't see those automated first two pages and the quality checklists. A huge thank you to him for giving me the green light and permission to rewrite and evolve his original creation. An amazing person to chat with!
 - **The Falcon BMS Community**: Special thanks to Benchmark Sims (BMS), the forum community, and all the flight sim pilots, mission designers, and profile contributors whose decades of passion and dedication continually drive this simulation forward. I wanted to contribute somehow, I hope you will like it.
 
 AeroGraph's original Rust source code, airfield vector databases, and build scripts are licensed under the [MIT License](LICENSE). Third-party community assets (FoxVox profiles, Bogey Dope audio recordings, and EZBoards-inspired layout templates) remain under the exclusive copyright of their respective authors and are strictly non-commercial. Sublicensing, monetizing, or commercial exploitation of bundled community assets is strictly prohibited (see [LICENSE](LICENSE) for full terms and author removal policies).

@@ -2,6 +2,7 @@ pub mod bms;
 pub mod config;
 pub mod engine;
 pub mod fvx;
+pub mod gui;
 pub mod input;
 pub mod kneeboard;
 pub mod speech;

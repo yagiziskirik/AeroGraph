@@ -358,15 +358,25 @@ impl KneeboardLayoutConfig {
 }"####
     }
 
-    /// Resolves the configuration file location next to current executable or working directory.
+    /// Resolves the configuration file location in application root directory.
     pub fn config_path() -> PathBuf {
-        if let Ok(exe) = std::env::current_exe() {
-            if let Some(parent) = exe.parent() {
-                let candidate = parent.join("kneeboards.json");
-                return candidate;
-            }
+        let app_dir = crate::config::AppConfig::app_root_dir();
+        let app_candidate = app_dir.join("kneeboards.json");
+        if app_candidate.exists() {
+            return app_candidate;
         }
-        PathBuf::from("kneeboards.json")
+
+        let cwd_candidate = PathBuf::from("kneeboards.json");
+        if cwd_candidate.exists() {
+            return cwd_candidate;
+        }
+
+        app_candidate
+    }
+
+    /// Returns the authentic default 32-slot configuration directly from built-in template, ignoring disk.
+    pub fn create_default() -> Self {
+        serde_json::from_str(Self::default_json_string()).unwrap()
     }
 
     /// Loads the configuration. If the file does not exist, generates it with default 32 slots.
@@ -396,6 +406,47 @@ impl KneeboardLayoutConfig {
 
         // In-memory fallback
         serde_json::from_str(Self::default_json_string()).unwrap()
+    }
+
+    /// Checks if a given page type is enabled in any slot.
+    /// Saves the current slot configuration back to kneeboards.json with deterministic key ordering (1L, 1R ... 16L, 16R).
+    pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let path = Self::config_path();
+
+        // Ensure deterministic slot ordering: 1L, 1R, 2L, 2R ... 16L, 16R
+        let mut ordered_keys: Vec<&String> = self.slots.keys().collect();
+        ordered_keys.sort_by_key(|k| {
+            let rem = k.trim_start_matches("F16_");
+            let is_r = rem.ends_with('R');
+            let num_str = rem.trim_end_matches(['L', 'R']);
+            let num = num_str.parse::<u32>().unwrap_or(99);
+            (num, if is_r { 1 } else { 0 })
+        });
+
+        let mut ordered_slots = serde_json::Map::new();
+        for k in ordered_keys {
+            if let Some(slot) = self.slots.get(k) {
+                ordered_slots.insert(k.clone(), serde_json::to_value(slot)?);
+            }
+        }
+
+        let mut root = serde_json::Map::new();
+        root.insert(
+            "_comment".to_string(),
+            serde_json::Value::String(if self._comment.is_empty() {
+                "AeroGraph Kneeboard Slot Configuration. Supports all 32 Falcon BMS slots (F16_1L through F16_16R, textures 7982.dds to 7997.dds). Available types: 'briefing_roster', 'briefing_steerpoints', 'custom_html', 'mission_route', 'mission_target', 'dep_taxi', 'arr_taxi', 'arr_ils_primary', 'arr_ils_secondary', 'blank', 'notes', 'image', 'restore_original', 'pass_through'.".to_string()
+            } else {
+                self._comment.clone()
+            }),
+        );
+        root.insert(
+            "slots".to_string(),
+            serde_json::Value::Object(ordered_slots),
+        );
+
+        let content = serde_json::to_string_pretty(&serde_json::Value::Object(root))?;
+        fs::write(path, content)?;
+        Ok(())
     }
 
     /// Checks if a given page type is enabled in any slot.

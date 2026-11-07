@@ -9,6 +9,9 @@ fn main() {
 
     match command {
         "check" | "check-all" => run_check_all(),
+        "ui-dev" => run_ui_dev(),
+        "ui-build" => run_ui_build(),
+        "local" => run_local(args.contains(&"--debug".to_string())),
         "installer" => {
             let mut custom_version = None;
             let mut iter = args.iter().skip(1);
@@ -27,8 +30,13 @@ fn main() {
             println!("AeroGraph Workspace Tasks");
             println!("Usage:");
             println!(
-                "  cargo check-all                 Run auto-fmt, Clippy lints, and unit tests"
+                "  cargo check-all                 Run auto-fmt, Clippy lints, unit tests & UI typecheck"
             );
+            println!(
+                "  cargo xtask ui-dev              Start Next.js GUI development server (pnpm dev)"
+            );
+            println!("  cargo xtask ui-build            Export Next.js static assets to ui/out (pnpm export)");
+            println!("  cargo local                     Build release binary & deploy to ./AeroGraph.exe");
             println!("  cargo installer                 Compile release binary & build Inno Setup installer");
             println!(
                 "  cargo installer --version <ver> Build installer with custom version string"
@@ -37,13 +45,76 @@ fn main() {
     }
 }
 
+fn run_local(debug_mode: bool) {
+    sync_ui_package_version();
+    let profile = if debug_mode { "debug" } else { "release" };
+    println!("Building AeroGraph ({} profile)...", profile);
+    let mut build_args = vec!["build"];
+    if !debug_mode {
+        build_args.push("--release");
+    }
+    let status = Command::new("cargo")
+        .args(&build_args)
+        .status()
+        .expect("Failed to execute cargo build");
+    check_status(status, "cargo build");
+
+    let src_exe = PathBuf::from("target").join(profile).join("aerograph.exe");
+    let dst_exe = PathBuf::from("AeroGraph.exe");
+
+    if dst_exe.exists() {
+        if let Err(e) = fs::OpenOptions::new().write(true).open(&dst_exe) {
+            eprintln!("\n⚠️ WARNING: Cannot overwrite AeroGraph.exe in project root ({e}).");
+            eprintln!("AeroGraph.exe appears to be running! Please close AeroGraph and run this command again.");
+            std::process::exit(1);
+        }
+    }
+
+    match fs::copy(&src_exe, &dst_exe) {
+        Ok(bytes) => {
+            println!(
+                "\n✔ Successfully deployed {:?} -> {:?} ({} bytes).",
+                src_exe, dst_exe, bytes
+            );
+            println!("Ready for local testing in root with assets/ and kneeboards.json!");
+        }
+        Err(e) => {
+            eprintln!("⚠️ Failed to copy executable to project root: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn run_ui_dev() {
+    sync_ui_package_version();
+    println!("Starting Next.js development server (pnpm dev)...");
+    let status = Command::new("cmd")
+        .args(["/C", "pnpm", "dev"])
+        .current_dir("ui")
+        .status()
+        .expect("Failed to execute pnpm dev in ui/");
+    check_status(status, "pnpm dev");
+}
+
+fn run_ui_build() {
+    sync_ui_package_version();
+    println!("Exporting Next.js static assets (pnpm export)...");
+    let status = Command::new("cmd")
+        .args(["/C", "pnpm", "export"])
+        .current_dir("ui")
+        .status()
+        .expect("Failed to execute pnpm export in ui/");
+    check_status(status, "pnpm export");
+}
+
 fn run_check_all() {
+    sync_ui_package_version();
     println!("==========================================================");
     println!("         AeroGraph Pre-Flight Quality Check               ");
     println!("==========================================================");
 
     // 1. Auto-format
-    println!("\n[1/3] Formatting Rust source code (cargo fmt)...");
+    println!("\n[1/4] Formatting Rust source code (cargo fmt)...");
     let status = Command::new("cargo")
         .arg("fmt")
         .status()
@@ -52,7 +123,7 @@ fn run_check_all() {
     println!("✔ Code formatting completed.");
 
     // 2. Clippy
-    println!("\n[2/3] Running Clippy lints (cargo clippy -- -D warnings)...");
+    println!("\n[2/4] Running Clippy lints (cargo clippy -- -D warnings)...");
     let status = Command::new("cargo")
         .args(["clippy", "--", "-D", "warnings"])
         .status()
@@ -61,13 +132,30 @@ fn run_check_all() {
     println!("✔ Clippy checks passed with 0 warnings.");
 
     // 3. Tests
-    println!("\n[3/3] Running unit tests (cargo test)...");
+    println!("\n[3/4] Running unit tests (cargo test)...");
     let status = Command::new("cargo")
         .arg("test")
         .status()
         .expect("Failed to run cargo test");
     check_status(status, "cargo test");
     println!("✔ All unit tests passed cleanly.");
+
+    // 4. UI Validation
+    println!("\n[4/4] Validating Next.js GUI TypeScript & Linting...");
+    let status = Command::new("cmd")
+        .args(["/C", "pnpm", "typecheck"])
+        .current_dir("ui")
+        .status()
+        .expect("Failed to run pnpm typecheck in ui/");
+    check_status(status, "pnpm typecheck");
+
+    let status = Command::new("cmd")
+        .args(["/C", "pnpm", "lint"])
+        .current_dir("ui")
+        .status()
+        .expect("Failed to run pnpm lint in ui/");
+    check_status(status, "pnpm lint");
+    println!("✔ UI checks passed cleanly with 0 warnings.");
 
     println!("\n==========================================================");
     println!("  ALL PRE-FLIGHT CHECKS PASSED! Ready for PR submission.  ");
@@ -180,6 +268,31 @@ fn find_iscc() -> Option<PathBuf> {
         }
     }
     None
+}
+
+fn sync_ui_package_version() {
+    let cargo_toml = fs::read_to_string("Cargo.toml").unwrap_or_default();
+    let version = cargo_toml
+        .lines()
+        .find(|l| l.trim().starts_with("version"))
+        .and_then(|l| l.split('=').nth(1))
+        .map(|s| s.trim().trim_matches('"'))
+        .unwrap_or("1.0.0-alpha");
+
+    let pkg_path = Path::new("ui/package.json");
+    if pkg_path.exists() {
+        if let Ok(content) = fs::read_to_string(pkg_path) {
+            if let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if json.get("version").and_then(|v| v.as_str()) != Some(version) {
+                    json["version"] = serde_json::Value::String(version.to_string());
+                    if let Ok(formatted) = serde_json::to_string_pretty(&json) {
+                        let _ = fs::write(pkg_path, formatted + "\n");
+                        println!("✔ Synced ui/package.json version to v{}", version);
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn check_status(status: ExitStatus, step: &str) {

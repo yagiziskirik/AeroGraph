@@ -1,7 +1,14 @@
 use image::{imageops, RgbaImage};
 use image_dds::{dds_from_image, ImageFormat, Mipmaps, Quality};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex};
+use std::time::SystemTime;
+
+type DdsPageCache = Mutex<HashMap<String, (SystemTime, Vec<u8>)>>;
+
+static DDS_PAGE_CACHE: LazyLock<DdsPageCache> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub struct KneeboardSlotMap;
 
@@ -92,6 +99,81 @@ pub fn find_theater_texture_dir(bms_base: &Path, theater_name: &str) -> Option<P
     None
 }
 
+/// Resolves the file path for stock BMS original textures (`restore_original`).
+/// Search priority:
+/// 1. <bms_dir>/Docs/07 Kneeboard Templates/F-16/DDS_Backup/<filename>
+/// 2. <bms_dir>/Data/TerrData/Objects/<theater>Obj/backup/<filename>
+/// 3. <bms_dir>/Data/TerrData/Objects/KoreaObj/backup/<filename>
+/// 4. <assets_dir>/data/DDS_Backup/<filename>
+pub fn resolve_restore_dds_path(
+    bms_dir: Option<&Path>,
+    assets_dir: &Path,
+    theater_name: &str,
+    filename: &str,
+) -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(bms) = bms_dir {
+        candidates.push(
+            bms.join("Docs")
+                .join("07 Kneeboard Templates")
+                .join("F-16")
+                .join("DDS_Backup")
+                .join(filename),
+        );
+        if let Some(th_dir) = find_theater_texture_dir(bms, theater_name) {
+            candidates.push(th_dir.join("backup").join(filename));
+        }
+        candidates.push(
+            bms.join("Data")
+                .join("TerrData")
+                .join("Objects")
+                .join("KoreaObj")
+                .join("backup")
+                .join(filename),
+        );
+    }
+    candidates.push(assets_dir.join("data").join("DDS_Backup").join(filename));
+    candidates.push(
+        PathBuf::from("assets")
+            .join("data")
+            .join("DDS_Backup")
+            .join(filename),
+    );
+
+    candidates
+        .into_iter()
+        .find(|candidate| candidate.exists() && candidate.is_file())
+}
+
+/// Resolves the file path for active game textures (`pass_through`).
+/// Search priority:
+/// 1. <bms_dir>/Data/TerrData/Objects/<theater>Obj/<filename>
+/// 2. <bms_dir>/Data/TerrData/Objects/KoreaObj/<filename>
+pub fn resolve_passthrough_dds_path(
+    bms_dir: Option<&Path>,
+    theater_name: &str,
+    filename: &str,
+) -> Option<PathBuf> {
+    if let Some(bms) = bms_dir {
+        if let Some(th_dir) = find_theater_texture_dir(bms, theater_name) {
+            let p = th_dir.join(filename);
+            if p.exists() && p.is_file() {
+                return Some(p);
+            }
+        }
+        let korea = bms
+            .join("Data")
+            .join("TerrData")
+            .join("Objects")
+            .join("KoreaObj")
+            .join(filename);
+        if korea.exists() && korea.is_file() {
+            return Some(korea);
+        }
+    }
+    None
+}
+
 /// Restores an original stock BMS texture from DDS_Backup (in assets/data/DDS_Backup or BMS Docs).
 pub fn restore_original_texture(
     bms_dir: &Path,
@@ -101,26 +183,14 @@ pub fn restore_original_texture(
 ) -> Result<bool, Box<dyn std::error::Error>> {
     let dest_path = texture_dir.join(filename);
 
-    let candidates = [
-        assets_dir.join("data").join("DDS_Backup").join(filename),
-        bms_dir
-            .join("Docs")
-            .join("07 Kneeboard Templates")
-            .join("F-16")
-            .join("DDS_Backup")
-            .join(filename),
-    ];
-
-    for candidate in &candidates {
-        if candidate.exists() {
-            fs::copy(candidate, &dest_path)?;
-            log::info!(
-                "Restored stock BMS original texture for {}: from {:?}",
-                filename,
-                candidate
-            );
-            return Ok(true);
-        }
+    if let Some(candidate) = resolve_restore_dds_path(Some(bms_dir), assets_dir, "", filename) {
+        fs::copy(&candidate, &dest_path)?;
+        log::info!(
+            "Restored stock BMS original texture for {}: from {:?}",
+            filename,
+            candidate
+        );
+        return Ok(true);
     }
 
     log::warn!(
@@ -128,6 +198,66 @@ pub fn restore_original_texture(
         filename
     );
     Ok(false)
+}
+
+/// Extracts a specific page (cropped to 1024x1554) from a 2048x2048 DDS texture file on disk.
+/// `is_right` determines whether to extract the left half (X: 0..1024) or right half (X: 1024..2048).
+pub fn extract_page_from_dds(dds_path: &Path, is_right: bool) -> Option<RgbaImage> {
+    if !dds_path.exists() {
+        return None;
+    }
+    let file = fs::File::open(dds_path).ok()?;
+    let mut reader = std::io::BufReader::new(file);
+    let dds_data = ddsfile::Dds::read(&mut reader).ok()?;
+    let full_img = image_dds::image_from_dds(&dds_data, 0).ok()?;
+
+    let w = full_img.width();
+    let h = full_img.height();
+    if w == 0 || h == 0 {
+        return None;
+    }
+
+    let half_w = w / 2;
+    let offset_x = if is_right { half_w } else { 0 };
+    let cropped = imageops::crop_imm(&full_img, offset_x, 0, half_w, h).to_image();
+    let resized = imageops::resize(&cropped, 1024, 1554, imageops::FilterType::Triangle);
+    Some(resized)
+}
+
+/// Encodes an RgbaImage to PNG byte buffer.
+pub fn encode_image_to_png(img: &RgbaImage) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let mut bytes = Vec::new();
+    let mut cursor = std::io::Cursor::new(&mut bytes);
+    img.write_to(&mut cursor, image::ImageFormat::Png)?;
+    Ok(bytes)
+}
+
+/// Retrieves the extracted PNG bytes for a DDS page, using an in-memory mtime-based cache.
+pub fn get_or_extract_dds_page_png(dds_path: &Path, is_right: bool) -> Option<Vec<u8>> {
+    if !dds_path.exists() {
+        return None;
+    }
+
+    let metadata = fs::metadata(dds_path).ok()?;
+    let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+    let cache_key = format!("{}:{}:{:?}", dds_path.display(), is_right, modified);
+
+    if let Ok(cache) = DDS_PAGE_CACHE.lock() {
+        if let Some((cached_time, bytes)) = cache.get(&cache_key) {
+            if *cached_time == modified {
+                return Some(bytes.clone());
+            }
+        }
+    }
+
+    let img = extract_page_from_dds(dds_path, is_right)?;
+    let png_bytes = encode_image_to_png(&img).ok()?;
+
+    if let Ok(mut cache) = DDS_PAGE_CACHE.lock() {
+        cache.insert(cache_key, (modified, png_bytes.clone()));
+    }
+
+    Some(png_bytes)
 }
 
 /// Merges both left (offset 0) and right (offset 1024) pages into a single 2048x2048 DDS texture in ONE pass.

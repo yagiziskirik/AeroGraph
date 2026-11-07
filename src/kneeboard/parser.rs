@@ -707,8 +707,8 @@ ppt_0=1638521.5, 1234546.5, 0.0, 145826.78, 17
                 "Steerpoints should not be empty"
             );
 
-            let assets = Path::new(r"C:\Users\ygz\Projects\AeroGraph\assets");
-            let db = crate::kneeboard::runways::TheaterDatabase::load(assets, "Korea KTO")
+            let assets = crate::config::AppConfig::find_assets_dir();
+            let db = crate::kneeboard::runways::TheaterDatabase::load(&assets, "Korea KTO")
                 .expect("Failed to load DB");
             let dep_ap = crate::kneeboard::runways::find_airport(
                 &db.airports,

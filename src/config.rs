@@ -24,7 +24,7 @@ pub struct AppConfig {
     #[serde(default)]
     pub bms_key_file: Option<String>,
 
-    #[serde(default)]
+    #[serde(default = "default_false")]
     pub sapi_earcons: bool,
 
     #[serde(default)]
@@ -61,6 +61,37 @@ pub struct AppConfig {
 
     #[serde(default = "default_github_repo")]
     pub github_repo: String,
+
+    // --- GUI Tactical Console Settings ---
+    #[serde(default = "default_false")]
+    pub gui_open_on_startup: bool,
+
+    #[serde(default = "default_true")]
+    pub gui_auto_dock_on_3d: bool,
+
+    #[serde(default = "default_true")]
+    pub gui_sound_effects: bool,
+
+    #[serde(default = "default_volume")]
+    pub gui_sound_volume: f32,
+
+    #[serde(default = "default_accent")]
+    pub gui_accent_color: String,
+
+    #[serde(default = "default_false")]
+    pub secondary_monitor_pin: bool,
+
+    #[serde(default = "default_window_size")]
+    pub window_size: (u32, u32),
+
+    #[serde(default)]
+    pub window_pos: Option<(i32, i32)>,
+    #[serde(default = "default_false")]
+    pub window_maximized: bool,
+    #[serde(default = "default_false")]
+    pub start_with_windows: bool,
+    #[serde(default = "default_true")]
+    pub auto_engage_voice: bool,
 }
 
 fn default_github_repo() -> String {
@@ -73,6 +104,22 @@ fn default_polling_rate() -> u32 {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_false() -> bool {
+    false
+}
+
+fn default_volume() -> f32 {
+    0.5
+}
+
+fn default_accent() -> String {
+    "#10B981".to_string()
+}
+
+fn default_window_size() -> (u32, u32) {
+    (1200, 740)
 }
 
 impl Default for AppConfig {
@@ -94,41 +141,165 @@ impl Default for AppConfig {
             custom_slots: HashMap::new(),
             check_updates_on_startup: true,
             github_repo: default_github_repo(),
+            gui_open_on_startup: default_false(),
+            gui_auto_dock_on_3d: default_true(),
+            gui_sound_effects: default_true(),
+            gui_sound_volume: default_volume(),
+            gui_accent_color: default_accent(),
+            secondary_monitor_pin: default_false(),
+            window_size: default_window_size(),
+            window_pos: None,
+            window_maximized: false,
+            start_with_windows: false,
+            auto_engage_voice: default_true(),
         }
     }
 }
 
 impl AppConfig {
-    pub fn config_path() -> PathBuf {
+    pub fn config_dir() -> PathBuf {
         if let Some(proj_dirs) = ProjectDirs::from("com", "ygz", "AeroGraph") {
             let config_dir = proj_dirs.config_dir();
             let _ = fs::create_dir_all(config_dir);
-            config_dir.join("aerograph.toml")
+            config_dir.to_path_buf()
         } else {
-            PathBuf::from("aerograph.toml")
+            let _ = fs::create_dir_all("config");
+            PathBuf::from("config")
         }
+    }
+
+    pub fn config_path() -> PathBuf {
+        Self::config_dir().join("aerograph.toml")
     }
 
     pub fn log_file_path() -> PathBuf {
-        if let Some(proj_dirs) = ProjectDirs::from("com", "ygz", "AeroGraph") {
-            let config_dir = proj_dirs.config_dir();
-            let _ = fs::create_dir_all(config_dir);
-            config_dir.join("aerograph.log")
-        } else {
-            PathBuf::from("aerograph.log")
-        }
+        Self::config_dir().join("aerograph.log")
     }
 
-    pub fn load() -> Self {
-        let path = Self::config_path();
+    pub fn user_templates_dir() -> PathBuf {
+        let dir = Self::config_dir().join("templates");
+        let _ = fs::create_dir_all(&dir);
+        dir
+    }
+
+    pub fn custom_templates_path() -> PathBuf {
+        Self::config_dir().join("custom_templates.json")
+    }
+
+    pub fn custom_stamps_path() -> PathBuf {
+        Self::config_dir().join("custom_stamps.json")
+    }
+
+    pub fn default_stamps() -> Vec<crate::gui::ipc::QuickStamp> {
+        vec![
+            crate::gui::ipc::QuickStamp {
+                id: "bingo".into(),
+                label: "BINGO 2500".into(),
+                template: "BINGO FUEL: {red: 2500 LBS} // JOKER: {yellow: 3200 LBS}".into(),
+            },
+            crate::gui::ipc::QuickStamp {
+                id: "laser".into(),
+                label: "LASER 1688".into(),
+                template: "PRIMARY LASER PRF: {green: 1688}".into(),
+            },
+            crate::gui::ipc::QuickStamp {
+                id: "ramrod".into(),
+                label: "RAMROD".into(),
+                template: "RAMROD CODE: {blue: CHARLIE}".into(),
+            },
+            crate::gui::ipc::QuickStamp {
+                id: "roe".into(),
+                label: "ROE 25NM".into(),
+                template: "ROE: Weapons Free beyond {green: 25NM} from Bullseye".into(),
+            },
+            crate::gui::ipc::QuickStamp {
+                id: "threat".into(),
+                label: "SAM THREAT".into(),
+                template: "WARNING: {highlight: Active SA-10 Grumble} tracking near STPT".into(),
+            },
+            crate::gui::ipc::QuickStamp {
+                id: "ip_vector".into(),
+                label: "IP VECTOR".into(),
+                template: "TGT IP: Bearing {blue: 045} / Distance {blue: 12NM} / Pullup 18,000 FT"
+                    .into(),
+            },
+        ]
+    }
+
+    pub fn load_custom_stamps() -> Vec<crate::gui::ipc::QuickStamp> {
+        let path = Self::custom_stamps_path();
         if path.exists() {
             if let Ok(content) = fs::read_to_string(&path) {
-                if let Ok(config) = toml::from_str(&content) {
-                    return config;
+                if let Ok(stamps) = serde_json::from_str(&content) {
+                    return stamps;
                 }
             }
         }
-        Self::default()
+        Self::default_stamps()
+    }
+
+    pub fn save_custom_stamps(stamps: &[crate::gui::ipc::QuickStamp]) -> std::io::Result<()> {
+        let path = Self::custom_stamps_path();
+        let content = serde_json::to_string_pretty(stamps)?;
+        fs::write(path, content)
+    }
+
+    pub fn load_custom_templates() -> Vec<crate::gui::ipc::TemplateMetadata> {
+        let path = Self::custom_templates_path();
+        if path.exists() {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(templates) = serde_json::from_str(&content) {
+                    return templates;
+                }
+            }
+        }
+        Vec::new()
+    }
+
+    pub fn custom_presets_path() -> PathBuf {
+        Self::config_dir().join("custom_presets.json")
+    }
+
+    pub fn load_custom_presets() -> Vec<crate::gui::preset::CustomPreset> {
+        let path = Self::custom_presets_path();
+        if path.exists() {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(presets) = serde_json::from_str(&content) {
+                    return presets;
+                }
+            }
+        }
+        Vec::new()
+    }
+
+    pub fn save_custom_presets(
+        presets: &[crate::gui::preset::CustomPreset],
+    ) -> std::io::Result<()> {
+        let path = Self::custom_presets_path();
+        let content = serde_json::to_string_pretty(presets)?;
+        fs::write(path, content)
+    }
+
+    pub fn save_custom_templates(
+        templates: &[crate::gui::ipc::TemplateMetadata],
+    ) -> std::io::Result<()> {
+        let path = Self::custom_templates_path();
+        let content = serde_json::to_string_pretty(templates)?;
+        fs::write(path, content)
+    }
+    pub fn load() -> Self {
+        let path = Self::config_path();
+        let mut cfg: Self = fs::read_to_string(path)
+            .ok()
+            .and_then(|c| toml::from_str(&c).ok())
+            .unwrap_or_default();
+        cfg.start_with_windows = Self::is_auto_start_enabled();
+        if cfg.auto_engage_voice
+            && !crate::bms::shared_memory::BmsSharedMemoryClient::is_bms_running()
+        {
+            cfg.voice_recognition = false;
+        }
+        cfg
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -138,29 +309,41 @@ impl AppConfig {
         Ok(())
     }
 
-    /// Locates the base assets directory: looks next to executable first, then current working directory.
-    pub fn find_assets_dir() -> PathBuf {
+    /// Locates the base application root directory (where kneeboards.json, custom/, and assets/ reside).
+    pub fn app_root_dir() -> PathBuf {
         if let Ok(exe) = std::env::current_exe() {
-            if let Some(parent) = exe.parent() {
-                let candidate = parent.join("assets");
-                if candidate.exists() {
-                    return candidate;
-                }
-                if let Some(up2) = parent.parent().and_then(|p| p.parent()) {
-                    let cand2 = up2.join("assets");
-                    if cand2.exists() {
-                        return cand2;
-                    }
+            // If running inside a cargo development or test tree (e.g. target/debug, target/release, target/.../deps),
+            // find the repository root by locating Cargo.toml in any ancestor directory.
+            for ancestor in exe.ancestors() {
+                if ancestor.join("Cargo.toml").is_file() {
+                    return ancestor.to_path_buf();
                 }
             }
+
+            // Otherwise, we are running as an installed application:
+            // the root directory is the parent folder containing the executable.
+            if let Some(parent) = exe.parent() {
+                return parent.to_path_buf();
+            }
         }
-        let dev_path = PathBuf::from(r"C:\Users\ygz\Projects\AeroGraph\assets");
-        if dev_path.exists() {
-            return dev_path;
+
+        // Development fallback via compile-time manifest dir if exe path inspection is not available
+        if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
+            let manifest_path = PathBuf::from(manifest_dir);
+            if manifest_path.join("Cargo.toml").is_file() {
+                return manifest_path;
+            }
         }
-        let local = PathBuf::from("assets");
-        if local.exists() {
-            return local;
+
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    }
+
+    /// Locates the base assets directory: looks in app_root_dir first, then relative fallback.
+    pub fn find_assets_dir() -> PathBuf {
+        let app_root = Self::app_root_dir();
+        let candidate = app_root.join("assets");
+        if candidate.exists() {
+            return candidate;
         }
         PathBuf::from("assets")
     }
@@ -231,11 +414,6 @@ impl AppConfig {
                 }
                 let _ = RegCloseKey(hkey);
             }
-        }
-
-        let default_path = PathBuf::from(r"C:\Games\Falcon BMS 4.38");
-        if default_path.exists() {
-            return Some(default_path);
         }
 
         None
@@ -348,6 +526,46 @@ impl AppConfig {
                 let _ = RegCloseKey(hkey);
             }
         }
+        Ok(())
+    }
+
+    /// Registers the .aeropreset file association and application icon in Windows HKCU registry.
+    pub fn register_aeropreset_association() -> Result<(), Box<dyn std::error::Error>> {
+        let exe_path = std::env::current_exe()?;
+        let exe_str = exe_path.to_string_lossy();
+        let icon_str = format!("\"{}\",0", exe_str);
+        let cmd_str = format!("\"{}\" \"%1\"", exe_str);
+
+        unsafe {
+            let set_reg = |sub: &str, val: &str| {
+                let full_sub = format!(r"Software\Classes\{}", sub);
+                let h_sub = HSTRING::from(full_sub.as_str());
+                let mut hkey = HKEY::default();
+                if RegCreateKeyW(
+                    HKEY_CURRENT_USER,
+                    windows::core::PCWSTR(h_sub.as_ptr()),
+                    &mut hkey,
+                )
+                .is_ok()
+                {
+                    let h_val = HSTRING::from(val);
+                    let slice = h_val.as_wide();
+                    let bytes = std::slice::from_raw_parts(
+                        slice.as_ptr() as *const u8,
+                        (slice.len() + 1) * 2,
+                    );
+                    let _ =
+                        RegSetValueExW(hkey, windows::core::PCWSTR::null(), 0, REG_SZ, Some(bytes));
+                    let _ = RegCloseKey(hkey);
+                }
+            };
+
+            set_reg(".aeropreset", "AeroGraph.Preset");
+            set_reg("AeroGraph.Preset", "AeroGraph Kneeboard Preset");
+            set_reg(r"AeroGraph.Preset\DefaultIcon", &icon_str);
+            set_reg(r"AeroGraph.Preset\shell\open\command", &cmd_str);
+        }
+
         Ok(())
     }
 }

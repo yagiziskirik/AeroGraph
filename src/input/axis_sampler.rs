@@ -2,11 +2,37 @@ use crate::bms::config_parser::{AxisBinding, BmsConfig, ButtonBinding};
 use crate::input::direct_input::{DirectInputManager, DIJOYSTATE2};
 use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct InputSnapshot {
     pub ptt_com1_pressed: bool,
     pub ptt_com2_pressed: bool,
     pub active_variables: HashMap<String, String>, // e.g. "AFElevatorUp" -> "True", "Axis_Toe_Brake" -> "True", "Btn_8" -> "True"
+    pub pitch: f32,
+    pub roll: f32,
+    pub yaw: f32,
+    pub left_brake: f32,
+    pub right_brake: f32,
+    pub pressed_buttons: Vec<u32>,
+    pub pressed_device_buttons: Vec<(u32, String, String)>, // (button_id, device_name, device_guid)
+    pub mpo_active: bool,
+}
+
+impl Default for InputSnapshot {
+    fn default() -> Self {
+        Self {
+            ptt_com1_pressed: false,
+            ptt_com2_pressed: false,
+            active_variables: HashMap::new(),
+            pitch: 0.5,
+            roll: 0.5,
+            yaw: 0.5,
+            left_brake: 0.0,
+            right_brake: 0.0,
+            pressed_buttons: Vec::new(),
+            pressed_device_buttons: Vec::new(),
+            mpo_active: false,
+        }
+    }
 }
 
 pub struct AxisSampler {
@@ -18,6 +44,8 @@ pub struct AxisSampler {
     baseline_axes: HashMap<String, f32>,
     deadband_threshold: f32,
     last_hotplug_check: std::time::Instant,
+    device_names: HashMap<String, String>,
+    mpo_binding: Option<(u32, String, String, bool)>, // (button_id, device_name, device_guid, is_key)
 }
 
 impl AxisSampler {
@@ -27,18 +55,27 @@ impl AxisSampler {
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut dinput = DirectInputManager::new()?;
 
-        // Dynamically detect connected game controllers once at startup (zero polling overhead)
+        // Dynamically detect connected game controllers once at startup
         let attached = dinput.enumerate_game_controllers();
         log::info!(
             "DirectInput detected {} attached controller(s):",
             attached.len()
         );
+        let mut device_names = HashMap::new();
         for (inst_guid, prod_guid, name) in &attached {
             log::info!(
                 "  🎮 Controller: \"{}\" (Instance: {}, Product: {})",
                 name,
                 inst_guid,
                 prod_guid
+            );
+            device_names.insert(
+                inst_guid.trim_matches('{').trim_matches('}').to_uppercase(),
+                name.clone(),
+            );
+            device_names.insert(
+                prod_guid.trim_matches('{').trim_matches('}').to_uppercase(),
+                name.clone(),
             );
             if dinput.open_device(inst_guid).is_ok() {
                 dinput.alias_device(inst_guid, prod_guid);
@@ -63,7 +100,6 @@ impl AxisSampler {
         // Filter and open devices for required axes
         let mut active_axes = HashMap::new();
         for (axis_name, binding) in &bms_config.axes {
-            // Check if this axis or any sub-action (e.g. Elevator, Toe_Brake) is in required_axis_names
             let matches = required_axis_names.iter().any(|req| {
                 req.to_lowercase().contains(&axis_name.to_lowercase())
                     || (axis_name == "Pitch" && (req == "AFElevatorUp" || req == "AFElevatorDown"))
@@ -88,7 +124,14 @@ impl AxisSampler {
             baseline_axes: HashMap::new(),
             deadband_threshold: 0.02, // 2% deadband for AS5600 encoder filtering
             last_hotplug_check: std::time::Instant::now(),
+            device_names,
+            mpo_binding: None,
         })
+    }
+
+    /// Configures the active MPO binding (from active .fvx profile) to sample against.
+    pub fn set_mpo_binding(&mut self, binding: (u32, String, String, bool)) {
+        self.mpo_binding = Some(binding);
     }
 
     /// Checks for newly attached USB game controllers (hotplug) and binds them if missing.
@@ -125,17 +168,16 @@ impl AxisSampler {
         }
 
         if newly_attached > 0 {
-            // Re-enrich BMS config from Setup XMLs in case files were updated/generated after initial launch
             let config_dir = self.bms_config.base_dir.join("User").join("Config");
             let _ = crate::bms::config_parser::BmsConfig::enrich_from_setup_xmls(
                 &config_dir,
                 &mut self.bms_config.devices,
                 &mut self.bms_config.ptt_com1,
                 &mut self.bms_config.ptt_com2,
+                &mut self.bms_config.mpo_button,
                 &mut self.bms_config.axes,
             );
 
-            // Re-resolve required axes and PTT buttons
             for (axis_name, binding) in &self.bms_config.axes {
                 let matches = self.required_axis_names.iter().any(|req| {
                     req.to_lowercase().contains(&axis_name.to_lowercase())
@@ -174,7 +216,6 @@ impl AxisSampler {
 
     /// Samples all active devices once, evaluates button and axis conditions, and returns a snapshot.
     pub fn sample(&mut self) -> InputSnapshot {
-        // Periodic hotplug check every 3 seconds: automatically connects controllers if plugged in after startup
         let now = std::time::Instant::now();
         if now.duration_since(self.last_hotplug_check) >= std::time::Duration::from_secs(3) {
             self.last_hotplug_check = now;
@@ -191,17 +232,32 @@ impl AxisSampler {
             snapshot.ptt_com2_pressed = self.check_button(ptt2);
         }
 
-        // Sample pressed buttons across all devices (for InputTrackers like MPO Switch Toggle)
-        for dev in &self.bms_config.devices {
-            if let Some(state) = self.dinput.poll_device(&dev.guid) {
+        // Sample pressed buttons across all connected controllers
+        let opened_guids = self.dinput.get_opened_guids();
+        for guid in &opened_guids {
+            let dev_name = self
+                .device_names
+                .get(&guid.to_uppercase())
+                .cloned()
+                .unwrap_or_else(|| "Controller".to_string());
+            if let Some(state) = self.dinput.poll_device(guid) {
                 for (btn_idx, &val) in state.rgbButtons.iter().enumerate() {
                     if (val & 0x80) != 0 {
-                        snapshot
-                            .active_variables
-                            .insert(format!("Btn_{}_{}", dev.name, btn_idx), "True".to_string());
+                        let btn_u32 = btn_idx as u32;
+                        if !snapshot.pressed_buttons.contains(&btn_u32) {
+                            snapshot.pressed_buttons.push(btn_u32);
+                        }
+                        snapshot.pressed_device_buttons.push((
+                            btn_u32,
+                            dev_name.clone(),
+                            guid.clone(),
+                        ));
                         snapshot
                             .active_variables
                             .insert(format!("Btn_{}", btn_idx), "True".to_string());
+                        snapshot
+                            .active_variables
+                            .insert(format!("Btn_{}_{}", dev_name, btn_idx), "True".to_string());
                     }
                 }
             }
@@ -212,7 +268,6 @@ impl AxisSampler {
         for (name, binding) in &active_axes {
             if let Some(state) = self.dinput.poll_device(&binding.device_guid) {
                 let raw_val = self.get_axis_value(&state, binding.axis_index);
-                // DirectInput default range is 0..65535, with 32767 as neutral center
                 let raw_norm = (raw_val as f32) / 65535.0;
                 let is_inverted = binding.calibration.as_ref().is_some_and(|c| c.invert);
                 let normalized = if is_inverted {
@@ -221,7 +276,6 @@ impl AxisSampler {
                     raw_norm.clamp(0.0, 1.0)
                 };
 
-                // Apply deadband hysteresis against AS5600 sensor jitter
                 let last = self
                     .last_axis_values
                     .entry(name.clone())
@@ -231,8 +285,59 @@ impl AxisSampler {
                 }
                 let filtered = *last;
 
-                // Map to FoxVox variable states
+                let lower = name.to_lowercase();
+                if lower.contains("pitch") || lower.contains("elevator") {
+                    snapshot.pitch = filtered;
+                } else if lower.contains("roll") || lower.contains("aileron") {
+                    snapshot.roll = filtered;
+                } else if lower.contains("yaw") || lower.contains("rudder") {
+                    snapshot.yaw = filtered;
+                } else if lower.contains("toe_brake_right") {
+                    snapshot.right_brake = filtered;
+                } else if lower.contains("toe_brake") || lower.contains("brake") {
+                    snapshot.left_brake = filtered;
+                }
+
                 self.evaluate_axis_variables(name, filtered, &mut snapshot.active_variables);
+            }
+        }
+
+        // MPO detection: strictly evaluate against the active FVX profile binding
+        if let Some((id, ref dev_name, ref dev_guid, is_key)) = self.mpo_binding {
+            if is_key {
+                #[cfg(target_os = "windows")]
+                unsafe {
+                    use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
+                    if (GetAsyncKeyState(id as i32) as u16 & 0x8000) != 0 {
+                        snapshot.mpo_active = true;
+                    }
+                }
+            } else {
+                let is_pressed =
+                    snapshot
+                        .pressed_device_buttons
+                        .iter()
+                        .any(|(btn, d_name, d_guid)| {
+                            if *btn != id {
+                                return false;
+                            }
+                            if !dev_guid.is_empty() && d_guid.eq_ignore_ascii_case(dev_guid) {
+                                return true;
+                            }
+                            if !dev_name.is_empty() && d_name.eq_ignore_ascii_case(dev_name) {
+                                return true;
+                            }
+                            if dev_guid.is_empty()
+                                && (dev_name.is_empty()
+                                    || dev_name.eq_ignore_ascii_case("Profile Default"))
+                            {
+                                return true;
+                            }
+                            false
+                        });
+                if is_pressed {
+                    snapshot.mpo_active = true;
+                }
             }
         }
 
@@ -271,7 +376,6 @@ impl AxisSampler {
     ) {
         match axis_name {
             "Pitch" => {
-                // Pitch: stick forward = AFElevatorDown, stick aft = AFElevatorUp
                 if norm > 0.60 {
                     vars.insert("AFElevatorDown".to_string(), "True".to_string());
                 } else if norm < 0.40 {
@@ -279,7 +383,6 @@ impl AxisSampler {
                 }
             }
             "Roll" => {
-                // Roll: stick left = AFAileronLeft, stick right = AFAileronRight
                 if norm > 0.60 {
                     vars.insert("AFAileronLeft".to_string(), "True".to_string());
                 } else if norm < 0.40 {
@@ -287,7 +390,6 @@ impl AxisSampler {
                 }
             }
             "Yaw" => {
-                // Yaw: pedal left = AFRudderLeft, pedal right = AFRudderRight
                 if norm > 0.60 {
                     vars.insert("AFRudderLeft".to_string(), "True".to_string());
                 } else if norm < 0.40 {
@@ -295,7 +397,6 @@ impl AxisSampler {
                 }
             }
             "Toe_Brake" => {
-                // Left brake: establish resting baseline and trigger on displacement > 0.15
                 let baseline = *self
                     .baseline_axes
                     .entry(axis_name.to_string())
@@ -305,7 +406,6 @@ impl AxisSampler {
                 }
             }
             "Toe_Brake_Right" => {
-                // Right brake: establish resting baseline and trigger on displacement > 0.15
                 let baseline = *self
                     .baseline_axes
                     .entry(axis_name.to_string())

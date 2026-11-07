@@ -161,11 +161,22 @@ impl Drop for MappedArea {
 }
 
 /// Client to read Falcon BMS shared memory
-#[derive(Default)]
 pub struct BmsSharedMemoryClient {
     primary: Option<MappedArea>,
     vibe: Option<MappedArea>,
     string_area: Option<MappedArea>,
+    last_process_check: std::time::Instant,
+}
+
+impl Default for BmsSharedMemoryClient {
+    fn default() -> Self {
+        Self {
+            primary: None,
+            vibe: None,
+            string_area: None,
+            last_process_check: std::time::Instant::now(),
+        }
+    }
 }
 
 impl BmsSharedMemoryClient {
@@ -173,8 +184,16 @@ impl BmsSharedMemoryClient {
         Self::default()
     }
 
+    /// Fast, non-persistent check whether Falcon BMS process is currently active.
+    pub fn is_bms_running() -> bool {
+        crate::updater::is_bms_running()
+    }
+
     /// Attempts to connect to Falcon BMS shared memory areas.
     pub fn connect(&mut self) -> bool {
+        if !Self::is_bms_running() {
+            return false;
+        }
         if self.primary.is_none() {
             self.primary = MappedArea::open(PRIMARY_SHARED_MEMORY_NAME);
         }
@@ -188,8 +207,18 @@ impl BmsSharedMemoryClient {
         self.primary.is_some()
     }
 
-    pub fn is_connected(&self) -> bool {
-        self.primary.is_some()
+    pub fn is_connected(&mut self) -> bool {
+        if self.primary.is_none() {
+            return false;
+        }
+        if self.last_process_check.elapsed() >= std::time::Duration::from_millis(800) {
+            self.last_process_check = std::time::Instant::now();
+            if !Self::is_bms_running() {
+                self.disconnect();
+                return false;
+            }
+        }
+        true
     }
 
     pub fn disconnect(&mut self) {

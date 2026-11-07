@@ -6,6 +6,22 @@ fn main() {
     println!("cargo:rerun-if-changed=icon.ico");
     println!("cargo:rerun-if-changed=build.rs");
 
+    // Ensure ui/out directory exists with at least a placeholder file so
+    // #[derive(RustEmbed)] on UiAssets in src/gui/assets.rs does not fail
+    // during fresh checkouts, cargo check, or cargo clippy before `cargo ui-build` is run.
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into()));
+    let ui_out = manifest_dir.join("ui").join("out");
+    if !ui_out.exists() {
+        let _ = std::fs::create_dir_all(&ui_out);
+    }
+    let placeholder = ui_out.join("index.html");
+    if !placeholder.exists() {
+        let _ = std::fs::write(
+            &placeholder,
+            b"<!DOCTYPE html><html><body>AeroGraph Tactical Console Placeholder</body></html>",
+        );
+    }
+
     if env::var("CARGO_CFG_TARGET_OS").unwrap_or_default() == "windows" {
         let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
         let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());

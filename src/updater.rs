@@ -43,10 +43,8 @@ pub fn is_bms_running() -> bool {
                 let exe_name =
                     String::from_utf16_lossy(&entry.szExeFile[..null_pos]).to_lowercase();
 
-                if exe_name == "falcon bms.exe"
-                    || exe_name == "falcon bms_avx.exe"
-                    || exe_name == "falcon bms_avx2.exe"
-                {
+                let clean = exe_name.replace([' ', '_'], "");
+                if clean.starts_with("falconbms") && clean.ends_with(".exe") {
                     let _ = CloseHandle(snapshot);
                     return true;
                 }
@@ -61,20 +59,30 @@ pub fn is_bms_running() -> bool {
     false
 }
 
-/// Simple semantic version comparison: returns true if `remote` is strictly greater than `current`.
+/// Compares two version strings according to SemVer 2.0.0 precedence rules.
+/// Returns true if `remote` is strictly greater than `current`.
 pub fn is_newer_version(remote: &str, current: &str) -> bool {
-    let clean = |s: &str| -> Vec<u64> {
-        s.trim()
-            .trim_start_matches(['v', 'V'])
+    fn parse_version(s: &str) -> (Vec<u64>, Option<String>) {
+        let clean = s.trim().trim_start_matches(['v', 'V']);
+        let (core_str, pre_str) = match clean.split_once('-') {
+            Some((c, p)) => (c, Some(p.to_string())),
+            None => (clean, None),
+        };
+        let nums: Vec<u64> = core_str
             .split('.')
             .filter_map(|p| p.parse::<u64>().ok())
-            .collect()
-    };
+            .collect();
+        (nums, pre_str)
+    }
 
-    let r_parts = clean(remote);
-    let c_parts = clean(current);
+    let (r_nums, r_pre) = parse_version(remote);
+    let (c_nums, c_pre) = parse_version(current);
 
-    for (r, c) in r_parts.iter().zip(c_parts.iter()) {
+    // 1. Compare major, minor, patch numbers
+    let max_len = r_nums.len().max(c_nums.len());
+    for i in 0..max_len {
+        let r = r_nums.get(i).copied().unwrap_or(0);
+        let c = c_nums.get(i).copied().unwrap_or(0);
         if r > c {
             return true;
         }
@@ -82,7 +90,60 @@ pub fn is_newer_version(remote: &str, current: &str) -> bool {
             return false;
         }
     }
-    r_parts.len() > c_parts.len()
+
+    // 2. If core numeric versions are equal, compare prerelease status:
+    // SemVer rule: A normal release with no prerelease has higher precedence than a prerelease version.
+    // e.g. 1.0.0 > 1.0.0-beta > 1.0.0-alpha
+    match (r_pre, c_pre) {
+        (None, Some(_)) => true, // Remote is stable release, current is prerelease -> newer
+        (Some(_), None) => false, // Remote is prerelease, current is stable -> not newer
+        (None, None) => false,   // Both are identical stable releases
+        (Some(r), Some(c)) => compare_prerelease(&r, &c),
+    }
+}
+
+fn compare_prerelease(remote: &str, current: &str) -> bool {
+    let r_parts: Vec<&str> = remote.split('.').collect();
+    let c_parts: Vec<&str> = current.split('.').collect();
+
+    let max_len = r_parts.len().max(c_parts.len());
+    for i in 0..max_len {
+        let r = r_parts.get(i);
+        let c = c_parts.get(i);
+
+        match (r, c) {
+            (Some(r_val), Some(c_val)) => {
+                if r_val == c_val {
+                    continue;
+                }
+                if let (Ok(r_num), Ok(c_num)) = (r_val.parse::<u64>(), c_val.parse::<u64>()) {
+                    return r_num > c_num;
+                }
+                let rank = |val: &str| -> u32 {
+                    let v = val.to_lowercase();
+                    if v.contains("alpha") {
+                        1
+                    } else if v.contains("beta") {
+                        2
+                    } else if v.contains("rc") {
+                        3
+                    } else {
+                        4
+                    }
+                };
+                let r_rank = rank(r_val);
+                let c_rank = rank(c_val);
+                if r_rank != c_rank {
+                    return r_rank > c_rank;
+                }
+                return r_val > c_val;
+            }
+            (Some(_), None) => return true,
+            (None, Some(_)) => return false,
+            (None, None) => break,
+        }
+    }
+    false
 }
 
 /// Queries GitHub Releases API for the latest release on `yagiziskirik/AeroGraph`.
@@ -354,5 +415,16 @@ mod tests {
         assert!(!is_newer_version("v0.1.0", "0.1.0"));
         assert!(!is_newer_version("0.0.9", "0.1.0"));
         assert!(!is_newer_version("0.1.0", "0.2.0"));
+
+        // Prerelease and SemVer 2.0.0 ordering
+        assert!(is_newer_version("1.0.0-beta", "1.0.0-alpha"));
+        assert!(is_newer_version("1.0.0-beta.2", "1.0.0-beta.1"));
+        assert!(is_newer_version("1.0.0-rc.1", "1.0.0-beta"));
+        assert!(is_newer_version("1.0.0", "1.0.0-beta"));
+        assert!(is_newer_version("1.0.0", "1.0.0-alpha"));
+        assert!(is_newer_version("v1.0.0", "1.0.0-beta"));
+        assert!(!is_newer_version("1.0.0-beta", "1.0.0"));
+        assert!(!is_newer_version("1.0.0-alpha", "1.0.0-beta"));
+        assert!(!is_newer_version("1.0.0-beta", "1.0.0-beta"));
     }
 }

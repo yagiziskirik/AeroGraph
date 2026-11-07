@@ -15,9 +15,16 @@ Before building AeroGraph locally, ensure you have the following installed:
    rustup update stable
    rustup component add rustfmt clippy
    ```
-2. **Windows SDK**:
+2. **Node.js (v18+) & pnpm (v9+)**:
+   Required to develop, compile, and package the Next.js Tactical Avionics Console GUI:
+   ```powershell
+   winget install OpenJS.NodeJS.LTS
+   corepack enable
+   corepack prepare pnpm@latest --activate
+   ```
+3. **Windows SDK**:
    Required for `rc.exe` (resource compiler used to embed icon and application metadata into Windows PE binaries). Usually installed automatically with Visual Studio Build Tools / C++ desktop workload.
-3. **Inno Setup 6**:
+4. **Inno Setup 6**:
    Required to compile the standalone setup installer. Install via winget or official installer:
    ```powershell
    winget install JRSoftware.InnoSetup
@@ -79,26 +86,95 @@ Common types:
 
 ---
 
-## 🧪 3. Pre-Flight Quality Checks
+## 🖥️ 3. Tactical Avionics Console (UI) Development Workflow
+
+AeroGraph's Tactical Avionics Console GUI is built as a high-performance Next.js application located in the [`ui/`](ui/) directory:
+- **Stack**: Next.js 14, React 18, Tailwind CSS, Framer Motion, and Lucide Icons.
+- **Packaging Model**: Statically exported into HTML/CSS/JS (`ui/out/`) and embedded directly into the final standalone Windows binary (`rust-embed`), requiring zero Node.js runtime on end-user machines.
+
+### 1. Install Frontend Dependencies
+```powershell
+pnpm --dir ui install
+```
+
+### 2. Interactive Frontend Dev Server
+```powershell
+pnpm --dir ui dev
+```
+Starts the Next.js development server at `http://localhost:3000`. The frontend includes mock IPC telemetry and state simulation, allowing full UI design, responsive layout verification, and animation tuning directly in any modern browser without needing to launch Falcon BMS.
+
+### 3. Frontend Linting & Typechecking
+Before building the backend, verify TypeScript types and ESLint conformance:
+```powershell
+pnpm --dir ui tsc --noEmit
+pnpm --dir ui lint
+```
+
+### 4. Build & Export Static Assets (`cargo ui-build`)
+To compile and package the Next.js static assets for embedding into the Rust binary:
+```powershell
+cargo ui-build
+```
+> [!TIP]
+> `cargo ui-build` is a native Cargo alias configured in `.cargo/config.toml` that invokes `src/bin/xtask.rs ui-build`. It exports the optimized web application to `ui/out/`. Subsequent Rust builds (`cargo build` or `cargo build --release`) automatically link these compiled static assets directly into `aerograph.exe`.
+
+### 5. Local Binary Build & Testing Workflow
+
+After generating the static UI assets with `cargo ui-build`, compile the backend Rust binary using standard Cargo commands:
+
+- **Debug Build** (fast compilation with debug symbols):
+  ```powershell
+  cargo build
+  ```
+  Generates `target\debug\aerograph.exe`.
+
+- **Release Build** (optimized for live flight sim usage):
+  ```powershell
+  cargo build --release
+  ```
+  Generates `target\release\aerograph.exe`.
+
+#### Rapid Local Testing (Moving Executable to Root):
+The recommended workflow for testing AeroGraph locally is to run the compiled `.exe` directly from the main project root folder (`.\AeroGraph.exe`). This ensures it operates against live local resources (`assets\`, `images\`, `notes\`, and local `kneeboards.json`):
+
+```powershell
+# Automated: compiles release binary and deploys to .\AeroGraph.exe
+cargo local
+
+# Or for debug profile:
+cargo local -- --debug
+
+# Manual alternative via PowerShell:
+cargo build --release
+Copy-Item target\release\aerograph.exe .\AeroGraph.exe
+```
+
+> [!IMPORTANT]
+> **Ensure AeroGraph is Closed Before Deploying**:  
+> If `AeroGraph.exe` is currently running, Windows will lock the executable file and prevent overwriting with a `SharingViolation` error. `cargo local` automatically verifies the target file is writable before copying. Always close any running instance from the system tray or Task Manager before copying.
+
+---
+
+## 🧪 4. Pre-Flight Quality Checks & Cargo Aliases
 
 AeroGraph enforces strict code quality and formatting. CI will automatically check formatting, linting with Clippy, and run unit tests on every pull request.
 
-To verify your code before pushing, use our native Cargo command:
+AeroGraph provides native Cargo aliases configured in `.cargo/config.toml` for seamless local development:
+
+| Command | Purpose |
+| :--- | :--- |
+| `cargo check-all` | Runs `fmt`, `clippy -D warnings`, and the complete unit test suite. |
+| `cargo ui-build` | Compiles and exports the Next.js Tactical Console into `ui/out/`. |
+| `cargo local` | Compiles `--release` binary and deploys directly to `./AeroGraph.exe`. |
+| `cargo installer` | Compiles the release binary and packages the Inno Setup installer. |
+| `cargo lint` | Runs `cargo clippy -- -D warnings`. |
+| `cargo fmt-check` | Verifies code formatting without altering files. |
+| `cargo test` | Executes backend Rust unit tests. |
 
 ### Fast All-in-One Pre-Flight Check:
 ```powershell
 cargo check-all
 ```
-This runs:
-1. `cargo fmt` (automatically formats all Rust source files according to `rustfmt.toml`)
-2. `cargo clippy -- -D warnings` (ensures zero lint warnings or compiler warnings)
-3. `cargo test` (executes the automated unit test suite)
-
-### Individual Commands:
-- **Format Code**: `cargo fmt`
-- **Verify Format Without Changes**: `cargo fmt-check` (or `cargo fmt --all --check`)
-- **Lint**: `cargo lint` (or `cargo clippy -- -D warnings`)
-- **Tests**: `cargo test`
 
 ### Dependency & Performance Guidelines:
 - Avoid introducing heavyweight dependencies (e.g. OpenSSL, heavy asynchronous runtimes, or external C dependencies) where lightweight, synchronous pure-Rust or native Win32 APIs can be used.
@@ -106,7 +182,7 @@ This runs:
 
 ---
 
-## 🤖 4. AI-Generated Content Policy
+## 🤖 5. AI-Generated Content Policy
 
 We embrace AI tools as powerful productivity enhancers for coding, drafting documentation, and generating test fixtures. However, maintaining simulator stability and code quality is paramount:
 
@@ -116,7 +192,7 @@ We embrace AI tools as powerful productivity enhancers for coding, drafting docu
 
 ---
 
-## 🚀 5. Maintainer Release & Delivery Architecture
+## 🚀 6. Maintainer Release & Delivery Architecture
 
 *(This section is for maintainers cutting releases and curious contributors who want to understand AeroGraph's distribution architecture).*
 

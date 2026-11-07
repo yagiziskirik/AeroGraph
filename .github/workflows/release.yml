@@ -23,6 +23,23 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - name: Build UI static assets
+        run: |
+          pnpm --dir ui install --frozen-lockfile
+          pnpm --dir ui build
+
       - name: Extract Version from Tag
         id: get_version
         shell: pwsh

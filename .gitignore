@@ -21,6 +21,17 @@ aerograph.log
 # Local user configuration (dynamically created by AeroGraph at runtime)
 kneeboards.json
 aerograph.toml
+/custom/*
+!/custom/.gitkeep
 
 # Installer build output
 /installer/output/
+
+# Next.js GUI dependencies & build artifacts
+/ui/node_modules/
+/ui/.next/
+/ui/out/
+*.tsbuildinfo
+/ui/public/images/*.png
+!/ui/public/images/.gitkeep
+*.WebView2/
