@@ -19,6 +19,7 @@ pub enum AppEvent {
     CloseConsole,
     SpeechRecognized { text: String, confidence: f32 },
     KneeboardRegenFinished,
+    ImportPresetFile(PathBuf),
 }
 
 use std::path::PathBuf;
@@ -171,8 +172,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::info!("=== AeroGraph: Falcon BMS Voice & Kneeboards ===");
     log::info!("Session log started at: {:?}", log_path);
 
+    // Canonicalize any CLI arguments (such as an .aeropreset file path) before changing CWD
+    let args: Vec<String> = std::env::args()
+        .map(|a| {
+            let p = std::path::Path::new(&a);
+            if p.exists() {
+                std::fs::canonicalize(p)
+                    .map(|c| {
+                        let s = c.to_string_lossy().to_string();
+                        s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
+                    })
+                    .unwrap_or(a)
+            } else {
+                a
+            }
+        })
+        .collect();
+
+    // Anchor working directory to application root directory
+    let app_root = AppConfig::app_root_dir();
+    let _ = std::env::set_current_dir(&app_root);
+
     // Check CLI flags for manual regeneration
-    let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--regen" || a == "-r") {
         log::info!("Running manual kneeboard regeneration from CLI flag...");
         let cfg = AppConfig::load();
@@ -187,14 +208,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Guard against multiple concurrent instances
     let _single_instance_mutex = unsafe {
-        use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
-        use windows::Win32::System::Threading::CreateMutexW;
+        use windows::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS};
+        use windows::Win32::System::Threading::{
+            CreateMutexW, OpenEventW, SetEvent, EVENT_MODIFY_STATE,
+        };
         use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONWARNING, MB_OK};
 
         let mutex_name = windows::core::w!("AeroGraph_Single_Instance_Mutex");
         let handle = CreateMutexW(None, true, mutex_name).ok();
         if GetLastError() == ERROR_ALREADY_EXISTS {
-            log::warn!("Another instance of AeroGraph is already running. Exiting.");
+            log::warn!("Another instance of AeroGraph is already running.");
+
+            // Check if an .aeropreset file was passed as argument to be imported
+            if let Some(preset_arg) = args.iter().skip(1).find(|a| a.ends_with(".aeropreset")) {
+                let p = std::path::Path::new(preset_arg);
+                if p.exists() {
+                    let pending_file = AppConfig::config_dir().join("pending_import.txt");
+                    let _ = std::fs::write(&pending_file, p.to_string_lossy().as_bytes());
+                    log::info!("Wrote pending import request for: {:?}", p);
+                }
+            }
+
+            // Signal running instance via named event
+            let event_name = windows::core::w!("AeroGraph_Single_Instance_Event");
+            if let Ok(event) = OpenEventW(EVENT_MODIFY_STATE, false, event_name) {
+                let _ = SetEvent(event);
+                let _ = CloseHandle(event);
+                log::info!("Signaled running AeroGraph instance. Exiting secondary process.");
+                return Ok(());
+            }
+
             MessageBoxW(
                 None,
                 windows::core::w!("Another instance of AeroGraph is already running.\nPlease close the existing instance before launching a new one."),
@@ -222,7 +265,52 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.auto_kneeboards
     );
 
-    // Strict Falcon BMS registry check: require valid installation in registry
+    // Register .aeropreset Windows file association and icon in HKCU
+    if let Err(e) = AppConfig::register_aeropreset_association() {
+        log::warn!("Failed to register .aeropreset file association: {:?}", e);
+    }
+
+    // Process CLI arguments for direct .aeropreset execution / double click
+    for arg in args.iter().skip(1) {
+        if arg.ends_with(".aeropreset") {
+            let p = std::path::Path::new(arg);
+            if p.exists() {
+                match crate::gui::preset::AeroPresetPackage::import_from_file(p) {
+                    Ok(pkg) => {
+                        let _ = pkg.apply_to_workspace();
+                        log::info!("Imported and applied .aeropreset from CLI: {:?}", p);
+                        let now_ms = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis();
+                        let custom = crate::gui::preset::CustomPreset {
+                            id: format!("custom_{}", now_ms),
+                            name: pkg.manifest.name,
+                            description: pkg.manifest.description,
+                            theater: pkg.manifest.theater,
+                            color: pkg.manifest.color.clone(),
+                            slots: pkg.layout.slots,
+                            created_at: pkg.manifest.created_at,
+                        };
+                        let mut presets = AppConfig::load_custom_presets();
+                        presets.retain(|x| x.id != custom.id && x.name != custom.name);
+                        presets.push(custom);
+                        let _ = AppConfig::save_custom_presets(&presets);
+
+                        if !pkg.manifest.color.is_empty() {
+                            config.gui_accent_color = pkg.manifest.color.clone();
+                            let _ = config.save();
+                        }
+                        // Open console window automatically so user immediately sees their imported binder
+                        config.gui_open_on_startup = true;
+                    }
+                    Err(e) => {
+                        log::error!("Failed to parse .aeropreset file {:?}: {:?}", p, e);
+                    }
+                }
+            }
+        }
+    }
     if config.get_bms_base_dir().is_none() {
         log::error!("Falcon BMS 4.38 installation could not be detected in the Windows Registry.");
         #[cfg(target_os = "windows")]
@@ -294,8 +382,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::info!("AeroGraph system tray icon initialized");
 
     let running = Arc::new(AtomicBool::new(true));
+    let r_single_instance = running.clone();
     let r_voice = running.clone();
     let r_watcher = running.clone();
+
+    // Single-instance background event listener: receives CLI triggers from secondary instances
+    let proxy_single_instance = proxy.clone();
+    thread::spawn(move || {
+        use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+        use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
+
+        let event_name = windows::core::w!("AeroGraph_Single_Instance_Event");
+        let event_handle = unsafe { CreateEventW(None, false, false, event_name) };
+        if let Ok(handle) = event_handle {
+            while r_single_instance.load(Ordering::Relaxed) {
+                let res = unsafe { WaitForSingleObject(handle, 1000) };
+                if res == WAIT_OBJECT_0 {
+                    let pending_file = AppConfig::config_dir().join("pending_import.txt");
+                    if pending_file.exists() {
+                        if let Ok(path_str) = std::fs::read_to_string(&pending_file) {
+                            let _ = std::fs::remove_file(&pending_file);
+                            let path = PathBuf::from(path_str.trim());
+                            if path.exists() {
+                                let _ = proxy_single_instance
+                                    .send_event(AppEvent::ImportPresetFile(path));
+                                continue;
+                            }
+                        }
+                    }
+                    let _ = proxy_single_instance.send_event(AppEvent::ToggleConsole);
+                }
+            }
+            unsafe {
+                let _ = CloseHandle(handle);
+            }
+        }
+    });
 
     // 3. Shared state
     let shared_profile = Arc::new(Mutex::new(loaded_profile));
@@ -309,6 +431,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3b. Shared Audio Peak Meter for Real-Time VU Meter and Visualizer (Option A - CoreAudio)
     let ui_visible = Arc::new(AtomicBool::new(config.gui_open_on_startup));
+    let ui_hardware_active = Arc::new(AtomicBool::new(false));
+    let mpo_binding_active = Arc::new(AtomicBool::new(false));
     let voice_recognition_enabled = Arc::new(AtomicBool::new(config.voice_recognition));
     let mic_peak_level = Arc::new(AtomicU32::new(0));
     crate::engine::AudioPeakMeter::spawn_sampling_thread(
@@ -324,9 +448,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let v_reload = reload_trigger.clone();
     let v_proxy = proxy.clone();
     let v_input = shared_input_snapshot.clone();
+    let v_hardware_active = ui_hardware_active.clone();
+    let v_ui_visible = ui_visible.clone();
+    let v_mpo_binding = mpo_binding_active.clone();
+
+    let worker_ctx = VoiceWorkerContext {
+        running: r_voice,
+        profile_lock: v_profile,
+        config_lock: v_config,
+        reload_trigger: v_reload,
+        proxy: v_proxy,
+        input_lock: v_input,
+        ui_hardware_active: v_hardware_active,
+        ui_visible: v_ui_visible,
+        mpo_binding_active: v_mpo_binding,
+    };
 
     thread::spawn(move || {
-        run_voice_worker_loop(r_voice, v_profile, v_config, v_reload, v_proxy, v_input);
+        run_voice_worker_loop(worker_ctx);
     });
 
     // 5. Spawn background kneeboard watcher thread
@@ -358,7 +497,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut last_telemetry_tick = Instant::now();
     let mut last_in_3d = false;
     let audio_player = crate::engine::audio::AudioPlayer::new().ok();
-    let mpo_binding_active = Arc::new(AtomicBool::new(false));
 
     if config.gui_open_on_startup {
         let _ = proxy.send_event(AppEvent::ToggleConsole);
@@ -459,6 +597,73 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     win.send_event("KneeboardRegenFinished", "{}");
                 }
             }
+            Event::UserEvent(AppEvent::ImportPresetFile(path)) => {
+                log::info!("Handling incoming preset import from external trigger: {:?}", path);
+                match crate::gui::preset::AeroPresetPackage::import_from_file(&path) {
+                    Ok(pkg) => {
+                        let _ = pkg.apply_to_workspace();
+                        let now_ms = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis();
+                        let custom = crate::gui::preset::CustomPreset {
+                            id: format!("custom_{}", now_ms),
+                            name: pkg.manifest.name.clone(),
+                            description: pkg.manifest.description.clone(),
+                            theater: pkg.manifest.theater.clone(),
+                            color: pkg.manifest.color.clone(),
+                            slots: pkg.layout.slots.clone(),
+                            created_at: pkg.manifest.created_at.clone(),
+                        };
+                        let mut presets = AppConfig::load_custom_presets();
+                        presets.retain(|x| x.id != custom.id && x.name != custom.name);
+                        presets.push(custom);
+                        let _ = AppConfig::save_custom_presets(&presets);
+
+                        if !pkg.manifest.color.is_empty() {
+                            let mut cfg = shared_config.lock().unwrap();
+                            cfg.gui_accent_color = pkg.manifest.color.clone();
+                            let _ = cfg.save();
+                        }
+
+                        // Ensure tactical console window is open and brought to front
+                        if tactical_console.active_window().is_none() {
+                            let cfg = shared_config.lock().unwrap().clone();
+                            let p = proxy.clone();
+                            if let Ok(opened) = tactical_console.toggle(
+                                event_loop_target,
+                                &cfg,
+                                move |req, _win| {
+                                    let _ = p.send_event(AppEvent::IpcMessage(req));
+                                },
+                            ) {
+                                ui_visible.store(opened, Ordering::Relaxed);
+                                if let Some(win) = tactical_console.active_window() {
+                                    win.window().set_focus();
+                                    push_snapshot_helper(
+                                        win,
+                                        &cfg,
+                                        &shared_profile,
+                                        &mut main_bms_client,
+                                    );
+                                }
+                            }
+                        } else if let Some(win) = tactical_console.active_window() {
+                            win.window().set_focus();
+                            let cfg = shared_config.lock().unwrap().clone();
+                            push_snapshot_helper(
+                                win,
+                                &cfg,
+                                &shared_profile,
+                                &mut main_bms_client,
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("Failed to import AeroPreset from external trigger: {:?}", e);
+                    }
+                }
+            }
             Event::UserEvent(AppEvent::IpcMessage(req)) => {
                 let mut ctx = IpcContext {
                     tactical_console: &mut tactical_console,
@@ -473,6 +678,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ui_visible: &ui_visible,
                     voice_recognition_enabled: &voice_recognition_enabled,
                     mpo_binding_active: &mpo_binding_active,
+                    ui_hardware_active: &ui_hardware_active,
                 };
                 handle_ipc_message(req, &mut ctx);
             }
@@ -899,11 +1105,16 @@ struct IpcContext<'a> {
     ui_visible: &'a Arc<AtomicBool>,
     voice_recognition_enabled: &'a Arc<AtomicBool>,
     mpo_binding_active: &'a Arc<AtomicBool>,
+    ui_hardware_active: &'a Arc<AtomicBool>,
 }
 
 fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>) {
     use crate::gui::ipc::IpcRequest;
     match req {
+        IpcRequest::SetUiMode { mode } => {
+            ctx.ui_hardware_active
+                .store(mode == "hardware", Ordering::Relaxed);
+        }
         IpcRequest::DragWindow | IpcRequest::ResizeWindow { .. } | IpcRequest::MinimizeWindow => {
             // Handled directly inside window event callback
         }
@@ -926,6 +1137,7 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
             }
             ctx.tactical_console.teardown();
             ctx.ui_visible.store(false, Ordering::Relaxed);
+            ctx.ui_hardware_active.store(false, Ordering::Relaxed);
         }
         IpcRequest::GetInitialState => {
             let cfg = ctx.shared_config.lock().unwrap().clone();
@@ -1007,9 +1219,15 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
             let _ = cfg.save();
         }
         IpcRequest::SetAccentColor { color } => {
-            let mut cfg = ctx.shared_config.lock().unwrap();
-            cfg.gui_accent_color = color;
-            let _ = cfg.save();
+            let cfg = {
+                let mut cfg = ctx.shared_config.lock().unwrap();
+                cfg.gui_accent_color = color;
+                let _ = cfg.save();
+                cfg.clone()
+            };
+            if let Some(win) = ctx.tactical_console.active_window() {
+                push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+            }
         }
         IpcRequest::GetTemplateContent { path } => {
             let assets_dir = AppConfig::find_assets_dir();
@@ -1133,38 +1351,118 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
             name,
             description,
             theater,
+            color,
         } => {
-            let layout = crate::kneeboard::layout::KneeboardLayoutConfig::load_or_create_default();
-            let manifest = crate::gui::preset::AeroPresetManifest {
-                name,
-                author: "Pilot".to_string(),
-                theater,
-                description,
-                version: "1.0.0".to_string(),
-                created_at: "2026-11-04".to_string(),
+            let path = if file_path.trim().is_empty() {
+                let default_fname = format!(
+                    "{}.aeropreset",
+                    name.trim().to_lowercase().replace(' ', "_")
+                );
+                rfd::FileDialog::new()
+                    .add_filter("AeroPreset (*.aeropreset)", &["aeropreset"])
+                    .set_file_name(&default_fname)
+                    .set_title("Export AeroPreset (.aeropreset)")
+                    .save_file()
+            } else {
+                Some(std::path::PathBuf::from(file_path))
             };
-            let package = crate::gui::preset::AeroPresetPackage::new(
-                manifest,
-                layout,
-                std::collections::HashMap::new(),
-            );
-            let path = std::path::Path::new(&file_path);
-            if let Err(e) = package.export_to_file(path) {
-                log::error!("Failed to export AeroPreset: {:?}", e);
+            if let Some(path) = path {
+                let layout =
+                    crate::kneeboard::layout::KneeboardLayoutConfig::load_or_create_default();
+                let manifest = crate::gui::preset::AeroPresetManifest {
+                    name,
+                    author: "Pilot".to_string(),
+                    theater,
+                    description,
+                    version: "1.0.0".to_string(),
+                    created_at: "2026-11-06".to_string(),
+                    color: color.unwrap_or_else(|| "#10B981".to_string()),
+                };
+                let mut custom_files = std::collections::HashMap::new();
+                let assets_dir = AppConfig::find_assets_dir();
+                let user_templates_dir = AppConfig::user_templates_dir();
+
+                for slot_cfg in layout.slots.values() {
+                    if let Some(ref p) = slot_cfg.path {
+                        let pb = std::path::PathBuf::from(p);
+                        let filename = pb
+                            .file_name()
+                            .map(std::path::PathBuf::from)
+                            .unwrap_or_else(|| pb.clone());
+                        let candidates = vec![
+                            pb.clone(),
+                            user_templates_dir.join(p),
+                            user_templates_dir.join(&filename),
+                            assets_dir.join(p),
+                            assets_dir.join("notes").join(p),
+                            std::path::PathBuf::from(".").join(p),
+                            std::path::PathBuf::from(".").join("notes").join(p),
+                        ];
+                        for cand in candidates {
+                            if cand.exists() {
+                                if let Ok(bytes) = std::fs::read(&cand) {
+                                    use base64::prelude::*;
+                                    let b64 = BASE64_STANDARD.encode(&bytes);
+                                    custom_files.insert(p.clone(), b64);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                let package =
+                    crate::gui::preset::AeroPresetPackage::new(manifest, layout, custom_files);
+                if let Err(e) = package.export_to_file(&path) {
+                    log::error!("Failed to export AeroPreset: {:?}", e);
+                } else {
+                    log::info!("Successfully exported AeroPreset to: {:?}", path);
+                }
             }
         }
         IpcRequest::ImportPreset { file_path } => {
-            let path = std::path::Path::new(&file_path);
-            match crate::gui::preset::AeroPresetPackage::import_from_file(path) {
-                Ok(pkg) => {
-                    let _ = pkg.apply_to_workspace();
-                    if let Some(win) = ctx.tactical_console.active_window() {
-                        let cfg = ctx.shared_config.lock().unwrap().clone();
-                        push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+            let path = if file_path.trim().is_empty() {
+                rfd::FileDialog::new()
+                    .add_filter("AeroPreset (*.aeropreset)", &["aeropreset"])
+                    .set_title("Import AeroPreset (.aeropreset)")
+                    .pick_file()
+            } else {
+                Some(std::path::PathBuf::from(file_path))
+            };
+            if let Some(path) = path {
+                match crate::gui::preset::AeroPresetPackage::import_from_file(&path) {
+                    Ok(pkg) => {
+                        let _ = pkg.apply_to_workspace();
+                        let now_ms = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis();
+                        let custom = crate::gui::preset::CustomPreset {
+                            id: format!("custom_{}", now_ms),
+                            name: pkg.manifest.name,
+                            description: pkg.manifest.description,
+                            theater: pkg.manifest.theater,
+                            color: pkg.manifest.color,
+                            slots: pkg.layout.slots,
+                            created_at: pkg.manifest.created_at,
+                        };
+                        let mut presets = AppConfig::load_custom_presets();
+                        presets.retain(|x| x.id != custom.id && x.name != custom.name);
+                        presets.push(custom);
+                        let _ = AppConfig::save_custom_presets(&presets);
+
+                        if let Some(win) = ctx.tactical_console.active_window() {
+                            let cfg = ctx.shared_config.lock().unwrap().clone();
+                            push_snapshot_helper(
+                                win,
+                                &cfg,
+                                ctx.shared_profile,
+                                ctx.main_bms_client,
+                            );
+                        }
                     }
-                }
-                Err(e) => {
-                    log::error!("Failed to import AeroPreset: {:?}", e);
+                    Err(e) => {
+                        log::error!("Failed to import AeroPreset: {:?}", e);
+                    }
                 }
             }
         }
@@ -1172,12 +1470,73 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
             let pkg = match preset_id.as_str() {
                 "strike" | "sead" => crate::gui::preset::AeroPresetPackage::ag_strike_package(),
                 "cap" | "bvr" => crate::gui::preset::AeroPresetPackage::aa_air_superiority(),
+                "training" | "instrument" => {
+                    crate::gui::preset::AeroPresetPackage::training_instrument()
+                }
                 _ => crate::gui::preset::AeroPresetPackage::default_korea(),
             };
+            let color = pkg.manifest.color.clone();
             let _ = pkg.apply_to_workspace();
+            {
+                let mut cfg = ctx.shared_config.lock().unwrap();
+                cfg.gui_accent_color = color;
+                let _ = cfg.save();
+            }
             if let Some(win) = ctx.tactical_console.active_window() {
                 let cfg = ctx.shared_config.lock().unwrap().clone();
                 push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+            }
+        }
+        IpcRequest::SaveCustomPreset { preset } => {
+            let color = preset.color.clone();
+            let mut presets = AppConfig::load_custom_presets();
+            presets.retain(|p| p.id != preset.id);
+            presets.push(preset.clone());
+            let _ = AppConfig::save_custom_presets(&presets);
+
+            // Also synchronize kneeboards.json with the saved preset slots
+            let mut layout = crate::kneeboard::layout::KneeboardLayoutConfig::create_default();
+            layout.slots = preset.slots;
+            let _ = layout.save();
+
+            {
+                let mut cfg = ctx.shared_config.lock().unwrap();
+                cfg.gui_accent_color = color;
+                let _ = cfg.save();
+            }
+
+            if let Some(win) = ctx.tactical_console.active_window() {
+                let cfg = ctx.shared_config.lock().unwrap().clone();
+                push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+            }
+        }
+        IpcRequest::DeleteCustomPreset { id } => {
+            let mut presets = AppConfig::load_custom_presets();
+            presets.retain(|p| p.id != id);
+            let _ = AppConfig::save_custom_presets(&presets);
+            if let Some(win) = ctx.tactical_console.active_window() {
+                let cfg = ctx.shared_config.lock().unwrap().clone();
+                push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+            }
+        }
+        IpcRequest::ApplyCustomPreset { id } => {
+            let presets = AppConfig::load_custom_presets();
+            if let Some(preset) = presets.into_iter().find(|p| p.id == id) {
+                let color = preset.color.clone();
+                let mut layout = crate::kneeboard::layout::KneeboardLayoutConfig::create_default();
+                layout.slots = preset.slots;
+                let _ = layout.save();
+
+                {
+                    let mut cfg = ctx.shared_config.lock().unwrap();
+                    cfg.gui_accent_color = color;
+                    let _ = cfg.save();
+                }
+
+                if let Some(win) = ctx.tactical_console.active_window() {
+                    let cfg = ctx.shared_config.lock().unwrap().clone();
+                    push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+                }
             }
         }
         IpcRequest::SelectProfileFile => {
@@ -1526,6 +1885,7 @@ fn push_snapshot_helper(
         mpo_device,
         mpo_is_key,
         bms_mpo_binding,
+        custom_presets: AppConfig::load_custom_presets(),
     });
 }
 
@@ -1808,17 +2168,51 @@ fn get_available_templates() -> Vec<crate::gui::ipc::TemplateMetadata> {
             default_title: "INTENTIONALLY LEFT BLANK".into(),
             default_code: "BLANK".into(),
         },
+        crate::gui::ipc::TemplateMetadata {
+            id: "restore_original".into(),
+            name: "Restore Original DDS Texture".into(),
+            category: "chart".into(),
+            path: "".into(),
+            description: "Restores original Falcon BMS theater texture from backup".into(),
+            default_title: "RESTORE ORIGINAL DDS".into(),
+            default_code: "RESTORE // THEATER".into(),
+        },
+        crate::gui::ipc::TemplateMetadata {
+            id: "pass_through".into(),
+            name: "Pass-Through (Untouched Texture)".into(),
+            category: "chart".into(),
+            path: "".into(),
+            description: "Leaves existing Falcon BMS theater texture completely untouched".into(),
+            default_title: "PASS-THROUGH TEXTURE".into(),
+            default_code: "PASS-THROUGH".into(),
+        },
     ]
 }
 
-fn run_voice_worker_loop(
+struct VoiceWorkerContext {
     running: Arc<AtomicBool>,
     profile_lock: Arc<Mutex<Option<LoadedProfile>>>,
     config_lock: Arc<Mutex<AppConfig>>,
     reload_trigger: Arc<AtomicBool>,
     proxy: tao::event_loop::EventLoopProxy<AppEvent>,
     input_lock: Arc<Mutex<crate::input::axis_sampler::InputSnapshot>>,
-) {
+    ui_hardware_active: Arc<AtomicBool>,
+    ui_visible: Arc<AtomicBool>,
+    mpo_binding_active: Arc<AtomicBool>,
+}
+
+fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
+    let VoiceWorkerContext {
+        running,
+        profile_lock,
+        config_lock,
+        reload_trigger,
+        proxy,
+        input_lock,
+        ui_hardware_active,
+        ui_visible,
+        mpo_binding_active,
+    } = ctx;
     let mut bms_client = BmsSharedMemoryClient::new();
     let initial_voice_enabled = {
         let cfg = config_lock.lock().unwrap();
@@ -1908,22 +2302,27 @@ fn run_voice_worker_loop(
         }
         last_bms_connected = bms_conn;
 
-        if !voice_enabled {
-            if sapi.is_some() {
-                log::info!("Voice recognition disabled: releasing SAPI and microphone");
-                sapi = None;
-            }
+        let controllers_needed = voice_enabled
+            || (ui_visible.load(Ordering::Relaxed) && ui_hardware_active.load(Ordering::Relaxed))
+            || mpo_binding_active.load(Ordering::Relaxed);
+
+        if !voice_enabled && sapi.is_some() {
+            log::info!("Voice recognition disabled: releasing SAPI and microphone");
+            sapi = None;
+        }
+
+        if !controllers_needed {
             if axis_sampler.is_some() {
-                log::info!("Voice recognition disabled: releasing DirectInput axis sampler");
+                log::info!("Controllers not required: releasing DirectInput axis sampler");
                 axis_sampler = None;
             }
             active_profile_name = None;
             last_compiled_config = None;
-            thread::sleep(Duration::from_millis(200));
+            thread::sleep(Duration::from_millis(100));
             continue;
         }
 
-        if sapi.is_none() {
+        if voice_enabled && sapi.is_none() {
             log::info!("Voice recognition enabled: initializing SAPI Recognizer...");
             sapi = match SapiEngine::new() {
                 Ok(s) => {
@@ -1935,7 +2334,6 @@ fn run_voice_worker_loop(
                     None
                 }
             };
-            active_profile_name = None;
             last_compiled_config = None;
         }
 
@@ -2277,7 +2675,7 @@ fn run_voice_worker_loop(
                 }
             }
 
-            if listening_enabled {
+            if voice_enabled && listening_enabled {
                 state_engine.evaluate_reactive_groups(loaded, &input_vars);
             }
         }

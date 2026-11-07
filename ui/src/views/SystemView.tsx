@@ -9,6 +9,7 @@ import {
   VolumeSlider,
 } from '../components/inputs';
 import pkg from '../../package.json';
+import { AVIONICS_THEME_PALETTE } from '../services/templatesData';
 
 interface SystemViewProps {
   config: AppConfig;
@@ -21,14 +22,7 @@ interface SystemViewProps {
   onChangeVolume: (volume: number) => void;
 }
 
-const THEMES = [
-  { id: '#10B981', label: 'Classic Viper Green', desc: 'F-16 HUD & MFD CRT phosphor green' },
-  { id: '#22E385', label: 'NVG Night Vision', desc: 'Gen-III night vision high-transmittance green' },
-  { id: '#F59E0B', label: 'Tactical Amber', desc: 'High-contrast DED amber avionics display' },
-  { id: '#38BDF8', label: 'Stealth Cyan', desc: 'Modernized glass cockpit tactical data link blue' },
-  { id: '#E2E8F0', label: 'Titanium Silver', desc: 'Minimalist stealth monochrome digital atelier' },
-  { id: '#F43F5E', label: 'Combat Crimson', desc: 'High-urgency master caution emergency lighting' },
-];
+const THEMES = AVIONICS_THEME_PALETTE;
 
 export const SystemView: React.FC<SystemViewProps> = ({
   config,
@@ -106,7 +100,7 @@ export const SystemView: React.FC<SystemViewProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {THEMES.map((theme) => {
             const isSelected = accentColor.toLowerCase() === theme.id.toLowerCase();
             return (

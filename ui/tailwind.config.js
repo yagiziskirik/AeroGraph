@@ -17,7 +17,7 @@ module.exports = {
           active: "var(--border-active, #3B4861)",
         },
         accent: {
-          DEFAULT: "var(--accent-color, #10B981)",
+          DEFAULT: "rgb(var(--accent-rgb, 16 185 129) / <alpha-value>)",
           phosphor: "#10B981",
           nvg: "#22E385",
           amber: "#F59E0B",

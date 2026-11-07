@@ -68,12 +68,23 @@ pub enum IpcRequest {
         name: String,
         description: String,
         theater: String,
+        #[serde(default)]
+        color: Option<String>,
     },
     ImportPreset {
         file_path: String,
     },
     LoadBuiltinPreset {
         preset_id: String,
+    },
+    SaveCustomPreset {
+        preset: crate::gui::preset::CustomPreset,
+    },
+    DeleteCustomPreset {
+        id: String,
+    },
+    ApplyCustomPreset {
+        id: String,
     },
 
     // Voice & Hardware
@@ -98,6 +109,9 @@ pub enum IpcRequest {
     },
 
     // Diagnostics & System
+    SetUiMode {
+        mode: String,
+    },
     OpenLogFile,
     GetConsoleLogs,
     OpenImagesFolder,
@@ -164,6 +178,8 @@ pub struct StateSnapshot {
     pub mpo_is_key: bool,
     #[serde(default)]
     pub bms_mpo_binding: Option<String>,
+    #[serde(default)]
+    pub custom_presets: Vec<crate::gui::preset::CustomPreset>,
 }
 
 impl IpcRequest {

@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tao::dpi::{LogicalPosition, LogicalSize};
 use tao::event_loop::EventLoopWindowTarget;
@@ -8,6 +9,10 @@ use wry::{WebView, WebViewBuilder, WebViewBuilderExtWindows};
 use super::assets::UiAssets;
 use super::ipc::{IpcRequest, StateSnapshot, TelemetryData};
 use crate::config::AppConfig;
+use crate::kneeboard::dds::{
+    get_or_extract_dds_page_png, resolve_passthrough_dds_path, resolve_restore_dds_path,
+    KneeboardSlotMap,
+};
 
 pub struct TacticalConsoleWindow {
     window: Arc<Window>,
@@ -86,35 +91,105 @@ impl TacticalConsoleWindow {
             .with_autoplay(true)
             .with_ipc_handler(ipc_callback);
 
-        // Check if dev GUI environment flag is enabled
-        let dev_mode = std::env::var("AEROGRAPH_DEV_GUI").unwrap_or_default() == "1";
-        if dev_mode {
-            log::info!("GUI running in DEV mode: Loading http://localhost:3000");
-            webview_builder = webview_builder.with_url("http://localhost:3000");
-        } else {
-            webview_builder = webview_builder
-                .with_custom_protocol("aerograph".into(), move |_id, request| {
-                    let path = request.uri().path();
-                    let clean_path = if path.is_empty() || path == "/" {
-                        "/index.html"
-                    } else {
-                        path
-                    };
+        webview_builder =
+            webview_builder.with_custom_protocol("aerograph".into(), move |_id, request| {
+                let path = request.uri().path();
+                let clean_path = if path.is_empty() || path == "/" {
+                    "/index.html"
+                } else {
+                    path
+                };
 
-                    // Check if requesting an image from assets/images
-                    if clean_path.starts_with("/images/") {
-                        let filename = clean_path.trim_start_matches("/images/");
-                        let assets_dir = AppConfig::find_assets_dir();
-                        let img_path = assets_dir.join("images").join(filename);
-                        if img_path.exists() {
-                            if let Ok(bytes) = std::fs::read(&img_path) {
-                                let mime = if filename.ends_with(".png") {
-                                    "image/png"
-                                } else if filename.ends_with(".jpg") || filename.ends_with(".jpeg")
+                // Check if requesting an extracted DDS kneeboard page (restore_original or pass_through)
+                if clean_path.starts_with("/dds-page/") {
+                    let sub = clean_path.trim_start_matches("/dds-page/");
+                    let parts: Vec<&str> = sub.split('/').collect();
+                    if parts.len() >= 2 {
+                        let mode = parts[0].to_lowercase();
+                        let slot_with_ext = parts[1];
+                        let slot_key = slot_with_ext.trim_end_matches(".png");
+
+                        if let Some((filename, offset_x)) =
+                            KneeboardSlotMap::get_slot_info(slot_key)
+                        {
+                            let is_right = offset_x > 0;
+                            let cfg = AppConfig::load();
+                            let bms_dir = cfg.get_bms_base_dir();
+                            let (theater, _) = AppConfig::get_bms_registry_info();
+                            let assets_dir = AppConfig::find_assets_dir();
+
+                            let dds_path = if mode == "restore" || mode == "restore_original" {
+                                resolve_restore_dds_path(
+                                    bms_dir.as_deref(),
+                                    &assets_dir,
+                                    &theater,
+                                    filename,
+                                )
+                            } else {
+                                resolve_passthrough_dds_path(bms_dir.as_deref(), &theater, filename)
+                            };
+
+                            if let Some(path) = dds_path {
+                                if let Some(png_bytes) =
+                                    get_or_extract_dds_page_png(&path, is_right)
                                 {
-                                    "image/jpeg"
-                                } else {
-                                    "application/octet-stream"
+                                    return wry::http::Response::builder()
+                                        .header("Content-Type", "image/png")
+                                        .header("Access-Control-Allow-Origin", "*")
+                                        .header("Cache-Control", "no-cache")
+                                        .body(Cow::Owned(png_bytes))
+                                        .unwrap();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Check if requesting an image from local-image, images, or custom
+                let is_img_req = clean_path.starts_with("/local-image/")
+                    || clean_path.starts_with("/images/")
+                    || clean_path.starts_with("/custom/");
+
+                if is_img_req {
+                    let raw_sub = if clean_path.starts_with("/local-image/") {
+                        clean_path.trim_start_matches("/local-image/")
+                    } else {
+                        clean_path.trim_start_matches('/')
+                    };
+                    let rel_sub = raw_sub.replace("%20", " ");
+                    let filename = std::path::Path::new(&rel_sub)
+                        .file_name()
+                        .and_then(|f| f.to_str())
+                        .unwrap_or(&rel_sub);
+
+                    let assets_dir = AppConfig::find_assets_dir();
+                    let user_templates = AppConfig::user_templates_dir();
+
+                    let candidate_paths = vec![
+                        PathBuf::from(&rel_sub),
+                        assets_dir.join(&rel_sub),
+                        user_templates.join(&rel_sub),
+                        assets_dir.join("images").join(filename),
+                        PathBuf::from("images").join(filename),
+                        PathBuf::from("custom").join(filename),
+                        user_templates.join(filename),
+                    ];
+
+                    for img_path in candidate_paths {
+                        if img_path.exists() && img_path.is_file() {
+                            if let Ok(bytes) = std::fs::read(&img_path) {
+                                let ext = img_path
+                                    .extension()
+                                    .and_then(|s| s.to_str())
+                                    .unwrap_or("")
+                                    .to_lowercase();
+                                let mime = match ext.as_str() {
+                                    "png" => "image/png",
+                                    "jpg" | "jpeg" => "image/jpeg",
+                                    "bmp" => "image/bmp",
+                                    "webp" => "image/webp",
+                                    "svg" => "image/svg+xml",
+                                    _ => "application/octet-stream",
                                 };
                                 return wry::http::Response::builder()
                                     .header("Content-Type", mime)
@@ -124,20 +199,28 @@ impl TacticalConsoleWindow {
                             }
                         }
                     }
+                }
 
-                    match UiAssets::get_file_content(clean_path) {
-                        Some((bytes, mime)) => wry::http::Response::builder()
-                            .header("Content-Type", mime)
-                            .header("Access-Control-Allow-Origin", "*")
-                            .body(bytes)
-                            .unwrap(),
-                        None => wry::http::Response::builder()
-                            .status(wry::http::StatusCode::NOT_FOUND)
-                            .body(Cow::Borrowed(b"404 Not Found" as &[u8]))
-                            .unwrap(),
-                    }
-                })
-                .with_url("aerograph://app/index.html");
+                match UiAssets::get_file_content(clean_path) {
+                    Some((bytes, mime)) => wry::http::Response::builder()
+                        .header("Content-Type", mime)
+                        .header("Access-Control-Allow-Origin", "*")
+                        .body(bytes)
+                        .unwrap(),
+                    None => wry::http::Response::builder()
+                        .status(wry::http::StatusCode::NOT_FOUND)
+                        .body(Cow::Borrowed(b"404 Not Found" as &[u8]))
+                        .unwrap(),
+                }
+            });
+
+        // Check if dev GUI environment flag is enabled
+        let dev_mode = std::env::var("AEROGRAPH_DEV_GUI").unwrap_or_default() == "1";
+        if dev_mode {
+            log::info!("GUI running in DEV mode: Loading http://localhost:3000");
+            webview_builder = webview_builder.with_url("http://localhost:3000");
+        } else {
+            webview_builder = webview_builder.with_url("aerograph://app/index.html");
         }
 
         let webview = webview_builder.build(&*window)?;

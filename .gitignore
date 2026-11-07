@@ -21,6 +21,8 @@ aerograph.log
 # Local user configuration (dynamically created by AeroGraph at runtime)
 kneeboards.json
 aerograph.toml
+/custom/*
+!/custom/.gitkeep
 
 # Installer build output
 /installer/output/

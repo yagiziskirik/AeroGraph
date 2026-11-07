@@ -9,7 +9,7 @@ import { HardwareView } from '../views/HardwareView';
 import { SystemView } from '../views/SystemView';
 import { Ipc } from '../services/ipc';
 import { Sound } from '../services/sound';
-import { AppConfig, MasterMode, QuickStamp, SlotConfig, TelemetryData, TemplateMetadata } from '../types/ipc';
+import { AppConfig, CustomPreset, MasterMode, QuickStamp, SlotConfig, TelemetryData, TemplateMetadata } from '../types/ipc';
 
 const DEFAULT_CONFIG: AppConfig = {
   polling_rate_hz: 25,
@@ -66,6 +66,10 @@ export default function Home() {
     }
   }, []);
 
+  useEffect(() => {
+    Ipc.setUiMode(currentMode);
+  }, [currentMode]);
+
   const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
   const [profileName, setProfileName] = useState<string>('Standard Falcon BMS 4.38');
   const [profilePath, setProfilePath] = useState<string>('');
@@ -79,6 +83,7 @@ export default function Home() {
   const [availableTemplates, setAvailableTemplates] = useState<TemplateMetadata[]>([]);
   const [customTemplates, setCustomTemplates] = useState<TemplateMetadata[]>([]);
   const [customStamps, setCustomStamps] = useState<QuickStamp[]>([]);
+  const [customPresets, setCustomPresets] = useState<CustomPreset[]>([]);
   const [mpoButton, setMpoButton] = useState<number | undefined>(undefined);
   const [mpoDevice, setMpoDevice] = useState<string | undefined>(undefined);
   const [mpoIsKey, setMpoIsKey] = useState<boolean>(false);
@@ -97,6 +102,7 @@ export default function Home() {
       if (data.available_templates) setAvailableTemplates(data.available_templates);
       if (data.custom_templates) setCustomTemplates(data.custom_templates);
       if (data.custom_stamps) setCustomStamps(data.custom_stamps);
+      if (data.custom_presets) setCustomPresets(data.custom_presets);
       if (data.mpo_button !== undefined) setMpoButton(data.mpo_button);
       if (data.mpo_device) setMpoDevice(data.mpo_device);
       if (data.mpo_is_key !== undefined) setMpoIsKey(data.mpo_is_key);
@@ -166,7 +172,8 @@ export default function Home() {
       const r = parseInt(clean.substring(0, 2), 16);
       const g = parseInt(clean.substring(2, 4), 16);
       const b = parseInt(clean.substring(4, 6), 16);
-      document.documentElement.style.setProperty('--accent-rgb', `${r},${g},${b}`);
+      document.documentElement.style.setProperty('--accent-rgb', `${r} ${g} ${b}`);
+      document.documentElement.style.setProperty('--accent-glow', `rgba(${r}, ${g}, ${b}, 0.35)`);
     }
   };
 
@@ -225,58 +232,53 @@ export default function Home() {
         voiceEnabled={config.voice_recognition}
       />
 
-      {/* 3. Active Mode Viewport */}
+      {/* 3. Active Mode Viewport (Keep mounted to preserve staged edits, zoom, and active preset state across tabs) */}
       <div className="flex-1 w-full overflow-hidden relative min-h-0">
-        {currentMode === 'binder' && (
-          <div className="h-full w-full">
-            <BinderView
-              initialSlots={kneeboardSlots}
-              availableTemplates={availableTemplates}
-              customTemplates={customTemplates}
-              customStamps={customStamps}
-            />
-          </div>
-        )}
+        <div className={`h-full w-full ${currentMode === 'binder' ? 'block' : 'hidden'}`}>
+          <BinderView
+            initialSlots={kneeboardSlots}
+            availableTemplates={availableTemplates}
+            customTemplates={customTemplates}
+            customStamps={customStamps}
+            customPresets={customPresets}
+            accentColor={accentColor}
+            onSelectAccent={handleSelectAccent}
+          />
+        </div>
 
-        {currentMode === 'hardware' && (
-          <div className="h-full w-full">
-            <HardwareView
-              config={config}
-              telemetry={telemetry}
-              mpoButton={mpoButton}
-              mpoDevice={mpoDevice}
-              mpoIsKey={mpoIsKey}
-              bmsMpoBinding={bmsMpoBinding}
-            />
-          </div>
-        )}
+        <div className={`h-full w-full ${currentMode === 'hardware' ? 'block' : 'hidden'}`}>
+          <HardwareView
+            config={config}
+            telemetry={telemetry}
+            mpoButton={mpoButton}
+            mpoDevice={mpoDevice}
+            mpoIsKey={mpoIsKey}
+            bmsMpoBinding={bmsMpoBinding}
+          />
+        </div>
 
-        {currentMode === 'comms' && (
-          <div className="h-full w-full">
-            <CommsView
-              config={config}
-              onUpdateConfig={setConfig}
-              profileName={profileName}
-              profilePath={profilePath}
-              telemetry={telemetry}
-            />
-          </div>
-        )}
+        <div className={`h-full w-full ${currentMode === 'comms' ? 'block' : 'hidden'}`}>
+          <CommsView
+            config={config}
+            onUpdateConfig={setConfig}
+            profileName={profileName}
+            profilePath={profilePath}
+            telemetry={telemetry}
+          />
+        </div>
 
-        {currentMode === 'system' && (
-          <div className="h-full w-full">
-            <SystemView
-              config={config}
-              onUpdateConfig={setConfig}
-              accentColor={accentColor}
-              onSelectAccent={handleSelectAccent}
-              soundEnabled={soundEnabled}
-              soundVolume={soundVolume}
-              onToggleSound={handleToggleSound}
-              onChangeVolume={handleChangeVolume}
-            />
-          </div>
-        )}
+        <div className={`h-full w-full ${currentMode === 'system' ? 'block' : 'hidden'}`}>
+          <SystemView
+            config={config}
+            onUpdateConfig={setConfig}
+            accentColor={accentColor}
+            onSelectAccent={handleSelectAccent}
+            soundEnabled={soundEnabled}
+            soundVolume={soundVolume}
+            onToggleSound={handleToggleSound}
+            onChangeVolume={handleChangeVolume}
+          />
+        </div>
       </div>
     </main>
   );

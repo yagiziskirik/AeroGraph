@@ -256,6 +256,30 @@ impl AppConfig {
         Vec::new()
     }
 
+    pub fn custom_presets_path() -> PathBuf {
+        Self::config_dir().join("custom_presets.json")
+    }
+
+    pub fn load_custom_presets() -> Vec<crate::gui::preset::CustomPreset> {
+        let path = Self::custom_presets_path();
+        if path.exists() {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(presets) = serde_json::from_str(&content) {
+                    return presets;
+                }
+            }
+        }
+        Vec::new()
+    }
+
+    pub fn save_custom_presets(
+        presets: &[crate::gui::preset::CustomPreset],
+    ) -> std::io::Result<()> {
+        let path = Self::custom_presets_path();
+        let content = serde_json::to_string_pretty(presets)?;
+        fs::write(path, content)
+    }
+
     pub fn save_custom_templates(
         templates: &[crate::gui::ipc::TemplateMetadata],
     ) -> std::io::Result<()> {
@@ -285,29 +309,41 @@ impl AppConfig {
         Ok(())
     }
 
-    /// Locates the base assets directory: looks next to executable first, then current working directory.
-    pub fn find_assets_dir() -> PathBuf {
+    /// Locates the base application root directory (where kneeboards.json, custom/, and assets/ reside).
+    pub fn app_root_dir() -> PathBuf {
         if let Ok(exe) = std::env::current_exe() {
-            if let Some(parent) = exe.parent() {
-                let candidate = parent.join("assets");
-                if candidate.exists() {
-                    return candidate;
-                }
-                if let Some(up2) = parent.parent().and_then(|p| p.parent()) {
-                    let cand2 = up2.join("assets");
-                    if cand2.exists() {
-                        return cand2;
-                    }
+            // If running inside a cargo development or test tree (e.g. target/debug, target/release, target/.../deps),
+            // find the repository root by locating Cargo.toml in any ancestor directory.
+            for ancestor in exe.ancestors() {
+                if ancestor.join("Cargo.toml").is_file() {
+                    return ancestor.to_path_buf();
                 }
             }
+
+            // Otherwise, we are running as an installed application:
+            // the root directory is the parent folder containing the executable.
+            if let Some(parent) = exe.parent() {
+                return parent.to_path_buf();
+            }
         }
-        let dev_path = PathBuf::from(r"C:\Users\ygz\Projects\AeroGraph\assets");
-        if dev_path.exists() {
-            return dev_path;
+
+        // Development fallback via compile-time manifest dir if exe path inspection is not available
+        if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
+            let manifest_path = PathBuf::from(manifest_dir);
+            if manifest_path.join("Cargo.toml").is_file() {
+                return manifest_path;
+            }
         }
-        let local = PathBuf::from("assets");
-        if local.exists() {
-            return local;
+
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    }
+
+    /// Locates the base assets directory: looks in app_root_dir first, then relative fallback.
+    pub fn find_assets_dir() -> PathBuf {
+        let app_root = Self::app_root_dir();
+        let candidate = app_root.join("assets");
+        if candidate.exists() {
+            return candidate;
         }
         PathBuf::from("assets")
     }
@@ -490,6 +526,46 @@ impl AppConfig {
                 let _ = RegCloseKey(hkey);
             }
         }
+        Ok(())
+    }
+
+    /// Registers the .aeropreset file association and application icon in Windows HKCU registry.
+    pub fn register_aeropreset_association() -> Result<(), Box<dyn std::error::Error>> {
+        let exe_path = std::env::current_exe()?;
+        let exe_str = exe_path.to_string_lossy();
+        let icon_str = format!("\"{}\",0", exe_str);
+        let cmd_str = format!("\"{}\" \"%1\"", exe_str);
+
+        unsafe {
+            let set_reg = |sub: &str, val: &str| {
+                let full_sub = format!(r"Software\Classes\{}", sub);
+                let h_sub = HSTRING::from(full_sub.as_str());
+                let mut hkey = HKEY::default();
+                if RegCreateKeyW(
+                    HKEY_CURRENT_USER,
+                    windows::core::PCWSTR(h_sub.as_ptr()),
+                    &mut hkey,
+                )
+                .is_ok()
+                {
+                    let h_val = HSTRING::from(val);
+                    let slice = h_val.as_wide();
+                    let bytes = std::slice::from_raw_parts(
+                        slice.as_ptr() as *const u8,
+                        (slice.len() + 1) * 2,
+                    );
+                    let _ =
+                        RegSetValueExW(hkey, windows::core::PCWSTR::null(), 0, REG_SZ, Some(bytes));
+                    let _ = RegCloseKey(hkey);
+                }
+            };
+
+            set_reg(".aeropreset", "AeroGraph.Preset");
+            set_reg("AeroGraph.Preset", "AeroGraph Kneeboard Preset");
+            set_reg(r"AeroGraph.Preset\DefaultIcon", &icon_str);
+            set_reg(r"AeroGraph.Preset\shell\open\command", &cmd_str);
+        }
+
         Ok(())
     }
 }

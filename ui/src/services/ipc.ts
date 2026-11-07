@@ -175,14 +175,23 @@ export const Ipc = {
   },
 
   // Presets
-  exportPreset(filePath: string, name: string, description: string, theater: string) {
-    this.send('ExportPreset', { file_path: filePath, name, description, theater });
+  exportPreset(name: string, description: string, theater: string, color: string = '#10B981', filePath: string = '') {
+    this.send('ExportPreset', { file_path: filePath, name, description, theater, color });
   },
-  importPreset(filePath: string) {
+  importPreset(filePath: string = '') {
     this.send('ImportPreset', { file_path: filePath });
   },
   loadBuiltinPreset(presetId: string) {
     this.send('LoadBuiltinPreset', { preset_id: presetId });
+  },
+  saveCustomPreset(preset: any) {
+    this.send('SaveCustomPreset', { preset });
+  },
+  deleteCustomPreset(id: string) {
+    this.send('DeleteCustomPreset', { id });
+  },
+  applyCustomPreset(id: string) {
+    this.send('ApplyCustomPreset', { id });
   },
 
   // Voice & Hardware
@@ -221,6 +230,9 @@ export const Ipc = {
   },
 
   // Diagnostics & Logs
+  setUiMode(mode: string) {
+    this.send('SetUiMode', { mode });
+  },
   openLogFile() {
     this.send('OpenLogFile');
   },
