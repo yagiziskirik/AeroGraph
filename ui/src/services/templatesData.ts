@@ -344,6 +344,31 @@ CAUTION: SEC mode relight produces no afterburner and higher idle thrust; prepar
 - Pull Ejection Handle firmly between legs with back flat against seat`,
 };
 
+// Curated 8-color avionics luminescence palette (synchronized with System View)
+export interface AvionicsTheme {
+  id: string; // hex
+  hex: string;
+  name: string;
+  label: string;
+  desc: string;
+  border: string;
+  bg: string;
+  text: string;
+}
+
+export const AVIONICS_THEME_PALETTE: AvionicsTheme[] = [
+  { id: '#10B981', hex: '#10B981', name: 'Viper Green', label: 'Classic Viper Green', desc: 'F-16 HUD & MFD CRT phosphor green', border: 'border-emerald-500/40', bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+  { id: '#22E385', hex: '#22E385', name: 'NVG Night Vision', label: 'NVG Night Vision', desc: 'Gen-III night vision high-transmittance green', border: 'border-emerald-400/40', bg: 'bg-emerald-400/20', text: 'text-emerald-300' },
+  { id: '#F59E0B', hex: '#F59E0B', name: 'Tactical Amber', label: 'Tactical Amber', desc: 'High-contrast DED amber avionics display', border: 'border-amber-500/40', bg: 'bg-amber-500/20', text: 'text-amber-400' },
+  { id: '#38BDF8', hex: '#38BDF8', name: 'Stealth Cyan', label: 'Stealth Cyan', desc: 'Modernized glass cockpit tactical data link blue', border: 'border-sky-400/40', bg: 'bg-sky-400/20', text: 'text-sky-300' },
+  { id: '#8B5CF6', hex: '#8B5CF6', name: 'Combat Purple', label: 'Combat Purple', desc: 'Tactical electronic warfare & ECM violet', border: 'border-purple-500/40', bg: 'bg-purple-500/20', text: 'text-purple-400' },
+  { id: '#0288D1', hex: '#0288D1', name: 'Tactical Cobalt', label: 'Tactical Cobalt', desc: 'Strike package BVR horizon tactical blue', border: 'border-sky-600/40', bg: 'bg-sky-600/20', text: 'text-sky-400' },
+  { id: '#E2E8F0', hex: '#E2E8F0', name: 'Titanium Silver', label: 'Titanium Silver', desc: 'Minimalist stealth monochrome digital atelier', border: 'border-slate-300/40', bg: 'bg-slate-300/20', text: 'text-slate-200' },
+  { id: '#F43F5E', hex: '#F43F5E', name: 'Combat Crimson', label: 'Combat Crimson', desc: 'High-urgency master caution emergency lighting', border: 'border-rose-500/40', bg: 'bg-rose-500/20', text: 'text-rose-400' },
+];
+
+export const PRESET_COLOR_PALETTE = AVIONICS_THEME_PALETTE;
+
 // Default 32 slots matching Falcon BMS standard layout
 export const DEFAULT_DEV_SLOTS: Record<string, SlotConfig> = {
   F16_1L: { type: 'briefing_roster', description: 'Package Roster & Comms Ladder', title: 'PACKAGE ROSTER & COMMS', header_code: 'SPINS // ROSTER-COMMS' },
@@ -361,37 +386,54 @@ export const DEFAULT_DEV_SLOTS: Record<string, SlotConfig> = {
   F16_7L: {
     type: 'notes',
     title: 'PILOT MISSION SCRATCHPAD',
-    header_code: 'MISSION 15 // SCRATCHPAD',
+    subtitle: 'EDIT IN KNEEBOARDS.JSON • TRAY -> EDIT KNEEBOARDS',
+    header_code: 'T.O. BMS1F-16CM-1 // SPINS',
+    page_num: 'SPINS-1',
+    preset: 'caution',
+    spaced: false,
     notes: [
-      '## 1. LOCATIONS',
-      'Sinan-ni Bridge: N38°33.184" E127°37.770" - 1127\'',
-      'Hyesan Bridge: N38°22.395" E127°45.658" - 620\'',
+      '## 1. PRE-FLIGHT & UFC SETUP',
+      '[x] INS Alignment verified & UFC DED set',
+      '[x] Bullseye loaded: {blue: 045 / 60NM}',
+      '[ ] Master Arm {yellow: ARM} at STPT 4 (Fence In)',
+      '[ ] Laser Arm {green: ON} prior to 5nm to Target',
       '',
-      '## 2. PROFILES',
-      '- Profile 1: {orange: PRE}, AD {blue: 9.00SEC}, IMP AZ {green: 350}',
-      '- Profile 2: {orange: PRE}, AD {blue: 7.00SEC}, IMP AZ {green: 340}',
+      'BULLSEYE: {blue: 045 / 60NM}',
+      'PACKAGE VHF: {blue: 138.250}',
+      'TACTICAL UHF: {blue: 254.000}',
+      'RAMROD CODE: {blue: CHARLIE}',
+      'PRIMARY LASER: {green: 1688}',
       '',
-      'WARNING: {highlight: Active SA-3 Grumble} tracking near STPT 5 and STPT 6',
-      'CAUTION: Maintain minimum 25,000 FT MSL until IP ingress',
+      '## 2. BVR RULES OF ENGAGEMENT (ROE)',
+      "- Hostile: 2x sensor confirm or AWACS 'HOT/HOSTILE'",
+      '- Weapons Free beyond {green: 25nm} from Bullseye 045/60',
+      '- Minimum Abort Range (MAR): {red: 12nm} mandatory egress',
+      '',
+      'WARNING: {highlight: Active SA-10 Grumble} tracking near STPT 6',
+      'CAUTION: Maintain minimum 18,000 FT MSL until IP ingress',
+      '',
+      '## 3. PILOT REMARKS / CUSTOM NOTES',
+      "- Right-click AeroGraph tray icon and select 'Edit Kneeboards'",
+      '- Edit this slot (F16_7L) to customize your flight notes',
     ],
   },
   F16_7R: { type: 'arr_ils_primary', description: 'Arrival Primary ILS Approach Chart', title: 'ARRIVAL ILS APPROACH', header_code: 'APPROACH // ILS-1' },
-  F16_8L: { type: 'notes', path: 'notes/fuel_planning.md', title: 'FUEL REGIMES, BINGO & HOLDING', header_code: 'T.O. 1F-16CM-1 // FUEL-OPS', page_num: 'FUEL-1', preset: 'standard' },
+  F16_8L: { type: 'notes', path: 'notes/fuel_planning.md', title: 'FUEL REGIMES, BINGO & HOLDING', header_code: 'T.O. 1F-16CM-1 // FUEL-OPS', page_num: 'FUEL-1', preset: 'standard', spaced: true },
   F16_8R: { type: 'arr_ils_secondary', description: 'Arrival Secondary ILS Approach Chart', title: 'ARRIVAL SECONDARY ILS', header_code: 'APPROACH // ILS-2' },
-  F16_9L: { type: 'notes', path: 'notes/aa_missiles.md', title: 'A/A MISSILES & BVR TIMELINES', header_code: 'T.O. 1F-16CM-34-1-1 // A-A BVR', page_num: 'A/A-1', preset: 'tactical' },
+  F16_9L: { type: 'notes', path: 'notes/aa_missiles.md', title: 'A/A MISSILES & BVR TIMELINES', header_code: 'T.O. 1F-16CM-34-1-1 // A-A BVR', page_num: 'A/A-1', preset: 'tactical', spaced: true },
   F16_9R: { type: 'arr_taxi', description: 'Recovery Airfield Ground Taxi Chart', title: 'RECOVERY AIRFIELD TAXI', header_code: 'AIRFIELD // RECOVERY' },
-  F16_10L: { type: 'notes', path: 'notes/ag_precision.md', title: 'A/G PRECISION GUIDED MUNITIONS', header_code: 'T.O. 1F-16CM-34-1-2 // PGM STRIKE', page_num: 'PGM-1', preset: 'caution' },
-  F16_10R: { type: 'notes', path: 'notes/rwr_countermeasures.md', title: 'RWR THREAT MATRIX & CMS PROGRAMS', header_code: 'T.O. 1F-16CM-34-1-3 // RWR THREATS', page_num: 'RWR-1', preset: 'caution' },
-  F16_11L: { type: 'notes', path: 'notes/ag_ballistic.md', title: 'A/G BALLISTIC ORDNANCE & STRAFE', header_code: 'T.O. 1F-16CM-34-1-1 // BALLISTICS', page_num: 'BALL-1', preset: 'caution' },
-  F16_11R: { type: 'notes', path: 'notes/pfl_fault_actions.md', title: 'CRITICAL PILOT FAULT LIST (PFL)', header_code: 'T.O. 1F-16CM-1CL-1 // PFL FAULTS', page_num: 'PFL-1', preset: 'caution' },
-  F16_12L: { type: 'notes', path: 'notes/sead_harm.md', title: 'SEAD / HARM PROFILES & ALIC CODES', header_code: 'T.O. 1F-16CM-34-1-4 // SEAD HARM', page_num: 'SEAD-1', preset: 'caution' },
-  F16_12R: { type: 'notes', path: 'notes/ep_hydraulics.md', title: 'HYDRAULIC FAILURE & ALT GEAR', header_code: 'T.O. 1F-16CM-1CL-2 // HYD-GEAR', page_num: 'HYD-1', preset: 'caution' },
-  F16_13L: { type: 'notes', path: 'notes/airframe_limits.md', title: 'AIRFRAME & CROSSWIND LIMITATIONS', header_code: 'T.O. 1F-16CM-1 // AIRFRAME LIMITS', page_num: 'LIMITS-1', preset: 'caution' },
-  F16_13R: { type: 'notes', path: 'notes/divert_airfields.md', title: 'THEATER DIVERT AIRFIELDS DIRECTORY', header_code: 'FLIGHT INFO PUB // THEATER DIVERT', page_num: 'DIVERT-1', preset: 'standard' },
-  F16_14L: { type: 'notes', path: 'notes/approach_speeds.md', title: 'APPROACH SPEEDS & OVERHEAD BREAK', header_code: 'T.O. 1F-16CM-1 // APPROACH & BREAK', page_num: 'APP-1', preset: 'standard' },
-  F16_14R: { type: 'notes', path: 'notes/ifr_holding.md', title: 'INSTRUMENT HOLDING & MISSED APP', header_code: 'FLIGHT INFO PUB // IFR RECOVERY', page_num: 'IFR-1', preset: 'standard' },
-  F16_15L: { type: 'notes', path: 'notes/comms_laser_matrix.md', title: 'LASER CODES & COMMS LADDER', header_code: 'T.O. 1F-16CM-1 // COMMS & LASER', page_num: 'COMMS-1', preset: 'standard' },
-  F16_15R: { type: 'notes', path: 'notes/ep_flameout.md', title: 'ENGINE FLAMEOUT & SFO PROFILE', header_code: 'T.O. 1F-16CM-1CL-1 // EP FLAMEOUT', page_num: 'EP-1', preset: 'emergency' },
+  F16_10L: { type: 'notes', path: 'notes/ag_precision.md', title: 'A/G PRECISION GUIDED MUNITIONS', header_code: 'T.O. 1F-16CM-34-1-2 // PGM STRIKE', page_num: 'PGM-1', preset: 'caution', spaced: false },
+  F16_10R: { type: 'notes', path: 'notes/rwr_countermeasures.md', title: 'RWR THREAT MATRIX & CMS PROGRAMS', header_code: 'T.O. 1F-16CM-34-1-3 // RWR THREATS', page_num: 'RWR-1', preset: 'caution', spaced: false },
+  F16_11L: { type: 'notes', path: 'notes/ag_ballistic.md', title: 'A/G BALLISTIC ORDNANCE & STRAFE', header_code: 'T.O. 1F-16CM-34-1-1 // BALLISTICS', page_num: 'BALL-1', preset: 'caution', spaced: false },
+  F16_11R: { type: 'notes', path: 'notes/pfl_fault_actions.md', title: 'CRITICAL PILOT FAULT LIST (PFL)', header_code: 'T.O. 1F-16CM-1CL-1 // PFL FAULTS', page_num: 'PFL-1', preset: 'warning', spaced: false },
+  F16_12L: { type: 'notes', path: 'notes/sead_harm.md', title: 'SEAD / HARM PROFILES & ALIC CODES', header_code: 'T.O. 1F-16CM-34-1-4 // SEAD HARM', page_num: 'SEAD-1', preset: 'caution', spaced: false },
+  F16_12R: { type: 'notes', path: 'notes/ep_hydraulics.md', title: 'HYDRAULIC FAILURE & ALT GEAR', header_code: 'T.O. 1F-16CM-1CL-2 // HYD-GEAR', page_num: 'HYD-1', preset: 'warning', spaced: false },
+  F16_13L: { type: 'notes', path: 'notes/airframe_limits.md', title: 'AIRFRAME & CROSSWIND LIMITATIONS', header_code: 'T.O. 1F-16CM-1 // AIRFRAME LIMITS', page_num: 'LIMITS-1', preset: 'standard', spaced: true },
+  F16_13R: { type: 'notes', path: 'notes/divert_airfields.md', title: 'THEATER DIVERT AIRFIELDS DIRECTORY', header_code: 'FLIGHT INFO PUB // THEATER DIVERT', page_num: 'DIVERT-1', preset: 'standard', spaced: true },
+  F16_14L: { type: 'notes', path: 'notes/approach_speeds.md', title: 'APPROACH SPEEDS & OVERHEAD BREAK', header_code: 'T.O. 1F-16CM-1 // APPROACH & BREAK', page_num: 'APP-1', preset: 'standard', spaced: true },
+  F16_14R: { type: 'notes', path: 'notes/ifr_holding.md', title: 'INSTRUMENT HOLDING & MISSED APP', header_code: 'FLIGHT INFO PUB // IFR RECOVERY', page_num: 'IFR-1', preset: 'standard', spaced: true },
+  F16_15L: { type: 'notes', path: 'notes/comms_laser_matrix.md', title: 'LASER CODES & COMMS LADDER', header_code: 'T.O. 1F-16CM-1 // COMMS & LASER', page_num: 'COMMS-1', preset: 'standard', spaced: true },
+  F16_15R: { type: 'notes', path: 'notes/ep_flameout.md', title: 'ENGINE FLAMEOUT & SFO PROFILE', header_code: 'T.O. 1F-16CM-1CL-1 // EP FLAMEOUT', page_num: 'EP-1', preset: 'emergency', spaced: true },
   F16_16L: { type: 'blank', description: 'Intentionally left blank', title: 'INTENTIONALLY LEFT BLANK', header_code: 'BLANK' },
   F16_16R: { type: 'blank', description: 'Intentionally left blank', title: 'INTENTIONALLY LEFT BLANK', header_code: 'BLANK' },
 };
@@ -433,4 +475,80 @@ export const AVAILABLE_TEMPLATES_CATALOG: TemplateMetadata[] = [
   { id: 'arr_ils_primary', type: 'arr_ils_primary', name: 'Arrival Primary ILS Approach Chart', category: 'chart', default_title: 'ARRIVAL ILS APPROACH', default_code: 'APPROACH // ILS-1', path: '', description: 'Dynamic primary runway ILS approach plate with frequencies' },
   { id: 'arr_ils_secondary', type: 'arr_ils_secondary', name: 'Arrival Secondary ILS Approach Chart', category: 'chart', default_title: 'ARRIVAL SECONDARY ILS', default_code: 'APPROACH // ILS-2', path: '', description: 'Dynamic secondary runway ILS approach plate' },
   { id: 'blank', type: 'blank', name: 'Intentionally Left Blank Card', category: 'chart', default_title: 'INTENTIONALLY LEFT BLANK', default_code: 'BLANK', path: '', description: 'Intentionally Left Blank Aeronautical Card' },
+  { id: 'restore_original', type: 'restore_original', name: 'Restore Original DDS Texture', category: 'chart', default_title: 'RESTORE ORIGINAL DDS', default_code: 'RESTORE // THEATER', path: '', description: 'Restores original Falcon BMS theater texture from backup' },
+  { id: 'pass_through', type: 'pass_through', name: 'Pass-Through (Untouched Texture)', category: 'chart', default_title: 'PASS-THROUGH TEXTURE', default_code: 'PASS-THROUGH', path: '', description: 'Leaves existing Falcon BMS theater texture completely untouched' },
+];
+
+export interface BuiltinPresetDef {
+  id: string;
+  name: string;
+  theater: string;
+  badge: string;
+  color: string;
+  tagColor: { border: string; bg: string; text: string };
+  description: string;
+  slots: Record<string, SlotConfig>;
+}
+
+export const BUILTIN_PRESETS_CATALOG: BuiltinPresetDef[] = [
+  {
+    id: 'korea',
+    name: 'Standard Viper Combat',
+    theater: 'KOREA',
+    badge: 'KOREA',
+    color: '#10B981',
+    tagColor: { border: 'border-emerald-500/40', bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+    description: 'Standard operational roster, engine start flows, taxi diagrams, SkyVector theater route map and ILS charts for Korea.',
+    slots: { ...DEFAULT_DEV_SLOTS },
+  },
+  {
+    id: 'strike',
+    name: 'SEAD / Precision Strike Package',
+    theater: 'ALL',
+    badge: 'STRIKE',
+    color: '#F59E0B',
+    tagColor: { border: 'border-amber-500/40', bg: 'bg-amber-500/20', text: 'text-amber-400' },
+    description: 'Dedicated ground-strike loadout: SAM threat matrix, AGM-88 ALIC codes, GBU PGM release parameters, and ballistic ordnance.',
+    slots: {
+      ...DEFAULT_DEV_SLOTS,
+      F16_2R: { type: 'custom_html', path: 'custom/kneeboard-threats-gnd.html', description: 'SAM Threat Guide', title: 'SURFACE-TO-AIR MISSILE GUIDE', header_code: 'THREATS // SAM' },
+      F16_3R: { type: 'notes', path: 'notes/sead_harm.md', title: 'SEAD / HARM PROFILES & ALIC CODES', header_code: 'T.O. 1F-16CM-34-1-4 // SEAD HARM', page_num: 'SEAD-1', preset: 'caution', spaced: false },
+      F16_4L: { type: 'custom_html', path: 'custom/kneeboard-checklist-4-fence.html', description: 'Checklist 4: Fence-In / Fence-Out', title: 'FENCE-IN / FENCE-OUT COMBAT', header_code: 'CHECKLIST // FENCE' },
+      F16_5L: { type: 'custom_html', path: 'custom/kneeboard-checklist-5-lgb-mav-mark.html', description: 'Checklist 5: LGB, Maverick & Mark Point', title: 'LGB & MAVERICK EMPLOYMENT', header_code: 'CHECKLIST // PGM' },
+      F16_6L: { type: 'notes', path: 'notes/ag_precision.md', title: 'A/G PRECISION GUIDED MUNITIONS', header_code: 'T.O. 1F-16CM-34-1-2 // PGM STRIKE', page_num: 'PGM-1', preset: 'caution', spaced: false },
+      F16_7L: { type: 'notes', path: 'notes/ag_ballistic.md', title: 'A/G BALLISTIC ORDNANCE & STRAFE', header_code: 'T.O. 1F-16CM-34-1-1 // BALLISTICS', page_num: 'BALL-1', preset: 'caution', spaced: false },
+      F16_7R: { type: 'notes', path: 'notes/rwr_countermeasures.md', title: 'RWR THREAT MATRIX & CMS PROGRAMS', header_code: 'T.O. 1F-16CM-34-1-3 // RWR THREATS', page_num: 'RWR-1', preset: 'caution', spaced: false },
+    },
+  },
+  {
+    id: 'cap',
+    name: 'Combat Air Patrol / BVR Sweep',
+    theater: 'ALL',
+    badge: 'CAP / BVR',
+    color: '#38BDF8',
+    tagColor: { border: 'border-sky-400/40', bg: 'bg-sky-400/20', text: 'text-sky-300' },
+    description: 'Air-to-air intercept setup: AIM-120 pitbull gates, MAR envelopes, RWR defensive CMS programs, and comms/laser matrix.',
+    slots: {
+      ...DEFAULT_DEV_SLOTS,
+      F16_2R: { type: 'custom_html', path: 'custom/kneeboard-threats-air.html', description: 'Air-to-Air Threat Guide', title: 'AIR-TO-AIR THREAT GUIDE', header_code: 'THREATS // A-A' },
+      F16_3R: { type: 'notes', path: 'notes/aa_missiles.md', title: 'A/A MISSILES & BVR TIMELINES', header_code: 'T.O. 1F-16CM-34-1-1 // A-A BVR', page_num: 'A/A-1', preset: 'tactical', spaced: true },
+      F16_5R: { type: 'notes', path: 'notes/rwr_countermeasures.md', title: 'RWR THREAT MATRIX & CMS PROGRAMS', header_code: 'T.O. 1F-16CM-34-1-3 // RWR THREATS', page_num: 'RWR-1', preset: 'caution', spaced: false },
+      F16_6L: { type: 'notes', path: 'notes/comms_laser_matrix.md', title: 'LASER CODES & COMMS LADDER', header_code: 'T.O. 1F-16CM-1 // COMMS & LASER', page_num: 'COMMS-1', preset: 'standard', spaced: true },
+    },
+  },
+  {
+    id: 'training',
+    name: 'Training / Instrument Flight',
+    theater: 'ALL',
+    badge: 'IFR / TRAINING',
+    color: '#8B5CF6',
+    tagColor: { border: 'border-purple-500/40', bg: 'bg-purple-500/20', text: 'text-purple-400' },
+    description: 'IFR holding patterns, theater divert airfields, approach speeds, flameout SFO profiles and dual ILS runway charts.',
+    slots: {
+      ...DEFAULT_DEV_SLOTS,
+      F16_4L: { type: 'notes', path: 'notes/approach_speeds.md', title: 'APPROACH SPEEDS & OVERHEAD BREAK', header_code: 'T.O. 1F-16CM-1 // APPROACH & BREAK', page_num: 'APP-1', preset: 'standard', spaced: true },
+      F16_5L: { type: 'notes', path: 'notes/ifr_holding.md', title: 'INSTRUMENT HOLDING & MISSED APP', header_code: 'FLIGHT INFO PUB // IFR RECOVERY', page_num: 'IFR-1', preset: 'standard', spaced: true },
+      F16_6L: { type: 'notes', path: 'notes/divert_airfields.md', title: 'THEATER DIVERT AIRFIELDS DIRECTORY', header_code: 'FLIGHT INFO PUB // THEATER DIVERT', page_num: 'DIVERT-1', preset: 'standard', spaced: true },
+    },
+  },
 ];

@@ -5,8 +5,8 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Ipc } from '../services/ipc';
 import { Sound } from '../services/sound';
-import { SlotConfig, TemplateMetadata, QuickStamp } from '../types/ipc';
-import { AVAILABLE_TEMPLATES_CATALOG, DEFAULT_DEV_SLOTS, EMBEDDED_NOTES } from '../services/templatesData';
+import { SlotConfig, TemplateMetadata, QuickStamp, CustomPreset } from '../types/ipc';
+import { AVAILABLE_TEMPLATES_CATALOG, DEFAULT_DEV_SLOTS, EMBEDDED_NOTES, BUILTIN_PRESETS_CATALOG, PRESET_COLOR_PALETTE } from '../services/templatesData';
 import { AEROGRAPH_LOGO_B64 } from '../components/ChassisBar';
 import { ShiningCheckbox } from '../components/inputs';
 
@@ -15,6 +15,9 @@ interface BinderViewProps {
   availableTemplates?: TemplateMetadata[];
   customTemplates?: TemplateMetadata[];
   customStamps?: QuickStamp[];
+  customPresets?: CustomPreset[];
+  accentColor?: string;
+  onSelectAccent?: (color: string) => void;
 }
 
 const DEFAULT_STAMPS: QuickStamp[] = [
@@ -31,6 +34,9 @@ export const BinderView: React.FC<BinderViewProps> = ({
   availableTemplates = AVAILABLE_TEMPLATES_CATALOG,
   customTemplates: initialCustomTemplates = [],
   customStamps: initialCustomStamps = [],
+  customPresets: initialCustomPresets = [],
+  accentColor = '#10B981',
+  onSelectAccent,
 }) => {
   const [leftSlotIndex, setLeftSlotIndex] = useState(1);
   const [rightSlotIndex, setRightSlotIndex] = useState(1);
@@ -157,6 +163,29 @@ export const BinderView: React.FC<BinderViewProps> = ({
   const [newStampLabel, setNewStampLabel] = useState('');
   const [newStampTemplate, setNewStampTemplate] = useState('');
 
+  // AeroPreset Management Modal State
+  const [presetsModalOpen, setPresetsModalOpen] = useState(false);
+  const [presetTab, setPresetTab] = useState<'builtin' | 'custom' | 'import_export'>('builtin');
+  const [activePresetId, setActivePresetId] = useState<string | null>(null);
+  const [exportPresetName, setExportPresetName] = useState('My Custom Mission');
+  const [exportPresetTheater, setExportPresetTheater] = useState('KOREA');
+  const [exportPresetDesc, setExportPresetDesc] = useState('Custom 32-slot operational kneeboard configuration');
+  const [presetFeedback, setPresetFeedback] = useState<string | null>(null);
+
+  // Custom Presets State & Synchronization
+  const [customPresets, setCustomPresets] = useState<CustomPreset[]>(initialCustomPresets || []);
+  useEffect(() => {
+    if (initialCustomPresets) {
+      setCustomPresets(initialCustomPresets);
+    }
+  }, [initialCustomPresets]);
+
+  // Form State for creating/saving custom presets
+  const [newPresetName, setNewPresetName] = useState('');
+  const [newPresetTheater, setNewPresetTheater] = useState('ALL');
+  const [newPresetDesc, setNewPresetDesc] = useState('');
+  const [selectedPresetColor, setSelectedPresetColor] = useState('#10B981');
+
   // Custom Templates State & IPC Persistence
   const [customTemplates, setCustomTemplates] = useState<TemplateMetadata[]>(
     initialCustomTemplates || []
@@ -221,10 +250,12 @@ export const BinderView: React.FC<BinderViewProps> = ({
     Ipc.deleteCustomTemplate(id);
   };
 
-  // Sync initialSlots when passed from parent
+  // Sync initialSlots when passed from parent (only on first mount with valid slots to avoid clobbering staged workspace edits)
+  const slotsInitializedRef = useRef(false);
   useEffect(() => {
-    if (initialSlots && Object.keys(initialSlots).length > 0) {
+    if (!slotsInitializedRef.current && initialSlots && Object.keys(initialSlots).length > 0) {
       setSlots(initialSlots);
+      slotsInitializedRef.current = true;
     }
   }, [initialSlots]);
 
@@ -265,13 +296,14 @@ export const BinderView: React.FC<BinderViewProps> = ({
         if (libraryOpenFor) setLibraryOpenFor(null);
         if (settingsSlotKey) setSettingsSlotKey(null);
         if (stampsModalOpen) setStampsModalOpen(false);
+        if (presetsModalOpen) setPresetsModalOpen(false);
         if (newTemplateModalOpen) setNewTemplateModalOpen(false);
         if (editStampDropdownOpen) setEditStampDropdownOpen(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [radialOpenFor, libraryOpenFor, settingsSlotKey, stampsModalOpen, newTemplateModalOpen, editStampDropdownOpen]);
+  }, [radialOpenFor, libraryOpenFor, settingsSlotKey, stampsModalOpen, presetsModalOpen, newTemplateModalOpen, editStampDropdownOpen]);
 
   const leftKey = `F16_${leftSlotIndex}L`;
   const rightKey = `F16_${rightSlotIndex}R`;
@@ -290,8 +322,16 @@ export const BinderView: React.FC<BinderViewProps> = ({
     header_code: 'T.O. 1F-16CM-1 // WEAPONS',
   };
 
-  // Maps a slot to a high-res pre-rendered PNG if available
+  // Maps a slot to a high-res pre-rendered PNG, extracted DDS texture, or user image
   const getSlotImagePath = (slotKey: string, slot: SlotConfig): string | null => {
+    // When restore_original or pass_through is selected, serve the extracted DDS texture
+    if (slot.type === 'restore_original') {
+      return `/dds-page/restore/${slotKey}.png`;
+    }
+    if (slot.type === 'pass_through') {
+      return `/dds-page/passthrough/${slotKey}.png`;
+    }
+
     if (slot.type === 'briefing_roster') return '/images/page_1.png';
     if (slot.type === 'briefing_steerpoints') return '/images/page_2.png';
     if (slot.type === 'mission_route') return '/images/mission_route.png';
@@ -309,6 +349,23 @@ export const BinderView: React.FC<BinderViewProps> = ({
       if (slot.path?.includes('threats-air')) return '/images/threats-air.png';
       if (slot.path?.includes('threats-gnd')) return '/images/threats-gnd.png';
     }
+
+    // User PNG/JPG image slot type: covers the entire kneeboard page
+    if (slot.type === 'image') {
+      if (slot.path && slot.path.trim().length > 0) {
+        const p = slot.path.trim();
+        if (p.startsWith('data:') || p.startsWith('http://') || p.startsWith('https://')) {
+          return p;
+        }
+        const clean = p.replace(/\\/g, '/');
+        if (clean.startsWith('/')) {
+          return clean;
+        }
+        return `/local-image/${clean}`;
+      }
+      return null;
+    }
+
     return null;
   };
 
@@ -379,13 +436,86 @@ export const BinderView: React.FC<BinderViewProps> = ({
     setLibraryOpenFor(null);
   };
 
+  // Active preset detection based on explicit selection or full 32-slot matching
+  const activePreset = useMemo(() => {
+    const getSlotText = (s: SlotConfig): string => {
+      if (s.content !== undefined) return s.content;
+      if (s.notes) {
+        return Array.isArray(s.notes) ? s.notes.join('\n') : s.notes;
+      }
+      if (s.path) {
+        if (templateContentCache[s.path]) return templateContentCache[s.path];
+        if (EMBEDDED_NOTES[s.path]) return EMBEDDED_NOTES[s.path];
+        const cleanPath = s.path.replace(/^notes\//, '');
+        if (EMBEDDED_NOTES[cleanPath]) return EMBEDDED_NOTES[cleanPath];
+        if (EMBEDDED_NOTES[`notes/${cleanPath}`]) return EMBEDDED_NOTES[`notes/${cleanPath}`];
+      }
+      return '';
+    };
+
+    const areSlotsEqual = (a: Record<string, SlotConfig>, b: Record<string, SlotConfig>): boolean => {
+      const keysB = Object.keys(b);
+      for (const k of keysB) {
+        const slotA = a[k];
+        const slotB = b[k];
+        if (!slotA || !slotB) return false;
+        if (slotA.type !== slotB.type) return false;
+        if ((slotA.path || '') !== (slotB.path || '')) return false;
+        if (slotA.type === 'notes') {
+          const aPreset = slotA.preset || 'standard';
+          const bPreset = slotB.preset || 'standard';
+          if (aPreset !== bPreset) return false;
+
+          const aSpaced = slotA.spaced !== false;
+          const bSpaced = slotB.spaced !== false;
+          if (aSpaced !== bSpaced) return false;
+
+          const textA = getSlotText(slotA).trim();
+          const textB = getSlotText(slotB).trim();
+          if (textA !== textB) {
+            return false;
+          }
+        }
+      }
+      return true;
+    };
+
+    // 1. If an activePresetId is explicitly selected, check if workspace matches it
+    if (activePresetId) {
+      const builtin = BUILTIN_PRESETS_CATALOG.find((p) => p.id === activePresetId);
+      if (builtin && areSlotsEqual(slots, builtin.slots)) {
+        return { id: builtin.id, name: builtin.name, color: builtin.color, isBuiltin: true };
+      }
+      const custom = customPresets.find((p) => p.id === activePresetId);
+      if (custom && areSlotsEqual(slots, custom.slots)) {
+        return { id: custom.id, name: custom.name, color: custom.color, isBuiltin: false };
+      }
+    }
+
+    // 2. Check built-in catalog first (official presets take precedence over duplicate custom presets)
+    for (const p of BUILTIN_PRESETS_CATALOG) {
+      if (areSlotsEqual(slots, p.slots)) {
+        return { id: p.id, name: p.name, color: p.color, isBuiltin: true };
+      }
+    }
+
+    // 3. Check custom presets
+    for (const p of customPresets) {
+      if (areSlotsEqual(slots, p.slots)) {
+        return { id: p.id, name: p.name, color: p.color, isBuiltin: false };
+      }
+    }
+
+    return null;
+  }, [slots, customPresets, activePresetId, templateContentCache]);
+
   // Revert slot to default profile state
   const handleRevertSlot = (side: 'left' | 'right') => {
     Sound.playSwitch();
     const slotKey = side === 'left' ? leftKey : rightKey;
     const def = DEFAULT_DEV_SLOTS[slotKey];
     if (def) {
-      setSlots((prev) => ({ ...prev, [slotKey]: def }));
+      setSlots((prev) => ({ ...prev, [slotKey]: JSON.parse(JSON.stringify(def)) }));
     }
   };
 
@@ -538,12 +668,33 @@ export const BinderView: React.FC<BinderViewProps> = ({
       );
     }
 
-    const isBriefing = slot.type.startsWith('briefing_');
-    const isCustomHtml = slot.type === 'custom_html' || slot.path?.endsWith('.html');
-    const headerCode = slot.header_code || 'T.O. 1F-16CM-1 // FLIGHT-OPS';
+    const slotKey = isLeft ? leftKey : rightKey;
+    const isRestore = slot.type === 'restore_original';
+    const isPassThrough = slot.type === 'pass_through';
+
+    const effectiveSlot =
+      isRestore || isPassThrough
+        ? DEFAULT_DEV_SLOTS[slotKey] || { type: 'notes', title: 'STOCK PAGE', preset: 'standard' }
+        : slot;
+
+    const bannerHtml = isRestore
+      ? `<div style="background: rgba(16, 185, 129, 0.95); color: #000; font-family: monospace; font-size: 13px; font-weight: 800; text-align: center; padding: 8px 12px; margin-bottom: 14px; border-radius: 4px; letter-spacing: 1px;">RESTORE ORIGINAL // STOCK BMS TEXTURE PREVIEW</div>`
+      : isPassThrough
+      ? `<div style="background: rgba(245, 158, 11, 0.95); color: #000; font-family: monospace; font-size: 13px; font-weight: 800; text-align: center; padding: 8px 12px; margin-bottom: 14px; border-radius: 4px; letter-spacing: 1px;">PASS-THROUGH // UNTOUCHED BMS COCKPIT TEXTURE</div>`
+      : '';
+
+    const isBriefing = effectiveSlot.type.startsWith('briefing_');
+    const isCustomHtml = effectiveSlot.type === 'custom_html' || effectiveSlot.path?.endsWith('.html');
+    const headerCode =
+      effectiveSlot.header_code ||
+      (isRestore
+        ? 'RESTORE // STOCK BMS'
+        : isPassThrough
+        ? 'PASS-THROUGH // UNTOUCHED'
+        : 'T.O. 1F-16CM-1 // FLIGHT-OPS');
     const notchClass = isLeft ? 'notch-left' : 'notch-right';
-    const title = slot.title || (isLeft ? 'LEFT KNEEBOARD' : 'RIGHT KNEEBOARD');
-    const rawContent = getSlotDisplayContent(slot);
+    const title = effectiveSlot.title || (isLeft ? 'LEFT KNEEBOARD' : 'RIGHT KNEEBOARD');
+    const rawContent = getSlotDisplayContent(effectiveSlot);
 
     // 2. Custom HTML Checklists
     if (isCustomHtml) {
@@ -566,6 +717,7 @@ td.rightalign { text-align: right; font-weight: 800; color: #0D47A1; }
 </head>
 <body>
 <div class="page">
+${bannerHtml}
 ${rawContent}
 </div>
 <div class="footer">
@@ -639,6 +791,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
   <div class="header-notch ${notchClass}">${headerCode}</div>
 </div>
 <div class="content-container">
+  ${bannerHtml}
   <div class="main-title">${title}</div>
   <div class="subtitle">AUTOMATED MISSION BRIEFING EXTRACT // T.O. 1F-16CM-1</div>
   <div class="lock-banner">&#128274; DYNAMIC GAME CONTENT &mdash; SYNCHRONIZED DIRECTLY WITH BRIEFING.TXT (READ-ONLY)</div>
@@ -836,6 +989,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
   <div class="header-notch ${notchClass}">${headerCode}</div>
 </div>
 <div class="content-container">
+  ${bannerHtml}
   <div class="main-title">${title}</div>
   <div class="subtitle">${subtitle}</div>
   ${bodyFormatted}
@@ -908,6 +1062,39 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
 
         {/* Right Side: Primary Actions */}
         <div className="flex items-center space-x-2">
+          {/* Active Preset Indicator Pill & Presets Launcher */}
+          <button
+            type="button"
+            onClick={() => {
+              Sound.playClick();
+              setPresetTab('builtin');
+              setPresetsModalOpen(true);
+              setPresetFeedback(null);
+            }}
+            className="h-7 px-2.5 rounded bg-[#1A1A1E] hover:bg-[#222228] border border-white/[0.08] flex items-center space-x-2 cursor-pointer transition-colors"
+            title="Current active preset. Click to open Mission Presets catalog."
+          >
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{
+                backgroundColor: activePreset ? activePreset.color : '#F59E0B',
+                boxShadow: `0 0 8px ${activePreset ? activePreset.color : '#F59E0B'}80`,
+              }}
+            />
+            <span className="text-[10px] font-mono text-zinc-300 font-semibold uppercase tracking-wide truncate max-w-[160px]">
+              {activePreset ? activePreset.name : 'CUSTOMIZED'}
+            </span>
+            <span
+              className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+                activePreset
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+              }`}
+            >
+              {activePreset ? 'ACTIVE' : 'MODIFIED'}
+            </span>
+          </button>
+
           {/* Manage Quick Stamps with Authentic Icon */}
           <button
             type="button"
@@ -1175,7 +1362,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
               ) : (
                 <div className="w-fit min-w-full min-h-full flex items-start justify-start">
                   {leftImgSrc ? (
-                    /* High-Resolution Pre-Rendered Flight Chart Surface */
+                    /* High-Resolution Pre-Rendered Flight Chart or User Image Surface */
                     <div
                       className="bg-[#18181B] rounded shadow-2xl overflow-hidden relative border border-white/[0.06] m-auto shrink-0"
                       style={{
@@ -1187,8 +1374,64 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                       <img
                         src={leftImgSrc}
                         alt={`Slot ${leftSlotIndex}L Chart`}
-                        className="w-full h-full object-contain pointer-events-none select-none"
+                        className={`w-full h-full pointer-events-none select-none ${
+                          leftSlot.type === 'image' ? 'object-cover' : 'object-contain'
+                        }`}
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          const fallback = '/images/blank_F16_16L.png';
+                          if (target.src !== fallback && !target.src.endsWith(fallback)) {
+                            target.src = fallback;
+                          }
+                        }}
                       />
+                      {(leftSlot.type === 'restore_original' || leftSlot.type === 'pass_through') && (
+                        <div
+                          className="absolute top-0 left-0 right-0 py-1.5 px-3 text-[11px] font-mono font-bold uppercase tracking-wider text-center flex items-center justify-center space-x-2 z-10 shadow-lg"
+                          style={{
+                            backgroundColor:
+                              leftSlot.type === 'restore_original'
+                                ? 'rgba(16, 185, 129, 0.95)'
+                                : 'rgba(245, 158, 11, 0.95)',
+                            color: '#000',
+                          }}
+                        >
+                          <span>
+                            {leftSlot.type === 'restore_original'
+                              ? 'RESTORE ORIGINAL // STOCK BMS TEXTURE PREVIEW'
+                              : 'PASS-THROUGH // UNTOUCHED BMS TEXTURE'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : leftSlot.type === 'image' ? (
+                    /* User Image Placeholder when file path not found or empty */
+                    <div
+                      className="bg-[#121214] rounded shadow-2xl overflow-hidden relative border border-dashed border-white/20 m-auto shrink-0 flex flex-col items-center justify-center p-8 text-center"
+                      style={{
+                        width: `${Math.round(1024 * activeLeftScale)}px`,
+                        height: `${Math.round(1554 * activeLeftScale)}px`,
+                      }}
+                    >
+                      <svg
+                        className="w-16 h-16 text-zinc-600 mb-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
+                        <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                        <circle cx="9" cy="9" r="2" />
+                        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                      </svg>
+                      <span className="font-mono text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
+                        USER IMAGE SLOT (1024 &times; 1554)
+                      </span>
+                      <span className="text-[11px] text-zinc-500 max-w-xs font-mono">
+                        {leftSlot.path
+                          ? `Attempting to load: ${leftSlot.path}`
+                          : `Slot ${leftKey} is configured as an Image. Specify a PNG/JPG file path in Slot Settings.`}
+                      </span>
                     </div>
                   ) : (
                     /* Authentic 1024x1554 Kneeboard Preview Surface (Top-origin zoom) */
@@ -1483,7 +1726,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
               ) : (
                 <div className="w-fit min-w-full min-h-full flex items-start justify-start">
                   {rightImgSrc ? (
-                    /* High-Resolution Pre-Rendered Flight Chart Surface */
+                    /* High-Resolution Pre-Rendered Flight Chart or User Image Surface */
                     <div
                       className="bg-[#18181B] rounded shadow-2xl overflow-hidden relative border border-white/[0.06] m-auto shrink-0"
                       style={{
@@ -1495,8 +1738,64 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                       <img
                         src={rightImgSrc}
                         alt={`Slot ${rightSlotIndex}R Chart`}
-                        className="w-full h-full object-contain pointer-events-none select-none"
+                        className={`w-full h-full pointer-events-none select-none ${
+                          rightSlot.type === 'image' ? 'object-cover' : 'object-contain'
+                        }`}
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          const fallback = '/images/blank_F16_16L.png';
+                          if (target.src !== fallback && !target.src.endsWith(fallback)) {
+                            target.src = fallback;
+                          }
+                        }}
                       />
+                      {(rightSlot.type === 'restore_original' || rightSlot.type === 'pass_through') && (
+                        <div
+                          className="absolute top-0 left-0 right-0 py-1.5 px-3 text-[11px] font-mono font-bold uppercase tracking-wider text-center flex items-center justify-center space-x-2 z-10 shadow-lg"
+                          style={{
+                            backgroundColor:
+                              rightSlot.type === 'restore_original'
+                                ? 'rgba(16, 185, 129, 0.95)'
+                                : 'rgba(245, 158, 11, 0.95)',
+                            color: '#000',
+                          }}
+                        >
+                          <span>
+                            {rightSlot.type === 'restore_original'
+                              ? 'RESTORE ORIGINAL // STOCK BMS TEXTURE PREVIEW'
+                              : 'PASS-THROUGH // UNTOUCHED BMS TEXTURE'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : rightSlot.type === 'image' ? (
+                    /* User Image Placeholder when file path not found or empty */
+                    <div
+                      className="bg-[#121214] rounded shadow-2xl overflow-hidden relative border border-dashed border-white/20 m-auto shrink-0 flex flex-col items-center justify-center p-8 text-center"
+                      style={{
+                        width: `${Math.round(1024 * activeRightScale)}px`,
+                        height: `${Math.round(1554 * activeRightScale)}px`,
+                      }}
+                    >
+                      <svg
+                        className="w-16 h-16 text-zinc-600 mb-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
+                        <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                        <circle cx="9" cy="9" r="2" />
+                        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                      </svg>
+                      <span className="font-mono text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
+                        USER IMAGE SLOT (1024 &times; 1554)
+                      </span>
+                      <span className="text-[11px] text-zinc-500 max-w-xs font-mono">
+                        {rightSlot.path
+                          ? `Attempting to load: ${rightSlot.path}`
+                          : `Slot ${rightKey} is configured as an Image. Specify a PNG/JPG file path in Slot Settings.`}
+                      </span>
                     </div>
                   ) : (
                     /* Authentic 1024x1554 Kneeboard Preview Surface (Top-origin zoom) */
@@ -1634,6 +1933,8 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                       >
                         <option value="notes">notes (Pilot Flight Notes)</option>
                         <option value="blank">blank (Intentionally Left Blank)</option>
+                        <option value="restore_original">restore_original (Restore Theater Backup DDS)</option>
+                        <option value="pass_through">pass_through (Leave Existing DDS Untouched)</option>
                         <option value="custom_html">custom_html (Checklist HTML)</option>
                         <option value="briefing_roster">briefing_roster (Package Roster)</option>
                         <option value="briefing_steerpoints">briefing_steerpoints (Nav Steerpoints)</option>
@@ -1896,6 +2197,572 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
               <button
                 type="button"
                 onClick={() => setStampsModalOpen(false)}
+                className="h-6 px-3 rounded bg-[#27272A] hover:bg-[#323238] text-white font-bold text-xs cursor-pointer"
+              >
+                CLOSE
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= AEROPRESET MANAGEMENT MODAL ================= */}
+      {presetsModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6 select-none font-mono">
+          <div className="w-[660px] max-h-[88vh] bg-[#121214] border border-white/[0.12] rounded-lg shadow-2xl flex flex-col overflow-hidden text-xs">
+            {/* Modal Header */}
+            <div className="h-11 bg-[#18181B] border-b border-white/[0.08] px-4 flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-2">
+                <span className="w-2 h-2 rounded-full bg-accent" />
+                <span className="text-white font-bold text-xs uppercase tracking-wider">
+                  MISSION PRESETS &bull; .AEROPRESET MANAGEMENT
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPresetsModalOpen(false)}
+                className="text-zinc-400 hover:text-white text-base cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Tab Navigation */}
+            <div className="flex border-b border-white/[0.08] bg-[#0E0E10] px-4 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  Sound.playClick();
+                  setPresetTab('builtin');
+                }}
+                className={`pb-2 px-3 text-[11px] font-bold border-b-2 cursor-pointer transition-colors ${
+                  presetTab === 'builtin'
+                    ? 'border-accent text-accent'
+                    : 'border-transparent text-zinc-400 hover:text-white'
+                }`}
+              >
+                PRE-BUILT COMBAT PRESETS
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  Sound.playClick();
+                  setPresetTab('custom');
+                }}
+                className={`pb-2 px-3 text-[11px] font-bold border-b-2 cursor-pointer transition-colors ${
+                  presetTab === 'custom'
+                    ? 'border-accent text-accent'
+                    : 'border-transparent text-zinc-400 hover:text-white'
+                }`}
+              >
+                CUSTOM PRESETS ({customPresets.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  Sound.playClick();
+                  setPresetTab('import_export');
+                }}
+                className={`pb-2 px-3 text-[11px] font-bold border-b-2 cursor-pointer transition-colors ${
+                  presetTab === 'import_export'
+                    ? 'border-accent text-accent'
+                    : 'border-transparent text-zinc-400 hover:text-white'
+                }`}
+              >
+                IMPORT / EXPORT BUNDLES
+              </button>
+            </div>
+
+            {/* Notification / Feedback Banner */}
+            {presetFeedback && (
+              <div className="bg-accent/10 border-b border-accent/30 text-accent px-4 py-2 text-[11px] font-bold flex items-center justify-between">
+                <span>&#10003; {presetFeedback}</span>
+                <button
+                  type="button"
+                  onClick={() => setPresetFeedback(null)}
+                  className="text-accent hover:text-white text-xs cursor-pointer"
+                >
+                  &times;
+                </button>
+              </div>
+            )}
+
+            {/* Modal Body */}
+            <div className="p-4 space-y-3 overflow-y-auto flex-1">
+              {presetTab === 'builtin' && (
+                <div className="space-y-2.5">
+                  <span className="text-zinc-400 text-[10px] uppercase font-bold block mb-1">
+                    Select a ready-to-fly combat preset to immediately configure your 32 cockpit slots:
+                  </span>
+
+                  {BUILTIN_PRESETS_CATALOG.map((preset) => {
+                    const isActive = activePreset?.id === preset.id;
+                    return (
+                      <div
+                        key={preset.id}
+                        className={`p-3 rounded bg-[#18181B] border transition-colors flex items-center justify-between ${
+                          isActive
+                            ? 'border-emerald-500/50 bg-emerald-950/10'
+                            : 'border-white/[0.06] hover:border-white/20'
+                        }`}
+                      >
+                        <div className="min-w-0 pr-4">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <span className="text-white font-bold text-xs">{preset.name}</span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${preset.tagColor.bg} ${preset.tagColor.text} ${preset.tagColor.border}`}
+                            >
+                              {preset.badge}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#1E1E22] text-zinc-400">
+                              32 SLOTS
+                            </span>
+                            {isActive && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center space-x-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                <span>ACTIVE</span>
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-zinc-400 text-[11px]">{preset.description}</p>
+                        </div>
+                        <div className="flex items-center space-x-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              Sound.playClick();
+                              const nextSlots = JSON.parse(JSON.stringify(preset.slots));
+                              setSlots(nextSlots);
+                              setActivePresetId(preset.id);
+                              if (onSelectAccent) {
+                                onSelectAccent(preset.color);
+                              } else {
+                                Ipc.setAccentColor(preset.color);
+                              }
+                              Ipc.loadBuiltinPreset(preset.id);
+                              setPresetFeedback(`Loaded "${preset.name}" into active cockpit workspace and applied theme!`);
+                            }}
+                            className="px-3 py-1.5 rounded bg-accent hover:brightness-110 active:brightness-95 text-black font-bold text-[10px] cursor-pointer shadow-md shadow-accent/20 transition-all"
+                          >
+                            {isActive ? 'RE-APPLY' : 'LOAD PRESET'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {presetTab === 'custom' && (
+                <div className="space-y-4">
+                  {/* Save Current Workspace Card */}
+                  <div className="p-3.5 rounded bg-[#18181B] border border-white/[0.08] space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-white font-bold text-xs uppercase">
+                        Save Current Cockpit Setup (32 Slots)
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold border border-current text-accent bg-accent/15">
+                        NEW PRESET
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-zinc-400 text-[10px] uppercase font-bold block mb-1">
+                          Preset Name
+                        </label>
+                        <input
+                          type="text"
+                          value={newPresetName}
+                          onChange={(e) => setNewPresetName(e.target.value)}
+                          placeholder="e.g. Red Flag Strike Bravo"
+                          className="w-full h-7 px-2 rounded bg-[#1E1E22] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-accent"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-zinc-400 text-[10px] uppercase font-bold block mb-1">
+                          Theater Tag
+                        </label>
+                        <input
+                          type="text"
+                          value={newPresetTheater}
+                          onChange={(e) => setNewPresetTheater(e.target.value)}
+                          placeholder="e.g. NEVADA, KOREA, BALKANS, ALL"
+                          className="w-full h-7 px-2 rounded bg-[#1E1E22] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-accent"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-zinc-400 text-[10px] uppercase font-bold block mb-1">
+                        Description
+                      </label>
+                      <input
+                        type="text"
+                        value={newPresetDesc}
+                        onChange={(e) => setNewPresetDesc(e.target.value)}
+                        placeholder="e.g. Dedicated SEAD loadout with custom ALIC tables and SFO profile"
+                        className="w-full h-7 px-2 rounded bg-[#1E1E22] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-accent"
+                      />
+                    </div>
+
+                    {/* Color Palette Selector */}
+                    <div>
+                      <label className="text-zinc-400 text-[10px] uppercase font-bold block mb-1.5">
+                        Preset Accent Color (Curated Avionics Palette)
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {PRESET_COLOR_PALETTE.map((c) => {
+                          const isSelected = selectedPresetColor === c.hex;
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => {
+                                Sound.playClick();
+                                setSelectedPresetColor(c.hex);
+                              }}
+                              className={`h-6 px-2 rounded flex items-center space-x-1.5 border transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'border-white ring-1 ring-white/80 bg-white/10'
+                                  : 'border-white/[0.1] hover:border-white/30 bg-[#1A1A1E]'
+                              }`}
+                              title={c.name}
+                            >
+                              <span
+                                className="w-2.5 h-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: c.hex }}
+                              />
+                              <span
+                                className="text-[10px] font-bold"
+                                style={{ color: c.hex }}
+                              >
+                                {c.name.split(' ')[0]}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        disabled={!newPresetName.trim()}
+                        onClick={() => {
+                          Sound.playClick();
+                          const exportableSlots: Record<string, SlotConfig> = {};
+                          for (const [k, v] of Object.entries(slots)) {
+                            exportableSlots[k] = {
+                              ...v,
+                              notes: v.content !== undefined ? v.content : v.notes,
+                            };
+                          }
+                          const created: CustomPreset = {
+                            id: `custom_${Date.now()}`,
+                            name: newPresetName.trim() || 'Custom Cockpit Preset',
+                            description:
+                              newPresetDesc.trim() || 'Custom 32-slot operational layout.',
+                            theater: newPresetTheater.trim().toUpperCase() || 'ALL',
+                            color: selectedPresetColor,
+                            slots: exportableSlots,
+                            created_at: new Date().toISOString().split('T')[0],
+                          };
+                          setCustomPresets((prev) => [
+                            created,
+                            ...prev.filter((p) => p.id !== created.id),
+                          ]);
+                          setActivePresetId(created.id);
+                          if (onSelectAccent) {
+                            onSelectAccent(created.color);
+                          } else {
+                            Ipc.setAccentColor(created.color);
+                          }
+                          Ipc.saveCustomPreset(created);
+                          setNewPresetName('');
+                          setNewPresetDesc('');
+                          setPresetFeedback(`Saved "${created.name}" and set as active preset!`);
+                        }}
+                        className="h-7 px-4 rounded bg-accent hover:brightness-110 active:brightness-95 text-black font-bold text-[11px] disabled:opacity-40 cursor-pointer shadow-md shadow-accent/20 transition-all flex items-center space-x-1.5"
+                      >
+                        <span>SAVE CURRENT AS PRESET</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* List of Custom Presets */}
+                  <div className="space-y-2">
+                    <span className="text-zinc-400 text-[10px] uppercase font-bold block">
+                      Saved Custom Presets ({customPresets.length})
+                    </span>
+
+                    {customPresets.length === 0 ? (
+                      <div className="p-4 rounded bg-[#18181B] border border-white/[0.06] text-center text-zinc-500 text-xs">
+                        No custom presets saved yet. Save your current 32-slot cockpit setup above, or double-click any .aeropreset file in Windows Explorer to import it.
+                      </div>
+                    ) : (
+                      customPresets.map((p) => {
+                        const isActive = activePreset?.id === p.id;
+                        return (
+                          <div
+                            key={p.id}
+                            className={`p-3 rounded bg-[#18181B] border transition-colors flex items-center justify-between ${
+                              isActive
+                                ? 'border-emerald-500/50 bg-emerald-950/10'
+                                : 'border-white/[0.06] hover:border-white/20'
+                            }`}
+                          >
+                            <div className="min-w-0 pr-4">
+                              <div className="flex items-center space-x-2 mb-1">
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: p.color }}
+                                />
+                                <span className="text-white font-bold text-xs">{p.name}</span>
+                                <span
+                                  className="px-1.5 py-0.5 rounded text-[9px] font-bold border"
+                                  style={{
+                                    borderColor: `${p.color}60`,
+                                    backgroundColor: `${p.color}20`,
+                                    color: p.color,
+                                  }}
+                                >
+                                  {p.theater || 'ALL'}
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#1E1E22] text-zinc-400">
+                                  32 SLOTS
+                                </span>
+                                {isActive && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center space-x-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                    <span>ACTIVE</span>
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-zinc-400 text-[11px] mb-1">{p.description}</p>
+                              <span className="text-[10px] text-zinc-500">
+                                Created: {p.created_at || 'Recent'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center space-x-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  Sound.playClick();
+                                  const exportableSlots: Record<string, SlotConfig> = {};
+                                  for (const [k, v] of Object.entries(slots)) {
+                                    exportableSlots[k] = {
+                                      ...v,
+                                      notes: v.content !== undefined ? v.content : v.notes,
+                                    };
+                                  }
+                                  const updated = {
+                                    ...p,
+                                    slots: exportableSlots,
+                                  };
+                                  setCustomPresets((prev) =>
+                                    prev.map((x) => (x.id === p.id ? updated : x))
+                                  );
+                                  setActivePresetId(p.id);
+                                  if (onSelectAccent) {
+                                    onSelectAccent(p.color);
+                                  } else {
+                                    Ipc.setAccentColor(p.color);
+                                  }
+                                  Ipc.saveCustomPreset(updated);
+                                  setPresetFeedback(
+                                    `Overwrote "${p.name}" with current cockpit layout and set as active!`
+                                  );
+                                }}
+                                className="px-2 py-1.5 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.12] text-zinc-300 hover:text-white font-bold text-[10px] cursor-pointer transition-colors"
+                                title="Overwrite this preset's 32 slots with current working layout"
+                              >
+                                OVERRIDE
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  Sound.playClick();
+                                  Ipc.exportPreset(p.name, p.description, p.theater, p.color);
+                                  setPresetFeedback(`Exporting "${p.name}" bundle to file...`);
+                                }}
+                                className="px-2 py-1.5 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.12] text-zinc-300 hover:text-white font-bold text-[10px] cursor-pointer transition-colors"
+                                title="Export as standalone .aeropreset file"
+                              >
+                                EXPORT
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  Sound.playClick();
+                                  setSlots(JSON.parse(JSON.stringify(p.slots)));
+                                  setActivePresetId(p.id);
+                                  if (onSelectAccent) {
+                                    onSelectAccent(p.color);
+                                  } else {
+                                    Ipc.setAccentColor(p.color);
+                                  }
+                                  Ipc.applyCustomPreset(p.id);
+                                  setPresetFeedback(
+                                    `Activated "${p.name}" into cockpit layout and applied theme!`
+                                  );
+                                }}
+                                className="px-3 py-1.5 rounded bg-accent hover:brightness-110 active:brightness-95 text-black font-bold text-[10px] cursor-pointer shadow-md shadow-accent/20 transition-all"
+                              >
+                                {isActive ? 'RE-APPLY' : 'LOAD PRESET'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  Sound.playClick();
+                                  setCustomPresets((prev) => prev.filter((x) => x.id !== p.id));
+                                  Ipc.deleteCustomPreset(p.id);
+                                  setPresetFeedback(`Deleted preset "${p.name}".`);
+                                }}
+                                className="px-2 py-1.5 rounded bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 font-bold text-[10px] cursor-pointer transition-colors"
+                                title="Delete this custom preset"
+                              >
+                                &times;
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {presetTab === 'import_export' && (
+                /* Import / Export Section */
+                <div className="space-y-4">
+                  {/* Import Card */}
+                  <div className="p-3.5 rounded bg-[#18181B] border border-white/[0.08] space-y-2.5">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-white font-bold text-xs uppercase">Import .aeropreset Package</span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold border border-current text-accent bg-accent/15">COMMUNITY BUNDLE</span>
+                    </div>
+                    <p className="text-zinc-400 text-[11px]">
+                      Select an exported <code className="text-accent">.aeropreset</code> bundle from your filesystem. AeroGraph will unpack the layout and all custom notes files directly into your workspace.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        Sound.playClick();
+                        Ipc.importPreset('');
+                        setPresetFeedback('Opening file picker to import .aeropreset bundle...');
+                      }}
+                      className="h-7 px-3 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.12] text-white text-[11px] font-bold flex items-center space-x-1.5 cursor-pointer transition-colors"
+                    >
+                      <svg
+                        className="w-3.5 h-3.5 text-accent"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      <span>BROWSE & IMPORT (.AEROPRESET)</span>
+                    </button>
+                  </div>
+
+                  {/* Export Card */}
+                  <div className="p-3.5 rounded bg-[#18181B] border border-white/[0.08] space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-white font-bold text-xs uppercase">Export Current Mission Workspace</span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold border border-current text-accent bg-accent/15">STANDALONE ARCHIVE</span>
+                    </div>
+                    <p className="text-zinc-400 text-[11px]">
+                      Packages your active 32 kneeboard slots and any referenced custom notes or checklist files into a compressed <code className="text-accent">.aeropreset</code> file you can share with your flight wingmen.
+                    </p>
+
+                    <div className="space-y-2 pt-1">
+                      <div>
+                        <label className="text-zinc-400 text-[10px] uppercase font-bold block mb-1">Preset Title</label>
+                        <input
+                          type="text"
+                          value={exportPresetName}
+                          onChange={(e) => setExportPresetName(e.target.value)}
+                          placeholder="e.g. Package 4201 Strike"
+                          className="w-full h-7 px-2 rounded bg-[#1E1E22] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-accent"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-zinc-400 text-[10px] uppercase font-bold block mb-1">Theater</label>
+                          <input
+                            type="text"
+                            value={exportPresetTheater}
+                            onChange={(e) => setExportPresetTheater(e.target.value)}
+                            placeholder="e.g. KOREA, BALKANS, ISRAEL"
+                            className="w-full h-7 px-2 rounded bg-[#1E1E22] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-accent"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-zinc-400 text-[10px] uppercase font-bold block mb-1">Description</label>
+                          <input
+                            type="text"
+                            value={exportPresetDesc}
+                            onChange={(e) => setExportPresetDesc(e.target.value)}
+                            placeholder="e.g. Korea Campaign Day 3 strike"
+                            className="w-full h-7 px-2 rounded bg-[#1E1E22] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-accent"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-2 flex justify-end">
+                        <button
+                          type="button"
+                          disabled={!exportPresetName.trim()}
+                          onClick={() => {
+                            Sound.playClick();
+                            Ipc.exportPreset(
+                              exportPresetName.trim(),
+                              exportPresetDesc.trim(),
+                              exportPresetTheater.trim(),
+                              activePreset?.color || accentColor || '#10B981'
+                            );
+                            setPresetFeedback(`Opening save dialog for "${exportPresetName}"...`);
+                          }}
+                          className="h-7 px-4 rounded bg-accent hover:brightness-110 active:brightness-95 text-black font-bold text-[11px] disabled:opacity-40 cursor-pointer shadow-md shadow-accent/20 transition-all flex items-center space-x-1.5"
+                        >
+                          <svg
+                            className="w-3.5 h-3.5 text-black"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17 8 12 3 7 8" />
+                            <line x1="12" y1="3" x2="12" y2="15" />
+                          </svg>
+                          <span>EXPORT .AEROPRESET FILE</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="h-10 bg-[#18181B] border-t border-white/[0.08] px-4 flex items-center justify-between shrink-0">
+              <span className="text-[10px] text-zinc-500 font-mono">
+                AeroPreset format compresses layout + referenced notes
+              </span>
+              <button
+                type="button"
+                onClick={() => setPresetsModalOpen(false)}
                 className="h-6 px-3 rounded bg-[#27272A] hover:bg-[#323238] text-white font-bold text-xs cursor-pointer"
               >
                 CLOSE

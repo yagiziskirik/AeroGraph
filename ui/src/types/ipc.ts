@@ -90,6 +90,16 @@ export interface TelemetryData {
   mpo_active?: boolean;
 }
 
+export interface CustomPreset {
+  id: string;
+  name: string;
+  description: string;
+  theater: string;
+  color: string;
+  slots: Record<string, SlotConfig>;
+  created_at: string;
+}
+
 export interface StateSnapshot {
   config: AppConfig;
   profile_name: string;
@@ -100,6 +110,7 @@ export interface StateSnapshot {
   available_templates?: TemplateMetadata[];
   custom_templates?: TemplateMetadata[];
   custom_stamps?: QuickStamp[];
+  custom_presets?: CustomPreset[];
   mpo_button?: number;
   mpo_device?: string;
   mpo_is_key?: boolean;

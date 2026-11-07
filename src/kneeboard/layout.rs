@@ -358,35 +358,25 @@ impl KneeboardLayoutConfig {
 }"####
     }
 
-    /// Resolves the configuration file location next to current executable or working directory.
+    /// Resolves the configuration file location in application root directory.
     pub fn config_path() -> PathBuf {
-        // 1. Current working directory (where the user runs / edits project from)
+        let app_dir = crate::config::AppConfig::app_root_dir();
+        let app_candidate = app_dir.join("kneeboards.json");
+        if app_candidate.exists() {
+            return app_candidate;
+        }
+
         let cwd_candidate = PathBuf::from("kneeboards.json");
         if cwd_candidate.exists() {
             return cwd_candidate;
         }
 
-        // 2. Next to executable, or check project root if running from target/release or target/debug
-        if let Ok(exe) = std::env::current_exe() {
-            if let Some(parent) = exe.parent() {
-                // If running inside target/debug or target/release, check project root
-                if let Some(target_dir) = parent.parent() {
-                    if let Some(project_root) = target_dir.parent() {
-                        let root_candidate = project_root.join("kneeboards.json");
-                        if root_candidate.exists() {
-                            return root_candidate;
-                        }
-                    }
-                }
+        app_candidate
+    }
 
-                let candidate = parent.join("kneeboards.json");
-                if candidate.exists() {
-                    return candidate;
-                }
-            }
-        }
-
-        PathBuf::from("kneeboards.json")
+    /// Returns the authentic default 32-slot configuration directly from built-in template, ignoring disk.
+    pub fn create_default() -> Self {
+        serde_json::from_str(Self::default_json_string()).unwrap()
     }
 
     /// Loads the configuration. If the file does not exist, generates it with default 32 slots.
