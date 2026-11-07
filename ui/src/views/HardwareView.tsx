@@ -100,9 +100,25 @@ export const HardwareView: React.FC<HardwareViewProps> = ({
     };
   }, [listeningForMpo, mpoButton, mpoDevice, mpoIsKey]);
 
-  // Baseline resting values for toe brakes to ensure monotonic linear deflection
-  const [leftResting, setLeftResting] = useState<number | null>(null);
-  const [rightResting, setRightResting] = useState<number | null>(null);
+  // Wheel brakes inversion state with localStorage persistence
+  const [invertBrakes, setInvertBrakes] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('aerograph_invert_brakes');
+      if (saved !== null) return saved === 'true';
+    }
+    return config?.invert_wheel_brakes ?? true; // Default to inverted: 1.0 (unpressed pedal) -> 0.0 (released)
+  });
+
+  const handleToggleInvertBrakes = () => {
+    Sound.playSwitch();
+    setInvertBrakes((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('aerograph_invert_brakes', String(next));
+      }
+      return next;
+    });
+  };
 
   // DirectInput axis telemetry (normalized 0.0 - 1.0)
   const rawPitch = telemetry.pitch_axis !== undefined ? telemetry.pitch_axis : 0.5;
@@ -112,14 +128,6 @@ export const HardwareView: React.FC<HardwareViewProps> = ({
   const rawRightBrake = telemetry.right_brake !== undefined ? telemetry.right_brake : 0.0;
   const pttCom1 = telemetry.ptt_com1 || false;
   const pttCom2 = telemetry.ptt_com2 || false;
-
-  // Calibrate resting baseline when telemetry arrives
-  if (telemetry.left_brake !== undefined && leftResting === null) {
-    setLeftResting(telemetry.left_brake > 0.5 ? 1.0 : 0.0);
-  }
-  if (telemetry.right_brake !== undefined && rightResting === null) {
-    setRightResting(telemetry.right_brake > 0.5 ? 1.0 : 0.0);
-  }
 
   // Effective MPO state: controller telemetry (strictly evaluated against active FVX binding) or interactive manual switch toggle
   const isMpoActive =
@@ -146,14 +154,12 @@ export const HardwareView: React.FC<HardwareViewProps> = ({
   const rudderBitPassed = rudderLeftSatisfied || rudderRightSatisfied;
 
   // 4. WHEEL BRAKES (Toe Brakes Deflection)
-  const leftDeflection =
-    leftResting === 1.0
-      ? Math.max(0, Math.min(1.0, 1.0 - rawLeftBrake))
-      : Math.max(0, Math.min(1.0, rawLeftBrake));
-  const rightDeflection =
-    rightResting === 1.0
-      ? Math.max(0, Math.min(1.0, 1.0 - rawRightBrake))
-      : Math.max(0, Math.min(1.0, rawRightBrake));
+  const leftDeflection = invertBrakes
+    ? Math.max(0, Math.min(1.0, 1.0 - rawLeftBrake))
+    : Math.max(0, Math.min(1.0, rawLeftBrake));
+  const rightDeflection = invertBrakes
+    ? Math.max(0, Math.min(1.0, 1.0 - rawRightBrake))
+    : Math.max(0, Math.min(1.0, rawRightBrake));
   const leftBrakeSatisfied = leftDeflection >= 0.15;
   const rightBrakeSatisfied = rightDeflection >= 0.15;
   const brakesBitPassed = leftBrakeSatisfied && rightBrakeSatisfied;
@@ -344,7 +350,19 @@ export const HardwareView: React.FC<HardwareViewProps> = ({
           <div className="bg-[#18181B] p-3.5 rounded border border-white/[0.06] flex flex-col justify-between">
             <div className="flex justify-between items-center mb-1 font-mono text-xs">
               <span className="text-zinc-300 font-bold">WHEEL BRAKES</span>
-              <div className="flex items-center space-x-1">
+              <div className="flex items-center space-x-1.5">
+                <button
+                  type="button"
+                  onClick={handleToggleInvertBrakes}
+                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-colors cursor-pointer ${
+                    invertBrakes
+                      ? 'bg-amber-950/60 text-amber-300 border-amber-500/40 hover:bg-amber-900/60'
+                      : 'bg-[#141416] text-zinc-400 border-white/[0.08] hover:text-zinc-200 hover:border-white/20'
+                  }`}
+                  title="Toggle toe brake axis inversion (persisted in settings)"
+                >
+                  INV: {invertBrakes ? 'ON' : 'OFF'}
+                </button>
                 <span
                   className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-colors ${
                     leftBrakeSatisfied
