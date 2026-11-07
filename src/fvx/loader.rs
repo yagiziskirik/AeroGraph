@@ -12,6 +12,7 @@ pub struct LoadedProfile {
     pub profile: FvxProfile,
     pub profile_path: PathBuf,
     pub base_dir: PathBuf,
+    pub raw_json: serde_json::Value,
 }
 
 impl LoadedProfile {
@@ -33,7 +34,8 @@ impl LoadedProfile {
         let mut json_str = String::new();
         decoder.read_to_string(&mut json_str)?;
 
-        let profile: FvxProfile = serde_json::from_str(&json_str)?;
+        let raw_json: serde_json::Value = serde_json::from_str(&json_str)?;
+        let profile: FvxProfile = serde_json::from_value(raw_json.clone())?;
         let profile_path = path_ref.to_path_buf();
         let base_dir = profile_path
             .parent()
@@ -44,12 +46,14 @@ impl LoadedProfile {
             profile,
             profile_path,
             base_dir,
+            raw_json,
         })
     }
 
     /// Saves a .fvx profile file to disk with compression and base64 encoding matching FoxVox format.
+    /// Uses raw_json to preserve 100% of FoxVox original profile schema and avoid stripping plugins or injecting nulls.
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
-        let json_bytes = serde_json::to_vec(&self.profile)?;
+        let json_bytes = serde_json::to_vec(&self.raw_json)?;
         let uncompressed_len = (json_bytes.len() as u32).to_le_bytes();
 
         let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
@@ -218,6 +222,13 @@ impl LoadedProfile {
                 }
             }
         }
+        Self::update_raw_mpo_binding(
+            &mut self.raw_json,
+            2,
+            button_id as i64,
+            device_id,
+            product_name,
+        );
         modified
     }
 
@@ -301,6 +312,13 @@ impl LoadedProfile {
                 }
             }
         }
+        Self::update_raw_mpo_binding(
+            &mut self.raw_json,
+            0,
+            key_code as i64,
+            Some("KEYBOARD"),
+            Some(&product_str),
+        );
         modified
     }
 
@@ -344,6 +362,99 @@ impl LoadedProfile {
         }
 
         joined
+    }
+
+    fn update_raw_mpo_binding(
+        raw: &mut serde_json::Value,
+        input_type: i64,
+        id: i64,
+        device_id: Option<&str>,
+        product: Option<&str>,
+    ) {
+        let update_groups = |groups: &mut serde_json::Value| {
+            if let Some(arr) = groups.as_array_mut() {
+                for group in arr {
+                    if let Some(commands) = group.get_mut("Commands").and_then(|c| c.as_array_mut())
+                    {
+                        for cmd in commands {
+                            let name = cmd
+                                .get("Name")
+                                .and_then(|n| n.as_str())
+                                .unwrap_or("")
+                                .to_lowercase();
+                            if name.contains("mpo") || name.contains("manual pitch override") {
+                                if let Some(trackers) =
+                                    cmd.get_mut("InputTrackers").and_then(|t| t.as_array_mut())
+                                {
+                                    if trackers.is_empty() {
+                                        let mut obj = serde_json::Map::new();
+                                        obj.insert(
+                                            "InputType".to_string(),
+                                            serde_json::json!(input_type),
+                                        );
+                                        obj.insert("Id".to_string(), serde_json::json!(id));
+                                        if let Some(d) = device_id {
+                                            obj.insert(
+                                                "DeviceId".to_string(),
+                                                serde_json::json!(d),
+                                            );
+                                        }
+                                        if let Some(p) = product {
+                                            obj.insert("Product".to_string(), serde_json::json!(p));
+                                        }
+                                        trackers.push(serde_json::Value::Object(obj));
+                                    } else {
+                                        for tracker in trackers.iter_mut() {
+                                            if let Some(obj) = tracker.as_object_mut() {
+                                                obj.insert(
+                                                    "InputType".to_string(),
+                                                    serde_json::json!(input_type),
+                                                );
+                                                obj.insert("Id".to_string(), serde_json::json!(id));
+                                                if let Some(d) = device_id {
+                                                    obj.insert(
+                                                        "DeviceId".to_string(),
+                                                        serde_json::json!(d),
+                                                    );
+                                                }
+                                                if let Some(p) = product {
+                                                    obj.insert(
+                                                        "Product".to_string(),
+                                                        serde_json::json!(p),
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    let mut obj = serde_json::Map::new();
+                                    obj.insert(
+                                        "InputType".to_string(),
+                                        serde_json::json!(input_type),
+                                    );
+                                    obj.insert("Id".to_string(), serde_json::json!(id));
+                                    if let Some(d) = device_id {
+                                        obj.insert("DeviceId".to_string(), serde_json::json!(d));
+                                    }
+                                    if let Some(p) = product {
+                                        obj.insert("Product".to_string(), serde_json::json!(p));
+                                    }
+                                    cmd["InputTrackers"] =
+                                        serde_json::json!([serde_json::Value::Object(obj)]);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        if let Some(kcg) = raw.get_mut("KeyCommandGroups") {
+            update_groups(kcg);
+        }
+        if let Some(cg) = raw.get_mut("CommandGroups") {
+            update_groups(cg);
+        }
     }
 
     /// Dynamically extracts all unique axis variable names referenced in `VariableInputs` across all commands.
