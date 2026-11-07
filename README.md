@@ -314,6 +314,9 @@ listening_enabled = true
 # Intelligent flight automation: Auto-engages voice recognition on BMS start, disengages on game close
 auto_engage_voice = true
 
+# DirectInput wheel brake pedal axis inversion (true = invert raw 1.0 resting pedals to 0.0 idle, toggleable via UI)
+invert_wheel_brakes = true
+
 # Start AeroGraph minimized to system tray when Windows boots
 start_with_windows = false
 
@@ -523,12 +526,12 @@ Sharing customized kneeboards with wingmen is effortless and complete:
 
 <p align="center">
   <img src="docs/images/crew-chief-bit.webp" alt="Crew Chief BIT and Hardware Diagnostics" width="950" /><br />
-  <em>Crew Chief BIT view: Real-time DirectInput flight control surface gauges, differential toe brakes, and HOTAS switch diagnostics.</em>
+  <em>Crew Chief BIT view: Real-time DirectInput flight control surface gauges, differential toe brakes with one-click axis inversion toggle, and HOTAS switch diagnostics.</em>
 </p>
 
 The **Crew Chief BIT** view is a dedicated pre-flight diagnostic station for flight controls and hardware switches:
 - **Interactive Control Surface Telemetry**: Real-time visual gauges display live **Pitch (Elevator)**, **Roll (Ailerons)**, and **Yaw (Rudder)** axis deflections.
-- **Differential Toe Brakes**: Independent visual meters display Left and Right wheel brake pedal pressures to confirm differential braking before taxi.
+- **Differential Toe Brakes**: Independent visual meters display Left and Right wheel brake pedal pressures to confirm differential braking before taxi. Includes an interactive **`INV: ON / OFF`** axis inversion toggle directly on the channel header.
 - **HOTAS & PTT Status**: Live indicators display active DirectInput game controllers, pressed button numbers, and PTT COM1 (UHF) and COM2 (VHF) switches.
 - **FLCS MPO Status**: Visual confirmation of whether the physical Manual Pitch Override switch is currently engaged or centered.
 - **Zero-Friction Controller Sampling**: DirectInput controller monitoring automatically activates whenever viewing Crew Chief BIT even if master voice recognition is disabled, enabling seamless pre-flight hardware checks at any time. When switching away to other tabs, controller sampling cleanly suspends to ensure 0% background CPU usage.

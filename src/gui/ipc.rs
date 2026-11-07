@@ -180,6 +180,8 @@ pub struct StateSnapshot {
     pub bms_mpo_binding: Option<String>,
     #[serde(default)]
     pub custom_presets: Vec<crate::gui::preset::CustomPreset>,
+    #[serde(default)]
+    pub generated_images: Vec<String>,
 }
 
 impl IpcRequest {

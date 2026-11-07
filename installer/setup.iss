@@ -76,6 +76,10 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}\AeroGraph.exe.WebView2"
+Type: filesandordirs; Name: "{localappdata}\ygz\AeroGraph\data\webview"
+
 [Code]
 // Helper function to restore stock Falcon BMS F-16 textures from official BMS backup
 procedure RestoreStockTextures(BmsDir: String);
@@ -115,6 +119,8 @@ begin
     begin
       // Delete user config and cache in %APPDATA%\ygz\AeroGraph
       DelTree(ExpandConstant('{userappdata}\ygz\AeroGraph'), True, True, True);
+      DelTree(ExpandConstant('{localappdata}\ygz\AeroGraph'), True, True, True);
+      DelTree(ExpandConstant('{app}\AeroGraph.exe.WebView2'), True, True, True);
       // Delete local runtime files
       DeleteFile(ExpandConstant('{app}\kneeboards.json'));
       DelTree(ExpandConstant('{app}\assets\images'), True, True, True);

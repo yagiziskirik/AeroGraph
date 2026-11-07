@@ -15,7 +15,8 @@ use crate::kneeboard::briefing_render::render_briefing_pages;
 use crate::kneeboard::crop::{crop_theater_map_dual, find_theater_base_map};
 use crate::kneeboard::custom::check_and_render_custom_pages;
 use crate::kneeboard::dds::{
-    find_theater_texture_dir, merge_texture_pair_to_dds, restore_original_texture,
+    extract_page_from_dds, find_theater_texture_dir, merge_texture_pair_to_dds,
+    resolve_restore_dds_path, restore_original_texture, KneeboardSlotMap,
 };
 use crate::kneeboard::ils::find_and_render_ils_chart;
 use crate::kneeboard::layout::{KneeboardLayoutConfig, KneeboardPageType};
@@ -73,37 +74,54 @@ impl KneeboardWatcher {
             let manual_requested = manual_rx.try_recv().is_ok();
 
             if auto_kneeboards || manual_requested {
-                if let Some(ref bms_dir) = cached_bms_base_dir {
-                    let briefing_path = bms_dir.join("User").join("Briefings").join("briefing.txt");
+                let dummy_path = PathBuf::from(".");
+                let bms_dir = cached_bms_base_dir.as_ref().unwrap_or(&dummy_path);
+                let briefing_path = bms_dir.join("User").join("Briefings").join("briefing.txt");
 
-                    let mut needs_regen = manual_requested;
-                    if briefing_path.exists() {
-                        if let Ok(metadata) = fs::metadata(&briefing_path) {
-                            if let Ok(mtime) = metadata.modified() {
-                                if let Some(last_mtime) = last_briefing_mtime {
-                                    if mtime > last_mtime {
-                                        needs_regen = true;
-                                    }
+                let mut needs_regen = manual_requested;
+                if briefing_path.exists() {
+                    if let Ok(metadata) = fs::metadata(&briefing_path) {
+                        if let Ok(mtime) = metadata.modified() {
+                            if let Some(last_mtime) = last_briefing_mtime {
+                                if mtime > last_mtime {
+                                    needs_regen = true;
                                 }
-                                last_briefing_mtime = Some(mtime);
+                            } else {
+                                needs_regen = true;
                             }
+                            last_briefing_mtime = Some(mtime);
                         }
                     }
+                } else if last_briefing_mtime.is_none() {
+                    // First run and no briefing.txt! Check if images exist on disk.
+                    let images_dir = AppConfig::find_assets_dir().join("images");
+                    let is_empty = !images_dir.exists()
+                        || fs::read_dir(&images_dir)
+                            .map(|mut d| d.next().is_none())
+                            .unwrap_or(true);
+                    if is_empty {
+                        needs_regen = true;
+                    }
+                    last_briefing_mtime = Some(std::time::SystemTime::UNIX_EPOCH);
+                } else if last_briefing_mtime != Some(std::time::SystemTime::UNIX_EPOCH) {
+                    // Briefing file was previously tracked but has now been deleted
+                    needs_regen = true;
+                    last_briefing_mtime = Some(std::time::SystemTime::UNIX_EPOCH);
+                }
 
-                    if needs_regen {
-                        let t0 = Instant::now();
-                        log::info!("📋 [Kneeboards] Briefing change triggered! Regenerating kneeboards in pure Rust...");
-                        let cfg = config.lock().unwrap().clone();
-                        Self::execute_pipeline(&cfg, bms_dir, audio_player.as_ref());
-                        if let Some(ref cb) = on_complete {
-                            cb();
-                        }
-                        let elapsed = t0.elapsed();
-                        log::info!(
-                            "✅ [Kneeboards] Kneeboards successfully updated in {:.2}s",
-                            elapsed.as_secs_f64()
-                        );
+                if needs_regen {
+                    let t0 = Instant::now();
+                    log::info!("📋 [Kneeboards] Briefing change triggered! Regenerating kneeboards in pure Rust...");
+                    let cfg = config.lock().unwrap().clone();
+                    Self::execute_pipeline(&cfg, bms_dir, audio_player.as_ref());
+                    if let Some(ref cb) = on_complete {
+                        cb();
                     }
+                    let elapsed = t0.elapsed();
+                    log::info!(
+                        "✅ [Kneeboards] Kneeboards successfully updated in {:.2}s",
+                        elapsed.as_secs_f64()
+                    );
                 }
             }
 
@@ -127,13 +145,10 @@ impl KneeboardWatcher {
             callsign
         );
 
-        let texture_dir = match find_theater_texture_dir(bms_dir, &theater_name) {
-            Some(td) => td,
-            None => {
-                log::error!("Could not locate theater texture directory in BMS installation");
-                return;
-            }
-        };
+        let texture_dir = find_theater_texture_dir(bms_dir, &theater_name);
+        if texture_dir.is_none() {
+            log::info!("Theater texture directory not found in BMS installation; skipping in-cockpit DDS texture merging.");
+        }
 
         let briefing_txt = bms_dir.join("User").join("Briefings").join("briefing.txt");
         let callsign_ini = bms_dir
@@ -201,25 +216,75 @@ impl KneeboardWatcher {
         // =========================================================================
         let need_p1 = layout_cfg.has_type(&KneeboardPageType::BriefingRoster);
         let need_p2 = layout_cfg.has_type(&KneeboardPageType::BriefingSteerpoints);
-        if (need_p1 || need_p2) && briefing_txt.exists() {
-            log::info!("Generating briefing pages (Roster & Steerpoints)...");
-            match render_briefing_pages(&assets_dir, &wkhtmltoimage_path, &mut b_data) {
-                Ok(res) => {
+        if need_p1 || need_p2 {
+            if briefing_txt.exists() {
+                log::info!("Generating briefing pages (Roster & Steerpoints)...");
+                match render_briefing_pages(&assets_dir, &wkhtmltoimage_path, &mut b_data) {
+                    Ok(res) => {
+                        if need_p1 {
+                            if let Ok(img1) = image::open(&res.page_1_png) {
+                                slot_images.insert("F16_1L".to_string(), img1.to_rgba8());
+                                dirty_slots.insert("F16_1L".to_string());
+                            }
+                        }
+                        if need_p2 {
+                            if let Ok(img2) = image::open(&res.page_2_png) {
+                                slot_images.insert("F16_1R".to_string(), img2.to_rgba8());
+                                dirty_slots.insert("F16_1R".to_string());
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("Failed to generate briefing pages: {}", e);
+                    }
+                }
+            } else {
+                log::info!("No briefing.txt found, generating informational placeholder cards for roster & steerpoints...");
+                let briefing_dir = assets_dir.join("briefing");
+                let _ = fs::create_dir_all(&briefing_dir);
+                let _ = fs::create_dir_all(&images_dir);
+
+                let p1_html = briefing_dir.join("page_1.html");
+                let p2_html = briefing_dir.join("page_2.html");
+                let p1_png = images_dir.join("page_1.png");
+                let p2_png = images_dir.join("page_2.png");
+
+                let mut blank_jobs = Vec::new();
+
+                if need_p1 {
+                    let html1 = generate_blank_chart_html(
+                        "PACKAGE ROSTER & COMMS",
+                        "NO BRIEFING.TXT FOUND IN BMS",
+                    );
+                    if fs::write(&p1_html, &html1).is_ok() {
+                        blank_jobs.push((p1_html.as_path(), p1_png.as_path()));
+                    }
+                }
+
+                if need_p2 {
+                    let html2 = generate_blank_chart_html(
+                        "STEERPOINTS & NAVIGATION",
+                        "NO BRIEFING.TXT FOUND IN BMS",
+                    );
+                    if fs::write(&p2_html, &html2).is_ok() {
+                        blank_jobs.push((p2_html.as_path(), p2_png.as_path()));
+                    }
+                }
+
+                if !blank_jobs.is_empty() {
+                    render_html_batch_parallel(&wkhtmltoimage_path, &blank_jobs);
                     if need_p1 {
-                        if let Ok(img1) = image::open(&res.page_1_png) {
+                        if let Ok(img1) = image::open(&p1_png) {
                             slot_images.insert("F16_1L".to_string(), img1.to_rgba8());
                             dirty_slots.insert("F16_1L".to_string());
                         }
                     }
                     if need_p2 {
-                        if let Ok(img2) = image::open(&res.page_2_png) {
+                        if let Ok(img2) = image::open(&p2_png) {
                             slot_images.insert("F16_1R".to_string(), img2.to_rgba8());
                             dirty_slots.insert("F16_1R".to_string());
                         }
                     }
-                }
-                Err(e) => {
-                    log::error!("Failed to generate briefing pages: {}", e);
                 }
             }
         }
@@ -240,21 +305,19 @@ impl KneeboardWatcher {
             None
         };
 
-        let dep_name = b_data
-            .dep_name
-            .clone()
-            .unwrap_or_else(|| "Gimhae".to_string());
-        let arr_name = b_data
-            .arr_name
-            .clone()
-            .unwrap_or_else(|| "Gimhae".to_string());
+        let dep_name = b_data.dep_name.clone();
+        let arr_name = b_data.arr_name.clone();
 
-        let dep_ap = db
-            .as_ref()
-            .and_then(|d| find_airport(&d.airports, &dep_name));
-        let arr_ap = db
-            .as_ref()
-            .and_then(|d| find_airport(&d.airports, &arr_name));
+        let dep_ap = db.as_ref().and_then(|d| {
+            dep_name
+                .as_deref()
+                .and_then(|name| find_airport(&d.airports, name))
+        });
+        let arr_ap = db.as_ref().and_then(|d| {
+            arr_name
+                .as_deref()
+                .and_then(|name| find_airport(&d.airports, name))
+        });
 
         let dep_xy = dep_ap.map(|a| (a.x, a.y));
         let arr_xy = arr_ap.map(|a| (a.x, a.y));
@@ -361,6 +424,33 @@ impl KneeboardWatcher {
             }
         }
 
+        if need_maps {
+            let need_route = layout_cfg.has_type(&KneeboardPageType::MissionRoute);
+            let need_target = layout_cfg.has_type(&KneeboardPageType::MissionTarget);
+
+            if need_route && !parallel_render_jobs.iter().any(|(_, p)| p == &route_png) {
+                let blank_html = work_dir.join("mission_route_blank.html");
+                let html = generate_blank_chart_html(
+                    "MISSION ROUTE OVERVIEW",
+                    "NO ACTIVE FLIGHT PLAN STEERPOINTS",
+                );
+                if fs::write(&blank_html, html).is_ok() {
+                    parallel_render_jobs.push((blank_html, route_png.clone()));
+                }
+            }
+
+            if need_target && !parallel_render_jobs.iter().any(|(_, p)| p == &target_png) {
+                let blank_html = work_dir.join("mission_target_blank.html");
+                let html = generate_blank_chart_html(
+                    "TACTICAL TARGET COMBAT AREA",
+                    "NO TARGET STEERPOINT IN FLIGHT PLAN",
+                );
+                if fs::write(&blank_html, html).is_ok() {
+                    parallel_render_jobs.push((blank_html, target_png.clone()));
+                }
+            }
+        }
+
         // =========================================================================
         // 6. Departure Ground Taxi Chart (DepTaxi)
         // =========================================================================
@@ -390,7 +480,12 @@ impl KneeboardWatcher {
                 }
             } else {
                 let blank_html = work_dir.join("dep_gnd_blank.html");
-                let html = generate_blank_chart_html(&dep_name, "AIRFIELD MODEL NOT AVAILABLE");
+                let (title, reason) = if let Some(ref name) = dep_name {
+                    (name.as_str(), "AIRFIELD MODEL NOT AVAILABLE")
+                } else {
+                    ("DEPARTURE TAXI", "NO BRIEFING FOUND // UNKNOWN AIRFIELD")
+                };
+                let html = generate_blank_chart_html(title, reason);
                 if fs::write(&blank_html, html).is_ok() {
                     parallel_render_jobs.push((blank_html, dep_png.clone()));
                 }
@@ -436,9 +531,13 @@ impl KneeboardWatcher {
                 }
                 if !rendered {
                     let blank_html = work_dir.join("arr_ils_blank.html");
-                    let blank_png = images_dir.join("arr_ils_blank.png");
-                    let html =
-                        generate_blank_chart_html(&arr_name, "ILS APPROACH CHARTS NOT AVAILABLE");
+                    let blank_png = images_dir.join("arr_ils.png");
+                    let (title, reason) = if let Some(ref name) = arr_name {
+                        (name.as_str(), "ILS APPROACH CHARTS NOT AVAILABLE")
+                    } else {
+                        ("PRIMARY ILS", "NO BRIEFING FOUND // UNKNOWN AIRFIELD")
+                    };
+                    let html = generate_blank_chart_html(title, reason);
                     if fs::write(&blank_html, html).is_ok()
                         && render_html_to_png(&wkhtmltoimage_path, &blank_html, &blank_png).is_ok()
                     {
@@ -476,9 +575,13 @@ impl KneeboardWatcher {
                 }
                 if !rendered {
                     let blank_html = work_dir.join("sec_ils_blank.html");
-                    let blank_png = images_dir.join("sec_ils_blank.png");
-                    let html =
-                        generate_blank_chart_html(&arr_name, "ILS APPROACH CHARTS NOT AVAILABLE");
+                    let blank_png = images_dir.join("arr_ils_sec.png");
+                    let (title, reason) = if let Some(ref name) = arr_name {
+                        (name.as_str(), "ILS APPROACH CHARTS NOT AVAILABLE")
+                    } else {
+                        ("SECONDARY ILS", "NO BRIEFING FOUND // UNKNOWN AIRFIELD")
+                    };
+                    let html = generate_blank_chart_html(title, reason);
                     if fs::write(&blank_html, html).is_ok()
                         && render_html_to_png(&wkhtmltoimage_path, &blank_html, &blank_png).is_ok()
                     {
@@ -520,7 +623,12 @@ impl KneeboardWatcher {
                 }
             } else {
                 let blank_html = work_dir.join("arr_gnd_blank.html");
-                let html = generate_blank_chart_html(&arr_name, "AIRFIELD MODEL NOT AVAILABLE");
+                let (title, reason) = if let Some(ref name) = arr_name {
+                    (name.as_str(), "AIRFIELD MODEL NOT AVAILABLE")
+                } else {
+                    ("RECOVERY TAXI", "NO BRIEFING FOUND // UNKNOWN AIRFIELD")
+                };
+                let html = generate_blank_chart_html(title, reason);
                 if fs::write(&blank_html, html).is_ok() {
                     parallel_render_jobs.push((blank_html, arr_png.clone()));
                 }
@@ -751,7 +859,27 @@ impl KneeboardWatcher {
                     }
                 }
                 KneeboardPageType::RestoreOriginal => {
-                    // Handled during pair merging
+                    // Resolve and extract stock texture page for single-side restore and UI parity
+                    if let Some((filename, offset_x)) = KneeboardSlotMap::get_slot_info(slot) {
+                        let is_right = offset_x > 0;
+                        if let Some(backup_dds) = resolve_restore_dds_path(
+                            Some(bms_dir),
+                            &assets_dir,
+                            &theater_name,
+                            filename,
+                        ) {
+                            if let Some(page) = extract_page_from_dds(&backup_dds, is_right) {
+                                slot_images.insert(slot.clone(), page);
+                                dirty_slots.insert(slot.clone());
+                            }
+                        } else {
+                            log::warn!(
+                                "STOCK BMS BACKUP NOT FOUND: DDS_Backup missing for slot {} ({})",
+                                slot,
+                                filename
+                            );
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -781,82 +909,92 @@ impl KneeboardWatcher {
         // =========================================================================
         // 10. Direct Batched DDS Merging in Parallel across CPU threads (Incremental)
         // =========================================================================
-        let mut dds_jobs = Vec::new();
+        if let Some(ref texture_dir) = texture_dir {
+            let mut dds_jobs = Vec::new();
 
-        for (_pair_idx, filename, left_slot, right_slot) in KneeboardLayoutConfig::texture_pairs() {
-            let left_cfg = layout_cfg.slots.get(*left_slot);
-            let right_cfg = layout_cfg.slots.get(*right_slot);
+            for (_pair_idx, filename, left_slot, right_slot) in
+                KneeboardLayoutConfig::texture_pairs()
+            {
+                let left_cfg = layout_cfg.slots.get(*left_slot);
+                let right_cfg = layout_cfg.slots.get(*right_slot);
 
-            // Check if user requested to restore original for either slot
-            let left_restore = left_cfg
-                .map(|c| c.page_type == KneeboardPageType::RestoreOriginal)
-                .unwrap_or(false);
-            let right_restore = right_cfg
-                .map(|c| c.page_type == KneeboardPageType::RestoreOriginal)
-                .unwrap_or(false);
-            if left_restore && right_restore {
-                let _ = restore_original_texture(bms_dir, &assets_dir, &texture_dir, filename);
-                continue;
-            }
+                // If both sides are set to RestoreOriginal, perform fast full-file restoration
+                let left_restore = left_cfg
+                    .map(|c| c.page_type == KneeboardPageType::RestoreOriginal)
+                    .unwrap_or(false);
+                let right_restore = right_cfg
+                    .map(|c| c.page_type == KneeboardPageType::RestoreOriginal)
+                    .unwrap_or(false);
+                if left_restore && right_restore {
+                    let _ = restore_original_texture(bms_dir, &assets_dir, texture_dir, filename);
+                    continue;
+                }
 
-            let left_img = slot_images.get(*left_slot);
-            let right_img = slot_images.get(*right_slot);
+                let left_img = slot_images.get(*left_slot);
+                let right_img = slot_images.get(*right_slot);
 
-            if left_img.is_some() || right_img.is_some() {
-                let dest_path = texture_dir.join(filename);
-                let is_dirty =
-                    dirty_slots.contains(*left_slot) || dirty_slots.contains(*right_slot);
-                if !dest_path.exists() || is_dirty {
-                    dds_jobs.push((*filename, left_img, right_img));
-                } else {
-                    log::debug!("Skipping unchanged DDS pair {} (cached)", filename);
+                if left_img.is_some() || right_img.is_some() {
+                    let dest_path = texture_dir.join(filename);
+                    let is_dirty =
+                        dirty_slots.contains(*left_slot) || dirty_slots.contains(*right_slot);
+                    if !dest_path.exists() || is_dirty {
+                        dds_jobs.push((*filename, left_img, right_img));
+                    } else {
+                        log::debug!("Skipping unchanged DDS pair {} (cached)", filename);
+                    }
                 }
             }
-        }
 
-        if !dds_jobs.is_empty() {
-            let t0 = std::time::Instant::now();
-            let max_dds_workers = std::thread::available_parallelism()
-                .map(|n| (n.get() / 2).clamp(2, 4))
-                .unwrap_or(2);
-            let worker_count = max_dds_workers.min(dds_jobs.len());
-            log::info!(
-                "Starting bounded parallel DDS merge of {} texture pairs using {} workers...",
-                dds_jobs.len(),
-                worker_count
-            );
+            if !dds_jobs.is_empty() {
+                let t0 = std::time::Instant::now();
+                let max_dds_workers = std::thread::available_parallelism()
+                    .map(|n| (n.get() / 2).clamp(2, 4))
+                    .unwrap_or(2);
+                let worker_count = max_dds_workers.min(dds_jobs.len());
+                log::info!(
+                    "Starting bounded parallel DDS merge of {} texture pairs using {} workers...",
+                    dds_jobs.len(),
+                    worker_count
+                );
 
-            let queue = std::sync::Mutex::new(dds_jobs);
-            std::thread::scope(|s| {
-                let mut handles = Vec::with_capacity(worker_count);
-                for _ in 0..worker_count {
-                    let tex_dir = &texture_dir;
-                    handles.push(s.spawn(|| loop {
-                        let next = {
-                            let mut q = queue.lock().unwrap();
-                            q.pop()
-                        };
-                        let (filename, left_img, right_img) = match next {
-                            Some(item) => item,
-                            None => break,
-                        };
-                        let job_t0 = std::time::Instant::now();
-                        if let Err(e) =
-                            merge_texture_pair_to_dds(tex_dir, filename, left_img, right_img)
-                        {
-                            log::error!("Failed to merge texture pair {}: {}", filename, e);
-                        } else {
-                            log::info!("Merged DDS pair {} in {:?}", filename, job_t0.elapsed());
-                        }
-                    }));
-                }
-                for h in handles {
-                    let _ = h.join();
-                }
-            });
-            log::info!("All DDS merges completed in {:?}", t0.elapsed());
+                let queue = std::sync::Mutex::new(dds_jobs);
+                std::thread::scope(|s| {
+                    let mut handles = Vec::with_capacity(worker_count);
+                    for _ in 0..worker_count {
+                        let tex_dir = texture_dir;
+                        handles.push(s.spawn(|| loop {
+                            let next = {
+                                let mut q = queue.lock().unwrap();
+                                q.pop()
+                            };
+                            let (filename, left_img, right_img) = match next {
+                                Some(item) => item,
+                                None => break,
+                            };
+                            let job_t0 = std::time::Instant::now();
+                            if let Err(e) =
+                                merge_texture_pair_to_dds(tex_dir, filename, left_img, right_img)
+                            {
+                                log::error!("Failed to merge texture pair {}: {}", filename, e);
+                            } else {
+                                log::info!(
+                                    "Merged DDS pair {} in {:?}",
+                                    filename,
+                                    job_t0.elapsed()
+                                );
+                            }
+                        }));
+                    }
+                    for h in handles {
+                        let _ = h.join();
+                    }
+                });
+                log::info!("All DDS merges completed in {:?}", t0.elapsed());
+            } else {
+                log::info!("All DDS texture pairs are up-to-date (cached)");
+            }
         } else {
-            log::info!("All DDS texture pairs are up-to-date (cached)");
+            log::info!("Falcon BMS not installed or theater not found; skipping in-cockpit DDS texture merging.");
         }
 
         // =========================================================================

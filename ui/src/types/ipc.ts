@@ -27,6 +27,7 @@ export interface AppConfig {
   window_pos?: [number, number] | null;
   start_with_windows?: boolean;
   auto_engage_voice?: boolean;
+  invert_wheel_brakes?: boolean;
 }
 
 export interface SlotConfig {
@@ -115,6 +116,7 @@ export interface StateSnapshot {
   mpo_device?: string;
   mpo_is_key?: boolean;
   bms_mpo_binding?: string | null;
+  generated_images?: string[];
 }
 
 export type MasterMode = 'binder' | 'comms' | 'hardware' | 'system';

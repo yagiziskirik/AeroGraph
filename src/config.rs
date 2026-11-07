@@ -92,6 +92,8 @@ pub struct AppConfig {
     pub start_with_windows: bool,
     #[serde(default = "default_true")]
     pub auto_engage_voice: bool,
+    #[serde(default = "default_true")]
+    pub invert_wheel_brakes: bool,
 }
 
 fn default_github_repo() -> String {
@@ -152,6 +154,7 @@ impl Default for AppConfig {
             window_maximized: false,
             start_with_windows: false,
             auto_engage_voice: default_true(),
+            invert_wheel_brakes: default_true(),
         }
     }
 }
@@ -170,6 +173,18 @@ impl AppConfig {
 
     pub fn config_path() -> PathBuf {
         Self::config_dir().join("aerograph.toml")
+    }
+
+    pub fn webview_data_dir() -> PathBuf {
+        if let Some(proj_dirs) = ProjectDirs::from("com", "ygz", "AeroGraph") {
+            let dir = proj_dirs.data_local_dir().join("webview");
+            let _ = fs::create_dir_all(&dir);
+            dir
+        } else {
+            let dir = PathBuf::from("config").join("webview");
+            let _ = fs::create_dir_all(&dir);
+            dir
+        }
     }
 
     pub fn log_file_path() -> PathBuf {

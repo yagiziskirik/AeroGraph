@@ -153,6 +153,16 @@ Copy-Item target\release\aerograph.exe .\AeroGraph.exe
 > **Ensure AeroGraph is Closed Before Deploying**:  
 > If `AeroGraph.exe` is currently running, Windows will lock the executable file and prevent overwriting with a `SharingViolation` error. `cargo local` automatically verifies the target file is writable before copying. Always close any running instance from the system tray or Task Manager before copying.
 
+### 6. All-in-One Build & Verification (`cargo build-all`)
+To run the full pre-flight verification, rebuild Next.js static assets, and deploy the updated release executable to `./AeroGraph.exe` in a single command:
+```powershell
+cargo build-all
+```
+This runs:
+1. `cargo check-all` (Rust formatting, Clippy lints, unit tests, and Next.js TypeScript typecheck)
+2. `cargo ui-build` (exports Next.js static UI assets to `ui/out/`)
+3. `cargo local` (compiles `--release` binary with embedded assets and deploys to `./AeroGraph.exe`)
+
 ---
 
 ## 🧪 4. Pre-Flight Quality Checks & Cargo Aliases
@@ -163,10 +173,13 @@ AeroGraph provides native Cargo aliases configured in `.cargo/config.toml` for s
 
 | Command | Purpose |
 | :--- | :--- |
-| `cargo check-all` | Runs `fmt`, `clippy -D warnings`, and the complete unit test suite. |
+| `cargo check-all` | Runs `fmt`, `clippy -D warnings`, unit tests, and UI typechecks. |
+| `cargo build-all` | All-in-one quality check, UI static export, and local binary deployment (`check-all` + `ui-build` + `local`). |
 | `cargo ui-build` | Compiles and exports the Next.js Tactical Console into `ui/out/`. |
 | `cargo local` | Compiles `--release` binary and deploys directly to `./AeroGraph.exe`. |
 | `cargo installer` | Compiles the release binary and packages the Inno Setup installer. |
+| `cargo release` | Dry-run release check comparing previous Git tag against current `Cargo.toml`. |
+| `cargo release --execute` | Tags and pushes version in `Cargo.toml` to origin (`git tag` & `git push`). |
 | `cargo lint` | Runs `cargo clippy -- -D warnings`. |
 | `cargo fmt-check` | Verifies code formatting without altering files. |
 | `cargo test` | Executes backend Rust unit tests. |
@@ -229,26 +242,31 @@ AeroGraph's in-app updater (`src/updater.rs`) queries `GET /repos/yagiziskirik/A
 - Tag creation on `refs/tags/v*` is strictly restricted to the repository maintainer via **GitHub Tag Protection Rules**.
 - Contributors cannot push release tags.
 
-### Maintainer Release Workflow (`cargo-release`)
+### Maintainer Release Workflow (`cargo release`)
 Once all feature PRs for a release are merged into `main`:
 1. Check out latest `main`:
    ```powershell
    git checkout main
    git pull origin main
    ```
-2. Run a dry run to inspect changes:
+2. Update the target release version directly in **`Cargo.toml`** (`[package] version = "X.Y.Z"`). `Cargo.toml` is the single source of truth across the entire workspace.
+3. Run a dry run to inspect changes and verify version alignment:
    ```powershell
-   cargo release patch
-   # Or: cargo release minor / cargo release 0.3.0
+   cargo release
    ```
-3. Execute the release:
+   `cargo release` will:
+   - Synchronize `ui/package.json` with `Cargo.toml`
+   - Detect the previous release tag from `git describe --tags --abbrev=0` (or `git tag --sort=-v:refname`)
+   - Verify working tree cleanliness
+   - Check if tag `vX.Y.Z` already exists
+   - Display the previous version, upcoming release version, and planned Git commands
+4. Execute the release:
    ```powershell
-   cargo release patch --execute
+   cargo release --execute
    ```
-   `cargo-release` will:
-   - Run pre-release checks (`cargo check`)
-   - Bump `version` in `Cargo.toml` and update `Cargo.lock`
-   - Commit `chore(release): vX.Y.Z`
-   - Create annotated tag `vX.Y.Z`
-   - Push commit and tag to GitHub
-4. The GitHub Actions Release workflow will automatically compile the release executable, package `AeroGraph_Setup_vX.Y.Z.exe`, and publish the GitHub Release with attached assets.
+   `cargo release --execute` will:
+   - Verify working tree is clean (no uncommitted/unstaged changes)
+   - Ensure tag `vX.Y.Z` does not already exist
+   - Create annotated tag `vX.Y.Z` (`git tag -a vX.Y.Z -m "Release vX.Y.Z"`)
+   - Push the tag to remote origin (`git push origin vX.Y.Z`)
+5. The GitHub Actions Release workflow will automatically compile the release executable, package `AeroGraph_Setup_vX.Y.Z.exe`, and publish the GitHub Release with attached assets.
