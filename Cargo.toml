@@ -1,6 +1,6 @@
 [package]
 name = "aerograph"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 publish = false
 
@@ -9,6 +9,7 @@ pre-release-commit-message = "chore(release): v{{version}}"
 tag-message = "Release v{{version}}"
 tag = true
 push = true
+publish = false
 
 [dependencies]
 # Serialization & Config

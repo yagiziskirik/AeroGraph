@@ -9,9 +9,18 @@ fn main() {
 
     match command {
         "check" | "check-all" => run_check_all(),
+        "build-all" => {
+            let debug_mode = args.contains(&"--debug".to_string());
+            run_build_all(debug_mode);
+        }
         "ui-dev" => run_ui_dev(),
         "ui-build" => run_ui_build(),
         "local" => run_local(args.contains(&"--debug".to_string())),
+        "release" => {
+            let execute =
+                args.contains(&"--execute".to_string()) || args.contains(&"-x".to_string());
+            run_release(execute);
+        }
         "installer" => {
             let mut custom_version = None;
             let mut iter = args.iter().skip(1);
@@ -33,6 +42,9 @@ fn main() {
                 "  cargo check-all                 Run auto-fmt, Clippy lints, unit tests & UI typecheck"
             );
             println!(
+                "  cargo build-all                 All-in-one check-all + ui-build + local binary deploy"
+            );
+            println!(
                 "  cargo xtask ui-dev              Start Next.js GUI development server (pnpm dev)"
             );
             println!("  cargo xtask ui-build            Export Next.js static assets to ui/out (pnpm export)");
@@ -41,8 +53,20 @@ fn main() {
             println!(
                 "  cargo installer --version <ver> Build installer with custom version string"
             );
+            println!("  cargo release                   Dry-run release check (shows previous & target version)");
+            println!("  cargo release --execute         Tag and push the release to origin (git tag & git push)");
         }
     }
+}
+
+fn run_build_all(debug_mode: bool) {
+    println!("=== 1/3: Running check-all (formatting, lints, tests, UI check) ===");
+    run_check_all();
+    println!("\n=== 2/3: Building and exporting Next.js static UI assets ===");
+    run_ui_build();
+    println!("\n=== 3/3: Building and deploying local binary ===");
+    run_local(debug_mode);
+    println!("\n✔ build-all completed successfully!");
 }
 
 fn run_local(debug_mode: bool) {
@@ -293,6 +317,156 @@ fn sync_ui_package_version() {
             }
         }
     }
+}
+
+fn run_release(execute: bool) {
+    sync_ui_package_version();
+
+    let cargo_toml = fs::read_to_string("Cargo.toml").expect("Failed to read Cargo.toml");
+    let version = cargo_toml
+        .lines()
+        .find(|l| l.trim().starts_with("version"))
+        .and_then(|l| l.split('=').nth(1))
+        .map(|s| s.trim().trim_matches('"'))
+        .unwrap_or("0.1.0");
+
+    let previous_tag = get_previous_tag();
+    let target_tag = format!("v{}", version);
+    let tag_exists = check_tag_exists(&target_tag);
+    let is_dirty = check_git_dirty();
+
+    println!("==========================================================");
+    println!("         AeroGraph Release Workflow                       ");
+    println!("==========================================================");
+    println!(
+        "Previous Version / Tag : {}",
+        previous_tag.as_deref().unwrap_or("None")
+    );
+    println!("Target Release Version : v{} (from Cargo.toml)", version);
+    println!("Target Release Tag     : {}", target_tag);
+    println!(
+        "Working Tree Status    : {}",
+        if is_dirty {
+            "DIRTY (uncommitted changes detected)"
+        } else {
+            "CLEAN"
+        }
+    );
+    println!("\nGit Commands to be executed:");
+    println!("  git tag -a {} -m \"Release {}\"", target_tag, target_tag);
+    println!("  git push origin {}", target_tag);
+
+    if !execute {
+        println!("\n----------------------------------------------------------");
+        if tag_exists {
+            println!(
+                "⚠️  WARNING: Git tag '{}' already exists in repository!",
+                target_tag
+            );
+        }
+        if is_dirty {
+            println!("⚠️  WARNING: Working tree has uncommitted changes. Commit all changes before releasing.");
+        }
+        println!("[DRY-RUN] No changes were made to the Git repository.");
+        println!("To create the tag and push to GitHub origin, execute:");
+        println!("  cargo release --execute");
+        println!("----------------------------------------------------------\n");
+    } else {
+        if tag_exists {
+            eprintln!(
+                "\n❌ Release aborted: Git tag '{}' already exists in repository.",
+                target_tag
+            );
+            eprintln!("Did you forget to update the version in Cargo.toml?");
+            std::process::exit(1);
+        }
+        if is_dirty {
+            eprintln!("\n❌ Release aborted: Working tree has uncommitted changes.");
+            eprintln!("Please commit all changes cleanly before executing release tagging.");
+            std::process::exit(1);
+        }
+
+        println!("\n[1/2] Creating annotated Git tag: {}...", target_tag);
+        let tag_status = Command::new("git")
+            .args([
+                "tag",
+                "-a",
+                &target_tag,
+                "-m",
+                &format!("Release {}", target_tag),
+            ])
+            .status()
+            .expect("Failed to execute git tag");
+        check_status(tag_status, "git tag");
+        println!("✔ Tag '{}' created successfully.", target_tag);
+
+        println!(
+            "\n[2/2] Pushing tag to origin (git push origin {})...",
+            target_tag
+        );
+        let push_status = Command::new("git")
+            .args(["push", "origin", &target_tag])
+            .status()
+            .expect("Failed to execute git push");
+        check_status(push_status, "git push");
+        println!("✔ Successfully pushed tag '{}' to origin!", target_tag);
+
+        println!("\n==========================================================");
+        println!(
+            "  SUCCESS: AeroGraph {} has been tagged and pushed!     ",
+            target_tag
+        );
+        println!("  GitHub Actions will now package the release installer.  ");
+        println!("==========================================================\n");
+    }
+}
+
+fn get_previous_tag() -> Option<String> {
+    if let Ok(output) = Command::new("git")
+        .args(["describe", "--tags", "--abbrev=0"])
+        .output()
+    {
+        if output.status.success() {
+            let tag = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !tag.is_empty() {
+                return Some(tag);
+            }
+        }
+    }
+    if let Ok(output) = Command::new("git")
+        .args(["tag", "--sort=-v:refname"])
+        .output()
+    {
+        if output.status.success() {
+            let tags = String::from_utf8_lossy(&output.stdout);
+            if let Some(first) = tags.lines().next() {
+                let trimmed = first.trim().to_string();
+                if !trimmed.is_empty() {
+                    return Some(trimmed);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn check_tag_exists(tag: &str) -> bool {
+    if let Ok(output) = Command::new("git").args(["tag", "-l", tag]).output() {
+        if output.status.success() {
+            let res = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            return !res.is_empty();
+        }
+    }
+    false
+}
+
+fn check_git_dirty() -> bool {
+    if let Ok(output) = Command::new("git").args(["status", "--porcelain"]).output() {
+        if output.status.success() {
+            return !output.stdout.is_empty();
+        }
+    }
+    false
 }
 
 fn check_status(status: ExitStatus, step: &str) {
