@@ -91,6 +91,7 @@ impl TacticalConsoleWindow {
             )
             .with_background_color((10, 10, 12, 255))
             .with_autoplay(true)
+            .with_initialization_script("window.addEventListener('contextmenu', function(e) { e.preventDefault(); });")
             .with_ipc_handler(ipc_callback);
 
         webview_builder =
