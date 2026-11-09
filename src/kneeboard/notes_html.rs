@@ -1,5 +1,27 @@
 const AEROGRAPH_LOGO_B64: &str = include_str!("logo_b64.txt");
 
+static BOLD_RE: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| regex::Regex::new(r"\*\*([^\*\n]+?)\*\*").unwrap());
+static ITALIC_AST_RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r"(^|\s)\*([^\*\n]+?)\*($|\s|[.,;:!?])").unwrap()
+});
+static ITALIC_UND_RE: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| regex::Regex::new(r"(^|\s)_([^_\n]+?)_($|\s|[.,;:!?])").unwrap());
+
+/// Post-processes inline markdown formatting (bold, italic) and unescapes syntax characters.
+fn apply_markdown_inline(s: &str) -> String {
+    let res = BOLD_RE.replace_all(s, "<strong>$1</strong>");
+    let res = ITALIC_AST_RE.replace_all(&res, "$1<em>$2</em>$3");
+    let res = ITALIC_UND_RE.replace_all(&res, "$1<em>$2</em>$3");
+    res.replace(r"\:", ":")
+        .replace(r"\[", "[")
+        .replace(r"\]", "]")
+        .replace(r"\#", "#")
+        .replace(r"\>", ">")
+        .replace(r"\*", "*")
+        .replace(r"\_", "_")
+}
+
 /// HTML-escapes raw string input to prevent malformed tags.
 fn escape_html(input: &str) -> String {
     input
@@ -10,7 +32,7 @@ fn escape_html(input: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-/// Parses inline color formatting tags like `{red: text}`, `{blue: text}`, `{#HEX: text}`, and `{highlight: text}`.
+/// Parses inline color formatting tags like `{red: text}`, `{purple: text}`, `{#HEX: text}`, and markdown syntax.
 pub fn parse_inline_formatting(input: &str) -> String {
     let mut out = String::new();
     let mut rest = input;
@@ -33,6 +55,13 @@ pub fn parse_inline_formatting(input: &str) -> String {
                     "blue" => format!("<span style=\"color:#1565C0;font-weight:bold;\">{}</span>", escaped_text),
                     "orange" => format!("<span style=\"color:#E65100;font-weight:bold;\">{}</span>", escaped_text),
                     "cyan" => format!("<span style=\"color:#00838F;font-weight:bold;\">{}</span>", escaped_text),
+                    "purple" => format!("<span style=\"color:#7B1FA2;font-weight:bold;\">{}</span>", escaped_text),
+                    "magenta" => format!("<span style=\"color:#C2185B;font-weight:bold;\">{}</span>", escaped_text),
+                    "pink" => format!("<span style=\"color:#D81B60;font-weight:bold;\">{}</span>", escaped_text),
+                    "violet" => format!("<span style=\"color:#5E35B1;font-weight:bold;\">{}</span>", escaped_text),
+                    "teal" => format!("<span style=\"color:#00796B;font-weight:bold;\">{}</span>", escaped_text),
+                    "lime" => format!("<span style=\"color:#689F38;font-weight:bold;\">{}</span>", escaped_text),
+                    "brown" => format!("<span style=\"color:#5D4037;font-weight:bold;\">{}</span>", escaped_text),
                     "gray" | "grey" => format!("<span style=\"color:#546E7A;\">{}</span>", escaped_text),
                     "white" => format!("<span style=\"color:#FFFFFF;background-color:#263238;padding:1px 6px;border-radius:3px;font-weight:bold;\">{}</span>", escaped_text),
                     "black" => format!("<span style=\"color:#111111;font-weight:bold;\">{}</span>", escaped_text),
@@ -40,6 +69,7 @@ pub fn parse_inline_formatting(input: &str) -> String {
                     "bg-red" => format!("<span style=\"background-color:#FFCDD2;color:#B71C1C;padding:1px 6px;border-radius:3px;font-weight:bold;\">{}</span>", escaped_text),
                     "bg-green" => format!("<span style=\"background-color:#C8E6C9;color:#1B5E20;padding:1px 6px;border-radius:3px;font-weight:bold;\">{}</span>", escaped_text),
                     "bg-blue" => format!("<span style=\"background-color:#BBDEFB;color:#0D47A1;padding:1px 6px;border-radius:3px;font-weight:bold;\">{}</span>", escaped_text),
+                    "bg-purple" => format!("<span style=\"background-color:#E1BEE7;color:#4A148C;padding:1px 6px;border-radius:3px;font-weight:bold;\">{}</span>", escaped_text),
                     tag if tag.starts_with('#') => format!("<span style=\"color:{};font-weight:bold;\">{}</span>", escape_html(tag), escaped_text),
                     _ => format!("{{{}}}", escape_html(inside)),
                 };
@@ -52,7 +82,7 @@ pub fn parse_inline_formatting(input: &str) -> String {
         rest = after_brace;
     }
     out.push_str(&escape_html(rest));
-    out
+    apply_markdown_inline(&out)
 }
 
 /// Parses raw markdown / text notes into styled HTML elements using WebKit-safe table and block layouts.
@@ -94,11 +124,48 @@ pub fn parse_notes_to_html(raw_text: &str) -> String {
             }
             let title = parse_inline_formatting(rest);
             html.push_str(&format!("<h1 class=\"section-h1\">{}</h1>\n", title));
-        } else if trimmed.starts_with('[')
+        }
+        // Blockquote callout (> Note)
+        else if let Some(rest) = trimmed.strip_prefix("> ") {
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
+            let body = parse_inline_formatting(rest.trim());
+            html.push_str(&format!(
+                "<blockquote class=\"note-quote\">{}</blockquote>\n",
+                body
+            ));
+        } else if trimmed == ">" {
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
+            html.push_str("<blockquote class=\"note-quote\">&nbsp;</blockquote>\n");
+        }
+        // Image embedding (![alt](url/path))
+        else if trimmed.starts_with("![") && trimmed.contains("](") && trimmed.ends_with(')') {
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
+            if let Some(close_idx) = trimmed.find("](") {
+                let alt = &trimmed[2..close_idx];
+                let src = &trimmed[close_idx + 2..trimmed.len() - 1];
+                html.push_str(&format!(
+                    "<div class=\"note-img-wrap\"><img src=\"{}\" alt=\"{}\" class=\"note-img\" /></div>\n",
+                    escape_html(src.trim()),
+                    escape_html(alt.trim())
+                ));
+            }
+        }
+        // Section badge [SECTION] (must not be escaped with \[)
+        else if trimmed.starts_with('[')
             && trimmed.ends_with(']')
             && !trimmed.starts_with("[ ]")
             && !trimmed.starts_with("[x]")
             && !trimmed.starts_with("[X]")
+            && !trimmed.starts_with(r"\[")
         {
             if in_list {
                 html.push_str("</ul>\n");
@@ -107,9 +174,13 @@ pub fn parse_notes_to_html(raw_text: &str) -> String {
             let title = parse_inline_formatting(&trimmed[1..trimmed.len() - 1]);
             html.push_str(&format!("<div class=\"section-badge\">{}</div>\n", title));
         }
-        // Warning alerts (WebKit safe table)
-        else if trimmed.to_uppercase().starts_with("WARNING:")
-            || trimmed.to_uppercase().starts_with("[WARNING]")
+        // Warning alerts (WebKit safe table, not escaped with \WARNING: or \[WARNING])
+        else if (trimmed.to_uppercase().starts_with("WARNING:")
+            || trimmed.to_uppercase().starts_with("[WARNING]"))
+            && !trimmed.starts_with(r"\WARNING:")
+            && !trimmed.starts_with(r"\[WARNING]")
+            && !trimmed.starts_with(r"\warning:")
+            && !trimmed.starts_with(r"\[warning]")
         {
             if in_list {
                 html.push_str("</ul>\n");
@@ -125,9 +196,13 @@ pub fn parse_notes_to_html(raw_text: &str) -> String {
                 parse_inline_formatting(content.trim())
             ));
         }
-        // Caution alerts (WebKit safe table)
-        else if trimmed.to_uppercase().starts_with("CAUTION:")
-            || trimmed.to_uppercase().starts_with("[CAUTION]")
+        // Caution alerts (WebKit safe table, not escaped with \CAUTION: or \[CAUTION])
+        else if (trimmed.to_uppercase().starts_with("CAUTION:")
+            || trimmed.to_uppercase().starts_with("[CAUTION]"))
+            && !trimmed.starts_with(r"\CAUTION:")
+            && !trimmed.starts_with(r"\[CAUTION]")
+            && !trimmed.starts_with(r"\caution:")
+            && !trimmed.starts_with(r"\[caution]")
         {
             if in_list {
                 html.push_str("</ul>\n");
@@ -186,11 +261,13 @@ pub fn parse_notes_to_html(raw_text: &str) -> String {
             let item = parse_inline_formatting(&trimmed[2..]);
             html.push_str(&format!("  <li>{}</li>\n", item));
         }
-        // Key-Value badge rows (WebKit safe full-width table)
+        // Key-Value badge rows (WebKit safe full-width table, unless colon is escaped \:)
         else if let Some(colon_idx) = trimmed.find(':') {
+            let is_escaped_colon = colon_idx > 0 && trimmed.as_bytes()[colon_idx - 1] == b'\\';
             let key = trimmed[..colon_idx].trim();
             let val = trimmed[colon_idx + 1..].trim();
-            if !key.is_empty()
+            if !is_escaped_colon
+                && !key.is_empty()
                 && key.len() <= 28
                 && !val.is_empty()
                 && key.chars().all(|c| {
@@ -381,7 +458,7 @@ pub fn generate_notes_page_html(
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
         background-color: #FAFAF8;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
         color: #1A1A1A;
         width: 1024px;
         height: 1554px;
@@ -410,7 +487,7 @@ pub fn generate_notes_page_html(
     }}
     .header-notch-inner {{
         padding: 4px 26px;
-        font-weight: 900;
+        font-weight: 700;
         font-size: 22px;
         letter-spacing: 0.5px;
         color: {header_color};
@@ -436,7 +513,7 @@ pub fn generate_notes_page_html(
 
     .main-title {{
         font-size: 40px;
-        font-weight: 900;
+        font-weight: 700;
         font-style: italic;
         color: #111111;
         line-height: 1.15;
@@ -447,7 +524,7 @@ pub fn generate_notes_page_html(
 
     .subtitle {{
         font-size: 20px;
-        font-weight: 800;
+        font-weight: 700;
         color: #546E7A;
         letter-spacing: 1.2px;
         margin-bottom: 18px;
@@ -463,7 +540,7 @@ pub fn generate_notes_page_html(
 
     .section-h1 {{
         font-size: 28px;
-        font-weight: 900;
+        font-weight: 700;
         color: #0D47A1;
         background-color: #E3F2FD;
         border-left: 6px solid #1565C0;
@@ -475,7 +552,7 @@ pub fn generate_notes_page_html(
 
     .section-h2 {{
         font-size: 24px;
-        font-weight: 900;
+        font-weight: 700;
         color: #263238;
         border-bottom: 2px solid #90A4AE;
         padding-bottom: 4px;
@@ -485,7 +562,7 @@ pub fn generate_notes_page_html(
 
     .section-h3 {{
         font-size: 21px;
-        font-weight: 800;
+        font-weight: 700;
         color: #37474F;
         margin: 12px 0 6px 0;
     }}
@@ -495,12 +572,37 @@ pub fn generate_notes_page_html(
         background-color: #263238;
         color: #FFFFFF;
         font-size: 19px;
-        font-weight: 900;
+        font-weight: 700;
         padding: 4px 16px;
         border-radius: 4px;
         margin: 12px 0 6px 0;
         text-transform: uppercase;
         letter-spacing: 1px;
+    }}
+
+    /* Callout Blockquote (> Note) */
+    .note-quote {{
+        border-left: 5px solid #455A64;
+        background-color: #ECEFF1;
+        padding: 8px 16px;
+        margin: 8px 0;
+        font-size: 21px;
+        font-weight: 600;
+        color: #263238;
+        border-radius: 0 4px 4px 0;
+    }}
+
+    /* Embedded Image (![alt](path)) */
+    .note-img-wrap {{
+        text-align: center;
+        margin: 10px 0;
+    }}
+    .note-img {{
+        max-width: 100%;
+        max-height: 480px;
+        height: auto;
+        border-radius: 6px;
+        border: 1px solid #CFD8DC;
     }}
 
     /* Alerts (WebKit Safe Table) */
@@ -530,7 +632,7 @@ pub fn generate_notes_page_html(
         padding: 3px 12px;
         border-radius: 4px;
         font-size: 16px;
-        font-weight: 900;
+        font-weight: 700;
         letter-spacing: 1px;
         text-align: center;
     }}
@@ -570,7 +672,7 @@ pub fn generate_notes_page_html(
         font-size: 17px;
         line-height: 20px;
         text-align: center;
-        font-weight: 900;
+        font-weight: 700;
     }}
     .check-text-cell {{
         font-size: 22px;
@@ -602,7 +704,7 @@ pub fn generate_notes_page_html(
     }}
     .kv-key {{
         padding: 8px 16px;
-        font-weight: 900;
+        font-weight: 700;
         font-size: 22px;
         color: #37474F;
         text-align: left;
@@ -611,7 +713,7 @@ pub fn generate_notes_page_html(
     }}
     .kv-val {{
         padding: 8px 16px;
-        font-weight: 900;
+        font-weight: 700;
         font-size: 22px;
         color: #0D47A1;
         text-align: right;
@@ -654,7 +756,7 @@ pub fn generate_notes_page_html(
     }}
     .footer-title {{
         font-size: 18px;
-        font-weight: 900;
+        font-weight: 700;
         color: #263238;
         letter-spacing: 1px;
         vertical-align: middle;
@@ -687,7 +789,7 @@ pub fn generate_notes_page_html(
         background-color: #263238;
         color: #FFFFFF;
         font-size: 18px;
-        font-weight: 900;
+        font-weight: 700;
         padding: 4px 18px;
         border-radius: 6px;
         letter-spacing: 1px;
@@ -822,7 +924,15 @@ mod tests {
     fn test_markdown_and_color_parsing() {
         let text = r#"
 ## MISSION OBJECTIVE
+### Secondary Objective
+[WEAPONS CONFIG]
 - Eliminate {red: SA-6 site} at STPT 4
+- Primary target {purple: SAM BATTERY} with **high priority** and _tactical precision_
+> Check EPU before starting engine
+![Diagram](custom/threat_ring.png)
+Escaped line with \: colon that should not be KV table
+\[NOT A BADGE\]
+\WARNING: Do not trigger warning alert
 [ ] Pre-flight alignment complete
 [x] Laser code {green: 1688} verified
 BULLSEYE: {blue: 045 / 60NM}
@@ -831,7 +941,22 @@ CAUTION: Low fuel state upon egress
 "#;
         let html = parse_notes_to_html(text);
         assert!(html.contains("<h2 class=\"section-h2\">MISSION OBJECTIVE</h2>"));
+        assert!(html.contains("<h3 class=\"section-h3\">Secondary Objective</h3>"));
+        assert!(html.contains("<div class=\"section-badge\">WEAPONS CONFIG</div>"));
         assert!(html.contains("color:#D32F2F"));
+        assert!(html.contains("color:#7B1FA2"));
+        assert!(html.contains("<strong>high priority</strong>"));
+        assert!(html.contains("<em>tactical precision</em>"));
+        assert!(html.contains(
+            "<blockquote class=\"note-quote\">Check EPU before starting engine</blockquote>"
+        ));
+        assert!(html
+            .contains("<img src=\"custom/threat_ring.png\" alt=\"Diagram\" class=\"note-img\" />"));
+        assert!(html.contains("Escaped line with : colon that should not be KV table"));
+        assert!(!html.contains(r"\:"));
+        assert!(html.contains("[NOT A BADGE]"));
+        assert!(!html.contains(r"\["));
+        assert!(html.contains("Do not trigger warning alert"));
         assert!(html.contains("color:#2E7D32"));
         assert!(html.contains("color:#1565C0"));
         assert!(html.contains("background-color:#FFF59D"));
