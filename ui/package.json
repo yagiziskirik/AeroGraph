@@ -29,5 +29,5 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },
-  "version": "1.0.1"
+  "version": "1.0.2"
 }
