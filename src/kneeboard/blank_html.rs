@@ -8,7 +8,7 @@ pub fn generate_blank_chart_html(airport_name: &str, reason: &str) -> String {
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
         background-color: #FAFAF8;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
         color: #1A1A1A;
         width: 1024px;
         height: 1554px;
@@ -29,7 +29,7 @@ pub fn generate_blank_chart_html(airport_name: &str, reason: &str) -> String {
         background: #C62828;
         color: #FFFFFF;
         font-size: 26px;
-        font-weight: 900;
+        font-weight: 700;
         padding: 10px 24px;
         border-radius: 8px;
         margin: 0 auto 30px auto;
@@ -38,7 +38,7 @@ pub fn generate_blank_chart_html(airport_name: &str, reason: &str) -> String {
     }}
     .main-title {{
         font-size: 50px;
-        font-weight: 900;
+        font-weight: 700;
         color: #263238;
         margin-bottom: 25px;
         text-align: center;
@@ -52,14 +52,14 @@ pub fn generate_blank_chart_html(airport_name: &str, reason: &str) -> String {
     }}
     .ap-title {{
         font-size: 38px;
-        font-weight: 900;
+        font-weight: 700;
         color: #0D47A1;
         margin-bottom: 16px;
         text-align: center;
     }}
     .reason-desc {{
         font-size: 24px;
-        font-weight: 800;
+        font-weight: 700;
         color: #C62828;
         text-transform: uppercase;
         text-align: center;

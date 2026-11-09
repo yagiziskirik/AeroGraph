@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Ipc } from '../services/ipc';
 import { Sound } from '../services/sound';
-import { SlotConfig, TemplateMetadata, QuickStamp, CustomPreset } from '../types/ipc';
+import { SlotConfig, TemplateMetadata, QuickStamp, CustomPreset, AppConfig } from '../types/ipc';
 import { AVAILABLE_TEMPLATES_CATALOG, DEFAULT_DEV_SLOTS, EMBEDDED_NOTES, BUILTIN_PRESETS_CATALOG, PRESET_COLOR_PALETTE } from '../services/templatesData';
 import { AEROGRAPH_LOGO_B64 } from '../components/ChassisBar';
 import { ShiningCheckbox } from '../components/inputs';
@@ -19,6 +19,7 @@ interface BinderViewProps {
   accentColor?: string;
   onSelectAccent?: (color: string) => void;
   generatedImages?: string[];
+  config?: AppConfig;
 }
 
 const DEFAULT_STAMPS: QuickStamp[] = [
@@ -30,6 +31,28 @@ const DEFAULT_STAMPS: QuickStamp[] = [
   { id: 'ip_vector', label: 'IP VECTOR', template: 'TGT IP: Bearing {blue: 045} / Distance {blue: 12NM} / Pullup 18,000 FT' },
 ];
 
+const PREDEFINED_COLORS = [
+  { label: 'Red', tag: 'red', hex: '#D32F2F', bg: false },
+  { label: 'Yellow', tag: 'yellow', hex: '#F57F17', bg: false },
+  { label: 'Green', tag: 'green', hex: '#2E7D32', bg: false },
+  { label: 'Blue', tag: 'blue', hex: '#1565C0', bg: false },
+  { label: 'Orange', tag: 'orange', hex: '#E65100', bg: false },
+  { label: 'Cyan', tag: 'cyan', hex: '#00838F', bg: false },
+  { label: 'Purple', tag: 'purple', hex: '#7B1FA2', bg: false },
+  { label: 'Magenta', tag: 'magenta', hex: '#C2185B', bg: false },
+  { label: 'Pink', tag: 'pink', hex: '#D81B60', bg: false },
+  { label: 'Violet', tag: 'violet', hex: '#5E35B1', bg: false },
+  { label: 'Teal', tag: 'teal', hex: '#00796B', bg: false },
+  { label: 'Lime', tag: 'lime', hex: '#689F38', bg: false },
+  { label: 'Brown', tag: 'brown', hex: '#5D4037', bg: false },
+  { label: 'White', tag: 'white', hex: '#FFFFFF', bg: false },
+  { label: 'Bg Yellow', tag: 'bg-yellow', hex: '#FFF59D', textColor: '#111111', bg: true },
+  { label: 'Bg Red', tag: 'bg-red', hex: '#FFCDD2', textColor: '#B71C1C', bg: true },
+  { label: 'Bg Green', tag: 'bg-green', hex: '#C8E6C9', textColor: '#1B5E20', bg: true },
+  { label: 'Bg Blue', tag: 'bg-blue', hex: '#BBDEFB', textColor: '#0D47A1', bg: true },
+  { label: 'Bg Purple', tag: 'bg-purple', hex: '#E1BEE7', textColor: '#4A148C', bg: true },
+];
+
 export const BinderView: React.FC<BinderViewProps> = ({
   initialSlots,
   availableTemplates = AVAILABLE_TEMPLATES_CATALOG,
@@ -39,6 +62,7 @@ export const BinderView: React.FC<BinderViewProps> = ({
   accentColor = '#10B981',
   onSelectAccent,
   generatedImages = [],
+  config,
 }) => {
   const [leftSlotIndex, setLeftSlotIndex] = useState(1);
   const [rightSlotIndex, setRightSlotIndex] = useState(1);
@@ -95,9 +119,17 @@ export const BinderView: React.FC<BinderViewProps> = ({
     };
   }, []);
 
-  // Interactive Ctrl + Mouse Wheel Zoom on Kneeboards
+  // Interactive Ctrl + Mouse Wheel Zoom on Kneeboards & Alt + Scroll Wheel Page Navigation
   useEffect(() => {
     const handleLeftWheel = (e: WheelEvent) => {
+      if (e.altKey) {
+        e.preventDefault();
+        Sound.playClick();
+        const rawStep = e.deltaY < 0 ? 1 : -1;
+        const delta = config?.invert_kneeboard_scroll ? -rawStep : rawStep;
+        setLeftSlotIndex((p) => Math.max(1, Math.min(16, p + delta)));
+        return;
+      }
       if (!e.ctrlKey) return;
       e.preventDefault();
       setLeftZoom((current) => {
@@ -109,6 +141,14 @@ export const BinderView: React.FC<BinderViewProps> = ({
     };
 
     const handleRightWheel = (e: WheelEvent) => {
+      if (e.altKey) {
+        e.preventDefault();
+        Sound.playClick();
+        const rawStep = e.deltaY < 0 ? 1 : -1;
+        const delta = config?.invert_kneeboard_scroll ? -rawStep : rawStep;
+        setRightSlotIndex((p) => Math.max(1, Math.min(16, p + delta)));
+        return;
+      }
       if (!e.ctrlKey) return;
       e.preventDefault();
       setRightZoom((current) => {
@@ -129,7 +169,7 @@ export const BinderView: React.FC<BinderViewProps> = ({
       if (leftEl) leftEl.removeEventListener('wheel', handleLeftWheel);
       if (rightEl) rightEl.removeEventListener('wheel', handleRightWheel);
     };
-  }, [leftFitScale, rightFitScale]);
+  }, [leftFitScale, rightFitScale, config?.invert_kneeboard_scroll]);
 
   // Template Library Popover State & Categorization
   const [libraryOpenFor, setLibraryOpenFor] = useState<'left' | 'right' | null>(null);
@@ -164,6 +204,7 @@ export const BinderView: React.FC<BinderViewProps> = ({
 
   const [stampsModalOpen, setStampsModalOpen] = useState(false);
   const [editStampDropdownOpen, setEditStampDropdownOpen] = useState<'left' | 'right' | null>(null);
+  const [colorDropdownOpen, setColorDropdownOpen] = useState<'left' | 'right' | null>(null);
   const [newStampLabel, setNewStampLabel] = useState('');
   const [newStampTemplate, setNewStampTemplate] = useState('');
 
@@ -610,6 +651,43 @@ export const BinderView: React.FC<BinderViewProps> = ({
     setEditStampDropdownOpen(null);
   };
 
+  // Text formatting insertion/wrapping at cursor or selection
+  const handleFormatText = (
+    side: 'left' | 'right',
+    prefix: string,
+    suffix: string = '',
+    defaultText: string = ''
+  ) => {
+    Sound.playClick();
+    const textarea = side === 'left' ? leftTextareaRef.current : rightTextareaRef.current;
+    const currentContent = getSlotDisplayContent(side === 'left' ? leftSlot : rightSlot);
+    if (!textarea) return;
+
+    const start = textarea.selectionStart ?? currentContent.length;
+    const end = textarea.selectionEnd ?? currentContent.length;
+    const selectedText = currentContent.substring(start, end);
+
+    const replacement =
+      selectedText.length > 0
+        ? `${prefix}${selectedText}${suffix}`
+        : `${prefix}${defaultText}${suffix}`;
+
+    const updated = currentContent.substring(0, start) + replacement + currentContent.substring(end);
+    handleUpdateSlotContent(side, updated);
+
+    setTimeout(() => {
+      textarea.focus();
+      if (selectedText.length > 0) {
+        const newStart = start + prefix.length;
+        const newEnd = newStart + selectedText.length;
+        textarea.setSelectionRange(newStart, newEnd);
+      } else {
+        const cursorPos = start + prefix.length + defaultText.length;
+        textarea.setSelectionRange(cursorPos, cursorPos);
+      }
+    }, 20);
+  };
+
   // Authentic Blank Aeronautical Card HTML (Matching blank_html.rs)
   const generateBlankCardHtml = (title: string, reason: string): string => {
     return `<!DOCTYPE html>
@@ -617,10 +695,10 @@ export const BinderView: React.FC<BinderViewProps> = ({
 <head>
 <meta charset="utf-8">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; }
   body {
     background-color: #FAFAF8;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
     color: #1A1A1A;
     width: 1024px;
     height: 1554px;
@@ -641,7 +719,7 @@ export const BinderView: React.FC<BinderViewProps> = ({
     background: #C62828;
     color: #FFFFFF;
     font-size: 26px;
-    font-weight: 900;
+    font-weight: 700;
     padding: 10px 24px;
     border-radius: 8px;
     margin: 0 auto 30px auto;
@@ -650,7 +728,7 @@ export const BinderView: React.FC<BinderViewProps> = ({
   }
   .main-title {
     font-size: 50px;
-    font-weight: 900;
+    font-weight: 700;
     color: #263238;
     margin-bottom: 25px;
     text-align: center;
@@ -664,14 +742,14 @@ export const BinderView: React.FC<BinderViewProps> = ({
   }
   .ap-title {
     font-size: 38px;
-    font-weight: 900;
+    font-weight: 700;
     color: #0D47A1;
     margin-bottom: 16px;
     text-align: center;
   }
   .reason-desc {
     font-size: 24px;
-    font-weight: 800;
+    font-weight: 700;
     color: #C62828;
     text-transform: uppercase;
     text-align: center;
@@ -719,9 +797,9 @@ export const BinderView: React.FC<BinderViewProps> = ({
         : slot;
 
     const bannerHtml = isRestore
-      ? `<div style="background: rgba(16, 185, 129, 0.95); color: #000; font-family: monospace; font-size: 13px; font-weight: 800; text-align: center; padding: 8px 12px; margin-bottom: 14px; border-radius: 4px; letter-spacing: 1px;">RESTORE ORIGINAL // STOCK BMS TEXTURE PREVIEW</div>`
+      ? `<div style="background: rgba(16, 185, 129, 0.95); color: #000; font-family: monospace; font-size: 13px; font-weight: 700; text-align: center; padding: 8px 12px; margin-bottom: 14px; border-radius: 4px; letter-spacing: 1px;">RESTORE ORIGINAL // STOCK BMS TEXTURE PREVIEW</div>`
       : isPassThrough
-      ? `<div style="background: rgba(245, 158, 11, 0.95); color: #000; font-family: monospace; font-size: 13px; font-weight: 800; text-align: center; padding: 8px 12px; margin-bottom: 14px; border-radius: 4px; letter-spacing: 1px;">PASS-THROUGH // UNTOUCHED BMS COCKPIT TEXTURE</div>`
+      ? `<div style="background: rgba(245, 158, 11, 0.95); color: #000; font-family: monospace; font-size: 13px; font-weight: 700; text-align: center; padding: 8px 12px; margin-bottom: 14px; border-radius: 4px; letter-spacing: 1px;">PASS-THROUGH // UNTOUCHED BMS COCKPIT TEXTURE</div>`
       : '';
 
     const isBriefing = effectiveSlot.type.startsWith('briefing_');
@@ -744,14 +822,15 @@ export const BinderView: React.FC<BinderViewProps> = ({
 <head>
 <meta charset="utf-8">
 <style>
-body { background: white; font-family: -apple-system, sans-serif; margin: 0; padding: 24px; color: #111; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; }
+body { background: white; font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; margin: 0; padding: 24px; color: #111; }
 table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px; }
-th.title { background: #FFFF44; color: #222222; font-weight: 900; font-size: 16px; text-transform: uppercase; padding: 8px 12px; text-align: left; border: 1px solid #CCCC00; }
+th.title { background: #FFFF44; color: #222222; font-weight: 700; font-size: 16px; text-transform: uppercase; padding: 8px 12px; text-align: left; border: 1px solid #CCCC00; }
 tr.odd { background: #F8F8F8; }
 tr.even { background: #EEEEEE; }
 td { padding: 6px 12px; font-weight: 600; border-bottom: 1px solid #DDDDDD; }
 td.half { width: 50%; }
-td.rightalign { text-align: right; font-weight: 800; color: #0D47A1; }
+td.rightalign { text-align: right; font-weight: 700; color: #0D47A1; }
 .footer { position: fixed; bottom: 12px; left: 24px; right: 24px; border-top: 2px solid #90A4AE; padding-top: 8px; display: flex; justify-content: space-between; align-items: center; font-family: monospace; font-size: 11px; color: #546E7A; }
 .page-badge { background: #263238; color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
 </style>
@@ -804,18 +883,18 @@ ${rawContent}
 <head>
 <meta charset="utf-8">
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color: #1A1A1A; width: 1024px; height: 1554px; position: relative; overflow: hidden; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; }
+body { background-color: #FAFAF8; font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; color: #1A1A1A; width: 1024px; height: 1554px; position: relative; overflow: hidden; }
 .top-banner { position: absolute; top: 0; left: 0; width: 1024px; height: 130px; overflow: hidden; background: #0D47A1; }
-.header-notch { position: absolute; bottom: 0px; background-color: #FAFAF8; z-index: 10; font-weight: 900; font-size: 22px; padding: 6px 26px; color: #0D47A1; }
+.header-notch { position: absolute; bottom: 0px; background-color: #FAFAF8; z-index: 10; font-weight: 700; font-size: 22px; padding: 6px 26px; color: #0D47A1; }
 .notch-left { left: 48px; }
 .notch-right { right: 48px; }
 .content-container { position: absolute; top: 130px; left: 0; width: 1024px; height: 1344px; padding: 32px 54px; }
-.main-title { font-size: 38px; font-weight: 900; font-style: italic; color: #111; margin-bottom: 6px; text-transform: uppercase; }
-.subtitle { font-size: 18px; font-weight: 800; color: #546E7A; margin-bottom: 20px; border-bottom: 2px solid #CFD8DC; padding-bottom: 6px; }
+.main-title { font-size: 38px; font-weight: 700; font-style: italic; color: #111; margin-bottom: 6px; text-transform: uppercase; }
+.subtitle { font-size: 18px; font-weight: 700; color: #546E7A; margin-bottom: 20px; border-bottom: 2px solid #CFD8DC; padding-bottom: 6px; }
 .lock-banner { background: #ECEFF1; border-left: 6px solid #455A64; padding: 8px 14px; font-family: monospace; font-size: 13px; color: #37474F; margin-bottom: 20px; font-weight: bold; }
 .footer-table { position: absolute; bottom: 24px; left: 54px; width: 916px; border-top: 2.5px solid #90A4AE; display: flex; justify-content: space-between; align-items: center; padding-top: 12px; font-family: monospace; font-size: 13px; color: #455A64; }
-.footer-page-badge { background: #263238; color: white; font-weight: 900; padding: 4px 14px; border-radius: 4px; }
+.footer-page-badge { background: #263238; color: white; font-weight: 700; padding: 4px 14px; border-radius: 4px; }
 </style>
 </head>
 <body>
@@ -891,11 +970,12 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
 
     const headerTextColor = slot.header_color || defaultHdr;
     const isSpaced = slot.spaced !== undefined && slot.spaced !== null ? slot.spaced : true;
-    const displayPageNum = slot.page_num || pageNum;
-    const subtitle = slot.subtitle || 'PILOT FLIGHT NOTES // T.O. 1F-16CM-1';
+    const subtitle = slot.subtitle;
+    const titleText = slot.title;
 
     const parseInline = (text: string): string => {
-      return text.replace(/\{([a-zA-Z0-9#-]+):\s*([^}]+)\}/g, (_, tag, content) => {
+      // 1. Color tags: {color: text}
+      let res = text.replace(/\{([a-zA-Z0-9#-]+):\s*([^}]+)\}/g, (_, tag, content) => {
         const t = tag.toLowerCase();
         switch (t) {
           case 'red': return `<span style="color:#D32F2F;font-weight:bold;">${content}</span>`;
@@ -904,58 +984,135 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
           case 'blue': return `<span style="color:#1565C0;font-weight:bold;">${content}</span>`;
           case 'orange': return `<span style="color:#E65100;font-weight:bold;">${content}</span>`;
           case 'cyan': return `<span style="color:#00838F;font-weight:bold;">${content}</span>`;
+          case 'purple': return `<span style="color:#7B1FA2;font-weight:bold;">${content}</span>`;
+          case 'magenta': return `<span style="color:#C2185B;font-weight:bold;">${content}</span>`;
+          case 'pink': return `<span style="color:#D81B60;font-weight:bold;">${content}</span>`;
+          case 'violet': return `<span style="color:#5E35B1;font-weight:bold;">${content}</span>`;
+          case 'teal': return `<span style="color:#00796B;font-weight:bold;">${content}</span>`;
+          case 'lime': return `<span style="color:#689F38;font-weight:bold;">${content}</span>`;
+          case 'brown': return `<span style="color:#5D4037;font-weight:bold;">${content}</span>`;
           case 'white': return `<span style="color:#FFFFFF;background-color:#263238;padding:1px 6px;border-radius:3px;font-weight:bold;">${content}</span>`;
           case 'highlight':
           case 'bg-yellow': return `<span style="background-color:#FFF59D;color:#111111;padding:1px 6px;border-radius:3px;font-weight:bold;">${content}</span>`;
           case 'bg-red': return `<span style="background-color:#FFCDD2;color:#B71C1C;padding:1px 6px;border-radius:3px;font-weight:bold;">${content}</span>`;
           case 'bg-green': return `<span style="background-color:#C8E6C9;color:#1B5E20;padding:1px 6px;border-radius:3px;font-weight:bold;">${content}</span>`;
           case 'bg-blue': return `<span style="background-color:#BBDEFB;color:#0D47A1;padding:1px 6px;border-radius:3px;font-weight:bold;">${content}</span>`;
+          case 'bg-purple': return `<span style="background-color:#E1BEE7;color:#4A148C;padding:1px 6px;border-radius:3px;font-weight:bold;">${content}</span>`;
           default:
             if (t.startsWith('#')) return `<span style="color:${t};font-weight:bold;">${content}</span>`;
             return `{${tag}: ${content}}`;
         }
       });
+
+      // 2. Bold: **text**
+      res = res.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+      // 3. Italic: *text* (word boundaries or whitespace/punctuation)
+      res = res.replace(/(^|\s)\*([^*\n]+?)\*($|\s|[.,;:!?])/g, '$1<em>$2</em>$3');
+
+      // 4. Italic: _text_
+      res = res.replace(/(^|\s)_([^_\n]+?)_($|\s|[.,;:!?])/g, '$1<em>$2</em>$3');
+
+      // 5. Unescape \:, \[, \], \#, \>, \*, \_
+      res = res
+        .replace(/\\:/g, ':')
+        .replace(/\\\[/g, '[')
+        .replace(/\\\]/g, ']')
+        .replace(/\\#/g, '#')
+        .replace(/\\>/g, '>')
+        .replace(/\\\*/g, '*')
+        .replace(/\\_/g, '_');
+
+      return res;
     };
 
+    let inList = false;
     let bodyFormatted = '';
     const lines = rawContent.split('\n');
     for (const line of lines) {
       const t = line.trim();
       if (!t) {
-        bodyFormatted += '<div style="height:12px;"></div>';
-      } else if (t.startsWith('# ')) {
-        bodyFormatted += `<div style="font-size:26px; font-weight:900; color:${headerTextColor}; background:#ECEFF1; border-left:6px solid ${headerTextColor}; padding:8px 14px; margin:14px 0 8px 0; text-transform:uppercase;">${parseInline(t.substring(2))}</div>`;
+        if (inList) {
+          bodyFormatted += '</ul>\n';
+          inList = false;
+        }
+        bodyFormatted += '<div class="spacer"></div>\n';
+      } else if (t.startsWith('### ')) {
+        if (inList) { bodyFormatted += '</ul>\n'; inList = false; }
+        bodyFormatted += `<div class="section-h3">${parseInline(t.substring(4))}</div>\n`;
       } else if (t.startsWith('## ')) {
-        bodyFormatted += `<div style="font-size:22px; font-weight:900; color:#263238; border-bottom:2px solid #90A4AE; padding-bottom:4px; margin:14px 0 6px 0; text-transform:uppercase;">${parseInline(t.substring(3))}</div>`;
-      } else if (t.toUpperCase().startsWith('WARNING:')) {
-        bodyFormatted += `<div style="background:#FFEBEE; border:2px solid #C62828; border-radius:6px; padding:10px 14px; margin:10px 0; display:flex; align-items:center; font-size:18px; font-weight:700; color:#B71C1C;"><span style="background:#C62828; color:white; font-size:13px; font-weight:900; padding:3px 8px; border-radius:4px; margin-right:12px;">WARNING</span>${parseInline(t.substring(8))}</div>`;
-      } else if (t.toUpperCase().startsWith('CAUTION:')) {
-        bodyFormatted += `<div style="background:#FFF8E1; border:2px solid #F57F17; border-radius:6px; padding:10px 14px; margin:10px 0; display:flex; align-items:center; font-size:18px; font-weight:700; color:#E65100;"><span style="background:#F57F17; color:white; font-size:13px; font-weight:900; padding:3px 8px; border-radius:4px; margin-right:12px;">CAUTION</span>${parseInline(t.substring(8))}</div>`;
-      } else if (t.startsWith('- [ ]') || t.startsWith('[ ]') || t.startsWith('- [x]') || t.startsWith('[x]')) {
-        const isChecked = t.toLowerCase().includes('[x]');
-        const text = t.replace(/^(\- )?\[[ xX]\]\s*/, '');
-        bodyFormatted += `<div style="display:flex; align-items:center; font-size:18px; font-weight:600; color:#263238; margin:6px 0;"><div style="width:20px; height:20px; border:2px solid #455A64; border-radius:3px; margin-right:12px; background:${isChecked ? '#263238' : 'white'}; color:white; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:14px;">${isChecked ? '✓' : ''}</div>${parseInline(text)}</div>`;
+        if (inList) { bodyFormatted += '</ul>\n'; inList = false; }
+        bodyFormatted += `<div class="section-h2">${parseInline(t.substring(3))}</div>\n`;
+      } else if (t.startsWith('# ')) {
+        if (inList) { bodyFormatted += '</ul>\n'; inList = false; }
+        bodyFormatted += `<div class="section-h1" style="color:${headerTextColor};border-left-color:${headerTextColor};">${parseInline(t.substring(2))}</div>\n`;
+      } else if (t.startsWith('> ') || t.startsWith('>')) {
+        if (inList) { bodyFormatted += '</ul>\n'; inList = false; }
+        const quoteText = t.startsWith('> ') ? t.substring(2) : t.substring(1);
+        bodyFormatted += `<div class="note-quote">${parseInline(quoteText)}</div>\n`;
+      } else if (t.startsWith('![') && t.endsWith(')') && t.includes('](')) {
+        if (inList) { bodyFormatted += '</ul>\n'; inList = false; }
+        const closeIdx = t.indexOf('](');
+        const alt = t.substring(2, closeIdx);
+        const src = t.substring(closeIdx + 2, t.length - 1);
+        bodyFormatted += `<div class="note-img-wrap"><img src="${src.trim()}" alt="${alt.trim()}" class="note-img" /></div>\n`;
+      } else if (
+        t.startsWith('[') && t.endsWith(']') &&
+        !t.startsWith('[ ]') && !t.startsWith('[x]') && !t.startsWith('[X]') &&
+        !t.startsWith('\\[')
+      ) {
+        if (inList) { bodyFormatted += '</ul>\n'; inList = false; }
+        const badgeTitle = t.slice(1, -1);
+        bodyFormatted += `<div class="section-badge">${parseInline(badgeTitle)}</div>\n`;
+      } else if (
+        (t.toUpperCase().startsWith('WARNING:') || t.toUpperCase().startsWith('[WARNING]')) &&
+        !t.startsWith('\\WARNING:') && !t.startsWith('\\[WARNING]') &&
+        !t.startsWith('\\warning:') && !t.startsWith('\\[warning]')
+      ) {
+        if (inList) { bodyFormatted += '</ul>\n'; inList = false; }
+        const content = t.toUpperCase().startsWith('WARNING:') ? t.substring(8) : t.substring(9);
+        bodyFormatted += `<table class="alert-table warning" cellpadding="0" cellspacing="0"><tr><td class="alert-badge-cell"><span class="alert-badge">WARNING</span></td><td class="alert-text-cell">${parseInline(content.trim())}</td></tr></table>\n`;
+      } else if (
+        (t.toUpperCase().startsWith('CAUTION:') || t.toUpperCase().startsWith('[CAUTION]')) &&
+        !t.startsWith('\\CAUTION:') && !t.startsWith('\\[CAUTION]') &&
+        !t.startsWith('\\caution:') && !t.startsWith('\\[caution]')
+      ) {
+        if (inList) { bodyFormatted += '</ul>\n'; inList = false; }
+        const content = t.toUpperCase().startsWith('CAUTION:') ? t.substring(8) : t.substring(9);
+        bodyFormatted += `<table class="alert-table caution" cellpadding="0" cellspacing="0"><tr><td class="alert-badge-cell"><span class="alert-badge">CAUTION</span></td><td class="alert-text-cell">${parseInline(content.trim())}</td></tr></table>\n`;
+      } else if (t.startsWith('[ ] ') || t.startsWith('- [ ] ')) {
+        if (inList) { bodyFormatted += '</ul>\n'; inList = false; }
+        const text = t.startsWith('- ') ? t.substring(6) : t.substring(4);
+        bodyFormatted += `<table class="check-table" cellpadding="0" cellspacing="0"><tr><td class="check-box-cell"><div class="check-box"></div></td><td class="check-text-cell">${parseInline(text.trim())}</td></tr></table>\n`;
+      } else if (t.startsWith('[x] ') || t.startsWith('[X] ') || t.startsWith('- [x] ') || t.startsWith('- [X] ')) {
+        if (inList) { bodyFormatted += '</ul>\n'; inList = false; }
+        const text = t.startsWith('- ') ? t.substring(6) : t.substring(4);
+        bodyFormatted += `<table class="check-table checked" cellpadding="0" cellspacing="0"><tr><td class="check-box-cell"><div class="check-box checked">&#x2714;</div></td><td class="check-text-cell">${parseInline(text.trim())}</td></tr></table>\n`;
       } else if (t.startsWith('- ') || t.startsWith('* ')) {
-        bodyFormatted += `<div style="font-size:19px; font-weight:600; color:#212121; margin:4px 0 4px 18px;">&bull; ${parseInline(t.substring(2))}</div>`;
-      }
-      // Special Meaning for ":" Key-Value Badge Rows (Matching notes_html.rs lines 190-219 & 595-621)
-      else if (t.includes(':') && !t.toUpperCase().startsWith('WARNING:') && !t.toUpperCase().startsWith('CAUTION:')) {
+        if (!inList) {
+          bodyFormatted += '<ul class="notes-list">\n';
+          inList = true;
+        }
+        bodyFormatted += `  <li>${parseInline(t.substring(2))}</li>\n`;
+      } else if (t.includes(':')) {
         const colonIdx = t.indexOf(':');
+        const isEscaped = colonIdx > 0 && t[colonIdx - 1] === '\\';
         const key = t.substring(0, colonIdx).trim();
         const val = t.substring(colonIdx + 1).trim();
-        if (key.length > 0 && key.length <= 28 && val.length > 0 && /^[\w\s\/\-_]+$/.test(key)) {
-          bodyFormatted += `<table style="width:100%; background:#ECEFF1; border-radius:6px; margin:6px 0; border-collapse:separate;" cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="padding:8px 16px; font-weight:900; font-size:22px; color:#37474F; text-align:left; text-transform:uppercase; vertical-align:middle;">${parseInline(key)}</td>
-              <td style="padding:8px 16px; font-weight:900; font-size:22px; color:#0D47A1; text-align:right; font-family:'Lucida Console',Consolas,monospace; letter-spacing:0.5px; vertical-align:middle;">${parseInline(val)}</td>
-            </tr>
-          </table>`;
+        if (!isEscaped && key.length > 0 && key.length <= 28 && val.length > 0 && /^[\w\s\/\-_]+$/.test(key)) {
+          if (inList) { bodyFormatted += '</ul>\n'; inList = false; }
+          bodyFormatted += `<table class="kv-table" cellpadding="0" cellspacing="0"><tr><td class="kv-key">${parseInline(key)}</td><td class="kv-val">${parseInline(val)}</td></tr></table>\n`;
         } else {
-          bodyFormatted += `<div style="font-size:18px; line-height:1.45; color:#263238; font-weight:500; margin:4px 0;">${parseInline(t)}</div>`;
+          if (inList) { bodyFormatted += '</ul>\n'; inList = false; }
+          bodyFormatted += `<p class="note-line">${parseInline(t)}</p>\n`;
         }
       } else {
-        bodyFormatted += `<div style="font-size:18px; line-height:1.45; color:#263238; font-weight:500; margin:4px 0;">${parseInline(t)}</div>`;
+        if (inList) { bodyFormatted += '</ul>\n'; inList = false; }
+        bodyFormatted += `<p class="note-line">${parseInline(t)}</p>\n`;
       }
+    }
+    if (inList) {
+      bodyFormatted += '</ul>\n';
     }
 
     // Precise SVG Stripe Generation adhering strictly to spaced parameter
@@ -1006,40 +1163,377 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
       }
     }
 
+    const titleHtml = titleText && titleText.trim().length > 0
+      ? `<div class="main-title">${titleText.trim()}</div>\n`
+      : '';
+    const subtitleHtml = subtitle && subtitle.trim().length > 0
+      ? `<div class="subtitle">${parseInline(subtitle.trim())}</div>\n`
+      : '';
+    const pageBadgeHtml = slot.page_num && slot.page_num.trim().length > 0
+      ? `<span class="footer-page-badge">${slot.page_num.trim()}</span>`
+      : '';
+
     return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color: #1A1A1A; width: 1024px; height: 1554px; position: relative; overflow: hidden; }
-.top-banner { position: absolute; top: 0; left: 0; width: 1024px; height: 130px; overflow: hidden; background: #ECEFF1; }
-.header-notch { position: absolute; bottom: 0px; background-color: #FAFAF8; z-index: 10; font-weight: 900; font-size: 22px; padding: 6px 26px; color: ${headerTextColor}; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; }
+body {
+  background-color: #FAFAF8;
+  font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+  color: #1A1A1A;
+  width: 1024px;
+  height: 1554px;
+  position: relative;
+  overflow: hidden;
+}
+
+.top-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1024px;
+  height: 130px;
+  overflow: hidden;
+}
+
+.header-notch {
+  position: absolute;
+  bottom: 0px;
+  background-color: #FAFAF8;
+  border: none;
+  border-collapse: collapse;
+  z-index: 10;
+}
+.header-notch-inner {
+  padding: 4px 26px;
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 0.5px;
+  color: ${headerTextColor};
+  white-space: nowrap;
+  vertical-align: middle;
+}
 .notch-left { left: 48px; }
 .notch-right { right: 48px; }
-.content-container { position: absolute; top: 130px; left: 0; width: 1024px; height: 1344px; padding: 32px 54px; }
-.main-title { font-size: 38px; font-weight: 900; font-style: italic; color: #111; margin-bottom: 6px; text-transform: uppercase; }
-.subtitle { font-size: 18px; font-weight: 800; color: #546E7A; margin-bottom: 20px; border-bottom: 2px solid #CFD8DC; padding-bottom: 6px; }
-.footer-table { position: absolute; bottom: 24px; left: 54px; width: 916px; border-top: 2.5px solid #90A4AE; display: flex; justify-content: space-between; align-items: center; padding-top: 12px; font-family: monospace; font-size: 13px; color: #455A64; }
-.footer-page-badge { background: #263238; color: white; font-weight: 900; padding: 4px 14px; border-radius: 4px; }
+
+.content-container {
+  position: absolute;
+  top: 130px;
+  left: 0;
+  width: 1024px;
+  height: 1344px;
+  padding: 24px 64px 20px 64px;
+}
+
+.main-title {
+  font-size: 40px;
+  font-weight: 700;
+  font-style: italic;
+  color: #111111;
+  line-height: 1.15;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.subtitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: #546E7A;
+  letter-spacing: 1.2px;
+  margin-bottom: 18px;
+  text-transform: uppercase;
+  border-bottom: 2px solid #CFD8DC;
+  padding-bottom: 8px;
+}
+
+.spacer { height: 12px; }
+
+.section-h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #0D47A1;
+  background-color: #E3F2FD;
+  border-left: 6px solid #1565C0;
+  padding: 8px 14px;
+  margin: 14px 0 8px 0;
+  text-transform: uppercase;
+  border-radius: 0 4px 4px 0;
+}
+
+.section-h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #263238;
+  border-bottom: 2px solid #90A4AE;
+  padding-bottom: 4px;
+  margin: 14px 0 6px 0;
+  text-transform: uppercase;
+}
+
+.section-h3 {
+  font-size: 21px;
+  font-weight: 700;
+  color: #37474F;
+  margin: 12px 0 6px 0;
+}
+
+.section-badge {
+  display: inline-block;
+  background-color: #263238;
+  color: #FFFFFF;
+  font-size: 19px;
+  font-weight: 700;
+  padding: 4px 16px;
+  border-radius: 4px;
+  margin: 12px 0 6px 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.note-quote {
+  border-left: 5px solid #455A64;
+  background-color: #ECEFF1;
+  padding: 8px 16px;
+  margin: 8px 0;
+  font-size: 21px;
+  font-weight: 600;
+  color: #263238;
+  border-radius: 0 4px 4px 0;
+}
+
+.note-img-wrap {
+  text-align: center;
+  margin: 10px 0;
+}
+.note-img {
+  max-width: 100%;
+  max-height: 480px;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid #CFD8DC;
+}
+
+.alert-table {
+  width: 100%;
+  margin: 8px 0;
+  border-radius: 6px;
+  border-collapse: separate;
+  padding: 8px 14px;
+}
+.alert-table.warning {
+  background-color: #FFEBEE;
+  border: 2px solid #C62828;
+}
+.alert-table.caution {
+  background-color: #FFF8E1;
+  border: 2px solid #F57F17;
+}
+.alert-badge-cell {
+  width: 130px;
+  vertical-align: middle;
+  padding-right: 14px;
+}
+.alert-badge {
+  display: inline-block;
+  color: #FFFFFF;
+  padding: 3px 12px;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-align: center;
+}
+.alert-table.warning .alert-badge { background-color: #C62828; }
+.alert-table.caution .alert-badge { background-color: #F57F17; }
+.alert-text-cell {
+  font-size: 22px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.alert-table.warning .alert-text-cell { color: #B71C1C; }
+.alert-table.caution .alert-text-cell { color: #E65100; }
+
+.check-table {
+  width: 100%;
+  margin: 6px 0;
+  border-collapse: collapse;
+}
+.check-box-cell {
+  width: 36px;
+  vertical-align: middle;
+  padding-right: 12px;
+}
+.check-box {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #455A64;
+  border-radius: 4px;
+  background-color: #FFFFFF;
+  box-sizing: border-box;
+}
+.check-box.checked {
+  background-color: #2E7D32;
+  border-color: #2E7D32;
+  color: #FFFFFF;
+  font-size: 17px;
+  line-height: 20px;
+  text-align: center;
+  font-weight: 700;
+}
+.check-text-cell {
+  font-size: 22px;
+  font-weight: 700;
+  color: #263238;
+  vertical-align: middle;
+}
+
+.notes-list {
+  list-style-type: square;
+  margin-left: 32px;
+  margin-bottom: 8px;
+}
+.notes-list li {
+  font-size: 22px;
+  font-weight: 600;
+  color: #212121;
+  padding: 3px 0;
+  line-height: 1.35;
+}
+
+.kv-table {
+  width: 100%;
+  background-color: #ECEFF1;
+  border-radius: 6px;
+  margin: 5px 0;
+  border-collapse: separate;
+}
+.kv-key {
+  padding: 8px 16px;
+  font-weight: 700;
+  font-size: 22px;
+  color: #37474F;
+  text-align: left;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.kv-val {
+  padding: 8px 16px;
+  font-weight: 700;
+  font-size: 22px;
+  color: #0D47A1;
+  text-align: right;
+  font-family: "Lucida Console", "Consolas", monospace;
+  letter-spacing: 0.5px;
+  vertical-align: middle;
+}
+
+.note-line {
+  font-size: 22px;
+  line-height: 1.4;
+  color: #263238;
+  font-weight: 500;
+  padding: 2px 0;
+  white-space: pre-wrap;
+}
+
+.footer-table {
+  position: absolute;
+  bottom: 24px;
+  left: 64px;
+  width: 896px;
+  border-top: 2.5px solid #90A4AE;
+  border-collapse: collapse;
+}
+.footer-left {
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+  width: 320px;
+  padding-top: 14px;
+  padding-bottom: 2px;
+}
+.footer-logo {
+  width: 28px;
+  height: 28px;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+.footer-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #263238;
+  letter-spacing: 1px;
+  vertical-align: middle;
+}
+.footer-sub {
+  font-size: 14px;
+  font-weight: 700;
+  color: #78909C;
+  vertical-align: middle;
+}
+.footer-center {
+  text-align: center;
+  vertical-align: middle;
+  font-size: 15px;
+  font-weight: 700;
+  color: #546E7A;
+  font-style: italic;
+  padding-top: 14px;
+  padding-bottom: 2px;
+}
+.footer-right {
+  text-align: right;
+  vertical-align: middle;
+  white-space: nowrap;
+  width: 160px;
+  padding-top: 14px;
+  padding-bottom: 2px;
+}
+.footer-page-badge {
+  background-color: #263238;
+  color: #FFFFFF;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 4px 18px;
+  border-radius: 6px;
+  letter-spacing: 1px;
+  display: inline-block;
+}
 </style>
 </head>
 <body>
 <div class="top-banner">
   ${bannerSvg}
-  <div class="header-notch ${notchClass}">${headerCode}</div>
+  <table class="header-notch ${notchClass}" cellpadding="0" cellspacing="0">
+    <tr>
+      <td class="header-notch-inner">${headerCode}</td>
+    </tr>
+  </table>
 </div>
 <div class="content-container">
   ${bannerHtml}
-  <div class="main-title">${title}</div>
-  <div class="subtitle">${subtitle}</div>
+  ${titleHtml}
+  ${subtitleHtml}
   ${bodyFormatted}
 </div>
-<div class="footer-table">
-  <div><img src="data:image/png;base64,${AEROGRAPH_LOGO_B64}" width="22" height="22" style="vertical-align:middle;margin-right:8px;" /><strong>AEROGRAPH</strong> // TACTICAL KNEEBOARDS</div>
-  <div>* COCKPIT CERTIFIED FLIGHT NOTES</div>
-  <div class="footer-page-badge">${displayPageNum}</div>
-</div>
+<table class="footer-table" cellpadding="0" cellspacing="0">
+  <tr>
+    <td class="footer-left">
+      <img src="data:image/png;base64,${AEROGRAPH_LOGO_B64}" class="footer-logo" alt="AeroGraph Logo" />
+      <span class="footer-title">AEROGRAPH</span>
+      <span class="footer-sub">&nbsp;// TACTICAL</span>
+    </td>
+    <td class="footer-center">
+      * COCKPIT CERTIFIED FLIGHT NOTES
+    </td>
+    <td class="footer-right">
+      ${pageBadgeHtml}
+    </td>
+  </tr>
+</table>
 </body>
 </html>`;
   };
@@ -1089,6 +1583,207 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
   // Compute scale for left and right previews
   const activeLeftScale = leftZoom === 'fit' ? leftFitScale : leftZoom;
   const activeRightScale = rightZoom === 'fit' ? rightFitScale : rightZoom;
+
+  const renderEditorToolbar = (side: 'left' | 'right') => {
+    return (
+      <div className="flex flex-wrap items-center gap-1 p-1 bg-[#141416] border border-white/[0.08] rounded text-[10px]">
+        {/* Bold */}
+        <button
+          type="button"
+          title="Bold (**text**)"
+          onClick={() => handleFormatText(side, '**', '**', 'bold text')}
+          className="px-1.5 py-0.5 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.06] text-zinc-300 hover:text-white font-bold cursor-pointer transition-colors"
+        >
+          B
+        </button>
+        {/* Italic */}
+        <button
+          type="button"
+          title="Italic (_text_)"
+          onClick={() => handleFormatText(side, '_', '_', 'italic text')}
+          className="px-1.5 py-0.5 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.06] text-zinc-300 hover:text-white italic font-serif cursor-pointer transition-colors"
+        >
+          I
+        </button>
+
+        {/* Color Dropdown */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setColorDropdownOpen(colorDropdownOpen === side ? null : side)}
+            className="px-1.5 py-0.5 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.06] text-accent font-bold cursor-pointer flex items-center gap-1 transition-colors"
+          >
+            <span>🎨 Color ▾</span>
+          </button>
+          {colorDropdownOpen === side && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setColorDropdownOpen(null)} />
+              <div className="absolute left-0 top-full mt-1 w-60 bg-[#18181B] border border-white/10 rounded-lg shadow-2xl p-2 z-40 max-h-72 overflow-y-auto space-y-2">
+                <div>
+                  <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                    Text Colors
+                  </span>
+                  <div className="grid grid-cols-2 gap-1">
+                    {PREDEFINED_COLORS.filter((c) => !c.bg).map((c) => (
+                      <button
+                        key={c.tag}
+                        type="button"
+                        onClick={() => {
+                          handleFormatText(side, `{${c.tag}: `, '}', 'text');
+                          setColorDropdownOpen(null);
+                        }}
+                        className="flex items-center gap-1.5 p-1 rounded hover:bg-[#27272A] text-left cursor-pointer transition-colors"
+                      >
+                        <span
+                          className="w-3 h-3 rounded-full border border-black/30 flex-shrink-0"
+                          style={{ backgroundColor: c.hex }}
+                        />
+                        <span className="text-zinc-200 text-[10px] font-mono">{c.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="border-t border-white/[0.08] pt-1.5">
+                  <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                    Background Badges
+                  </span>
+                  <div className="grid grid-cols-2 gap-1">
+                    {PREDEFINED_COLORS.filter((c) => c.bg).map((c) => (
+                      <button
+                        key={c.tag}
+                        type="button"
+                        onClick={() => {
+                          handleFormatText(side, `{${c.tag}: `, '}', 'text');
+                          setColorDropdownOpen(null);
+                        }}
+                        className="flex items-center gap-1.5 p-1 rounded hover:bg-[#27272A] text-left cursor-pointer transition-colors"
+                      >
+                        <span
+                          className="px-1 rounded text-[9px] font-bold flex-shrink-0"
+                          style={{ backgroundColor: c.hex, color: c.textColor }}
+                        >
+                          Abc
+                        </span>
+                        <span className="text-zinc-200 text-[10px] font-mono">{c.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="w-[1px] h-3.5 bg-white/[0.1] mx-0.5" />
+
+        {/* Headings */}
+        <button
+          type="button"
+          title="Heading 1 (# Title)"
+          onClick={() => handleFormatText(side, '# ', '', 'TITLE')}
+          className="px-1.5 py-0.5 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.06] text-zinc-300 hover:text-white font-bold cursor-pointer transition-colors"
+        >
+          H1
+        </button>
+        <button
+          type="button"
+          title="Heading 2 (## Subtitle)"
+          onClick={() => handleFormatText(side, '## ', '', 'SUBTITLE')}
+          className="px-1.5 py-0.5 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.06] text-zinc-300 hover:text-white font-bold cursor-pointer transition-colors"
+        >
+          H2
+        </button>
+        <button
+          type="button"
+          title="Heading 3 (### Subheader)"
+          onClick={() => handleFormatText(side, '### ', '', 'SUBHEADER')}
+          className="px-1.5 py-0.5 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.06] text-zinc-300 hover:text-white font-bold cursor-pointer transition-colors"
+        >
+          H3
+        </button>
+        <button
+          type="button"
+          title="Section Badge ([SECTION])"
+          onClick={() => handleFormatText(side, '[', ']', 'SECTION')}
+          className="px-1.5 py-0.5 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.06] text-zinc-300 hover:text-white font-bold cursor-pointer transition-colors"
+        >
+          [SEC]
+        </button>
+
+        <div className="w-[1px] h-3.5 bg-white/[0.1] mx-0.5" />
+
+        {/* Alerts & Quotes */}
+        <button
+          type="button"
+          title="Warning Alert (WARNING: message)"
+          onClick={() => handleFormatText(side, 'WARNING: ', '', 'Alert message')}
+          className="px-1.5 py-0.5 rounded bg-[#2A1515] hover:bg-[#381B1B] border border-red-500/30 text-red-400 hover:text-red-300 font-bold cursor-pointer transition-colors"
+        >
+          WARN
+        </button>
+        <button
+          type="button"
+          title="Caution Alert (CAUTION: message)"
+          onClick={() => handleFormatText(side, 'CAUTION: ', '', 'Caution message')}
+          className="px-1.5 py-0.5 rounded bg-[#2A2315] hover:bg-[#382E1B] border border-amber-500/30 text-amber-400 hover:text-amber-300 font-bold cursor-pointer transition-colors"
+        >
+          CAUT
+        </button>
+        <button
+          type="button"
+          title="Blockquote Note (> Note)"
+          onClick={() => handleFormatText(side, '> ', '', 'Important note')}
+          className="px-1.5 py-0.5 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.06] text-zinc-300 hover:text-white font-bold cursor-pointer transition-colors"
+        >
+          &gt; NOTE
+        </button>
+
+        <div className="w-[1px] h-3.5 bg-white/[0.1] mx-0.5" />
+
+        {/* Checklists & Table */}
+        <button
+          type="button"
+          title="Check item ([ ] item)"
+          onClick={() => handleFormatText(side, '[ ] ', '', 'Item')}
+          className="px-1.5 py-0.5 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.06] text-zinc-300 hover:text-white font-bold cursor-pointer transition-colors"
+        >
+          [ ]
+        </button>
+        <button
+          type="button"
+          title="Checked item ([x] item)"
+          onClick={() => handleFormatText(side, '[x] ', '', 'Completed item')}
+          className="px-1.5 py-0.5 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.06] text-green-400 hover:text-green-300 font-bold cursor-pointer transition-colors"
+        >
+          [✔]
+        </button>
+        <button
+          type="button"
+          title="Bullet list (- item)"
+          onClick={() => handleFormatText(side, '- ', '', 'Bullet item')}
+          className="px-1.5 py-0.5 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.06] text-zinc-300 hover:text-white font-bold cursor-pointer transition-colors"
+        >
+          &bull; List
+        </button>
+        <button
+          type="button"
+          title="Key-Value Card (KEY: VALUE)"
+          onClick={() => handleFormatText(side, 'PARAM: ', '', 'VALUE')}
+          className="px-1.5 py-0.5 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.06] text-zinc-300 hover:text-white font-bold cursor-pointer transition-colors"
+        >
+          KEY:VAL
+        </button>
+        <button
+          type="button"
+          title="Image embed (![alt](path))"
+          onClick={() => handleFormatText(side, '![', '](image.png)', 'Description')}
+          className="px-1.5 py-0.5 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.06] text-zinc-300 hover:text-white font-bold cursor-pointer transition-colors"
+        >
+          IMG
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="h-full w-full flex flex-col bg-[#0E0E10] select-none overflow-hidden font-sans relative">
@@ -1394,6 +2089,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                       )}
                     </div>
                   </div>
+                  {renderEditorToolbar('left')}
                   <textarea
                     ref={leftTextareaRef}
                     value={getSlotDisplayContent(leftSlot)}
@@ -1402,7 +2098,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                     placeholder="Enter pilot notes, check items, or flight protocols in markdown..."
                   />
                   <div className="text-[10px] text-zinc-500 flex justify-between">
-                    <span>Syntax: # Heading &bull; ## Subheading &bull; KEY: VALUE &bull; WARNING: / CAUTION:</span>
+                    <span>Syntax: # H1 &bull; ## H2 &bull; ### H3 &bull; **Bold** &bull; _Italic_ &bull; [SEC] &bull; KEY: VAL &bull; WARNING:</span>
                     <span>Staged in-memory</span>
                   </div>
                 </div>
@@ -1776,6 +2472,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                       )}
                     </div>
                   </div>
+                  {renderEditorToolbar('right')}
                   <textarea
                     ref={rightTextareaRef}
                     value={getSlotDisplayContent(rightSlot)}
@@ -1784,7 +2481,7 @@ body { background-color: #FAFAF8; font-family: -apple-system, sans-serif; color:
                     placeholder="Enter pilot notes, check items, or flight protocols in markdown..."
                   />
                   <div className="text-[10px] text-zinc-500 flex justify-between">
-                    <span>Syntax: # Heading &bull; ## Subheading &bull; KEY: VALUE &bull; WARNING: / CAUTION:</span>
+                    <span>Syntax: # H1 &bull; ## H2 &bull; ### H3 &bull; **Bold** &bull; _Italic_ &bull; [SEC] &bull; KEY: VAL &bull; WARNING:</span>
                     <span>Staged in-memory</span>
                   </div>
                 </div>

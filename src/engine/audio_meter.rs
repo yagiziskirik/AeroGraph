@@ -11,6 +11,7 @@ use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
 };
 
+#[derive(Default)]
 pub struct AudioPeakMeter {
     meter: Option<IAudioMeterInformation>,
     _client: Option<IAudioClient>,
@@ -18,26 +19,14 @@ pub struct AudioPeakMeter {
 
 unsafe impl Send for AudioPeakMeter {}
 
-impl Default for AudioPeakMeter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl AudioPeakMeter {
     pub fn new() -> Self {
-        unsafe {
-            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        }
-        let (meter, client) = Self::init_meter();
-        Self {
-            meter,
-            _client: client,
-        }
+        Self::default()
     }
 
     fn init_meter() -> (Option<IAudioMeterInformation>, Option<IAudioClient>) {
         unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
             let enumerator: IMMDeviceEnumerator =
                 match CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) {
                     Ok(e) => e,

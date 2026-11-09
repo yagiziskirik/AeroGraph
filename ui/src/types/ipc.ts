@@ -28,6 +28,7 @@ export interface AppConfig {
   start_with_windows?: boolean;
   auto_engage_voice?: boolean;
   invert_wheel_brakes?: boolean;
+  invert_kneeboard_scroll?: boolean;
 }
 
 export interface SlotConfig {

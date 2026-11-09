@@ -496,6 +496,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut main_bms_client = BmsSharedMemoryClient::new();
     let mut last_telemetry_tick = Instant::now();
     let mut last_in_3d = false;
+    let mut was_open_before_3d = false;
     let audio_player = crate::engine::audio::AudioPlayer::new().ok();
 
     if config.gui_open_on_startup {
@@ -567,6 +568,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(opened) => {
                         log::info!("Tactical Console toggled (open={})", opened);
                         ui_visible.store(opened, Ordering::Relaxed);
+                        if last_in_3d {
+                            was_open_before_3d = opened;
+                        }
                         if opened {
                             if let Some(win) = tactical_console.active_window() {
                                 push_snapshot_helper(
@@ -916,38 +920,64 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
 
-                // High-Performance Telemetry Stream for Tactical Console (10Hz)
-                if tactical_console.is_open() && last_telemetry_tick.elapsed() >= Duration::from_millis(100) {
+                // Periodic BMS Connection & Telemetry / 3D State Sync (10Hz)
+                if last_telemetry_tick.elapsed() >= Duration::from_millis(100) {
                     last_telemetry_tick = Instant::now();
                     if !main_bms_client.is_connected() {
                         let _ = main_bms_client.connect();
                     }
 
                     let bms_running = main_bms_client.is_connected();
-                    let is_3d = main_bms_client
-                        .read_vibe_data()
-                        .map(|v| v.in_3d != 0)
-                        .unwrap_or(false);
+                    let is_3d = if bms_running {
+                        let vibe_3d = main_bms_client
+                            .read_vibe_data()
+                            .map(|v| v.in_3d != 0)
+                            .unwrap_or(false);
+                        let flight_3d = main_bms_client
+                            .read_primary_data()
+                            .map(|p| (p.hsi_bits & 0x8000_0000) != 0)
+                            .unwrap_or(false);
+                        vibe_3d || flight_3d
+                    } else {
+                        false
+                    };
 
-                    // SmartAutoDock: Sim 3D Lockout & Teardown
+                    // SmartAutoDock: Sim 3D Lockout & Teardown / Auto-Restore
                     if is_3d && !last_in_3d {
-                        let cfg = shared_config.lock().unwrap();
-                        if cfg.gui_auto_dock_on_3d && !cfg.secondary_monitor_pin {
-                            log::info!("SmartAutoDock: Entered 3D simulation, tearing down Tactical Console to ensure 0% sim overhead.");
-                            tactical_console.teardown();
-                            last_in_3d = is_3d;
-                            return;
+                        if tactical_console.is_open() {
+                            was_open_before_3d = true;
+                            let cfg = shared_config.lock().unwrap();
+                            if cfg.gui_auto_dock_on_3d && !cfg.secondary_monitor_pin {
+                                log::info!("SmartAutoDock: Entered 3D simulation, tearing down Tactical Console to ensure 0% sim overhead.");
+                                tactical_console.teardown();
+                                ui_visible.store(false, Ordering::Relaxed);
+                                last_in_3d = is_3d;
+                                return;
+                            }
                         }
+                    } else if !is_3d && last_in_3d {
+                        // Exited 3D cockpit
+                        let cfg = shared_config.lock().unwrap();
+                        if was_open_before_3d
+                            && cfg.gui_auto_dock_on_3d
+                            && !cfg.secondary_monitor_pin
+                            && !tactical_console.is_open()
+                        {
+                            log::info!("SmartAutoDock: Exited 3D simulation, restoring Tactical Console.");
+                            let _ = proxy.send_event(AppEvent::ToggleConsole);
+                        }
+                        was_open_before_3d = false;
                     }
                     last_in_3d = is_3d;
 
-                    let is_vis = tactical_console
-                        .active_window()
-                        .map(|w| w.window().is_visible())
-                        .unwrap_or(false);
-                    ui_visible.store(is_vis, Ordering::Relaxed);
+                    if tactical_console.is_open() {
+                        let is_vis = tactical_console
+                            .active_window()
+                            .map(|w| w.window().is_visible())
+                            .unwrap_or(false);
+                        ui_visible.store(is_vis, Ordering::Relaxed);
 
-                    if let Some(win) = tactical_console.active_window() {
+                        if let Some(win) = tactical_console.active_window() {
                         let strings = main_bms_client.read_string_info();
                         let callsign = if !strings.callsign.is_empty() {
                             strings.callsign
@@ -1067,6 +1097,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
+        }
             _ => {}
         }
     });
@@ -2232,25 +2263,7 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
         mpo_binding_active,
     } = ctx;
     let mut bms_client = BmsSharedMemoryClient::new();
-    let initial_voice_enabled = {
-        let cfg = config_lock.lock().unwrap();
-        cfg.voice_recognition
-    };
-    let mut sapi = if initial_voice_enabled {
-        match SapiEngine::new() {
-            Ok(s) => {
-                log::info!("SAPI Speech Recognizer initialized successfully");
-                Some(s)
-            }
-            Err(e) => {
-                log::error!("Failed to initialize Windows SAPI Recognizer: {:?}", e);
-                None
-            }
-        }
-    } else {
-        log::info!("Voice recognition disabled in configuration; skipping SAPI initialization.");
-        None
-    };
+    let mut sapi: Option<SapiEngine> = None;
 
     let initial_gender = {
         let cfg = config_lock.lock().unwrap();
@@ -2369,15 +2382,18 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
 
         state_engine.set_bms_connected(bms_conn);
 
+        let mut in_3d_state = false;
         if let Some(flight_data) = bms_client.read_primary_data() {
             state_engine.update_from_flight_data(&flight_data);
+            if (flight_data.hsi_bits & 0x8000_0000) != 0 {
+                in_3d_state = true;
+            }
         }
 
         if let Some(vibe) = bms_client.read_vibe_data() {
-            let in_3d = if vibe.in_3d != 0 { "True" } else { "False" };
-            state_engine
-                .variables
-                .insert("In3D".to_string(), in_3d.to_string());
+            if vibe.in_3d != 0 {
+                in_3d_state = true;
+            }
             let on_ground = if vibe.is_on_ground != 0 {
                 "True"
             } else {
@@ -2387,6 +2403,11 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                 .variables
                 .insert("OnGround".to_string(), on_ground.to_string());
         }
+
+        let in_3d = if in_3d_state { "True" } else { "False" };
+        state_engine
+            .variables
+            .insert("In3D".to_string(), in_3d.to_string());
 
         let strings = bms_client.read_string_info();
         if !strings.awacs.is_empty() {

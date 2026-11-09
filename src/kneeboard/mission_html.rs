@@ -716,7 +716,7 @@ pub fn generate_mission_overview_html(
             <circle cx='{tx:.1}' cy='{ty:.1}' r='{r_px:.1}' fill='rgba(126, 34, 206, 0.08)' stroke='#7E22CE' stroke-width='3.0' stroke-dasharray='8,6' />
             <circle cx='{tx:.1}' cy='{ty:.1}' r='7' fill='#7E22CE' stroke='#FFFFFF' stroke-width='2' />
             <rect x='{:.1}' y='{:.1}' width='180' height='28' rx='4' fill='rgba(255, 255, 255, 0.96)' stroke='#7E22CE' stroke-width='2' />
-            <text x='{tx:.1}' y='{:.1}' font-size='15' font-weight='900' fill='#7E22CE' text-anchor='middle'>TNK ORBIT ({:.0}NM)</text>"#,
+            <text x='{tx:.1}' y='{:.1}' font-size='15' font-weight='700' fill='#7E22CE' text-anchor='middle'>TNK ORBIT ({:.0}NM)</text>"#,
                     tx - 90.0,
                     ty - r_px - 28.0,
                     ty - r_px - 9.0,
@@ -729,7 +729,7 @@ pub fn generate_mission_overview_html(
             <circle cx='{tx:.1}' cy='{ty:.1}' r='{r_px:.1}' fill='rgba(13, 148, 136, 0.08)' stroke='#0D9488' stroke-width='3.0' stroke-dasharray='8,6' />
             <circle cx='{tx:.1}' cy='{ty:.1}' r='7' fill='#0D9488' stroke='#FFFFFF' stroke-width='2' />
             <rect x='{:.1}' y='{:.1}' width='190' height='28' rx='4' fill='rgba(255, 255, 255, 0.96)' stroke='#0D9488' stroke-width='2' />
-            <text x='{tx:.1}' y='{:.1}' font-size='15' font-weight='900' fill='#0D9488' text-anchor='middle'>AWACS ORBIT ({:.0}NM)</text>"#,
+            <text x='{tx:.1}' y='{:.1}' font-size='15' font-weight='700' fill='#0D9488' text-anchor='middle'>AWACS ORBIT ({:.0}NM)</text>"#,
                     tx - 95.0,
                     ty - r_px - 28.0,
                     ty - r_px - 9.0,
@@ -742,7 +742,7 @@ pub fn generate_mission_overview_html(
             <circle cx='{tx:.1}' cy='{ty:.1}' r='{r_px:.1}' fill='rgba(220, 38, 38, 0.14)' stroke='#DC2626' stroke-width='3.5' stroke-dasharray='10,6' />
             <circle cx='{tx:.1}' cy='{ty:.1}' r='8' fill='#DC2626' stroke='#FFFFFF' stroke-width='2.5' />
             <rect x='{:.1}' y='{:.1}' width='160' height='28' rx='4' fill='rgba(255, 255, 255, 0.96)' stroke='#DC2626' stroke-width='2' />
-            <text x='{tx:.1}' y='{:.1}' font-size='16' font-weight='900' fill='#DC2626' text-anchor='middle'>{name} ({:.0}NM)</text>"#,
+            <text x='{tx:.1}' y='{:.1}' font-size='16' font-weight='700' fill='#DC2626' text-anchor='middle'>{name} ({:.0}NM)</text>"#,
                     tx - 80.0,
                     ty - r_px - 28.0,
                     ty - r_px - 9.0,
@@ -788,7 +788,7 @@ pub fn generate_mission_overview_html(
             let circle_fill = if is_refuel { "#FAF5FF" } else { "#FFFFFF" };
             svg_elements.push(format!(
                 r#"<circle cx='{:.1}' cy='{:.1}' r='18' fill='{circle_fill}' stroke='{circle_stroke}' stroke-width='4' />
-                <text x='{:.1}' y='{:.1}' font-size='20' font-family='monospace' font-weight='900' fill='{circle_stroke}' text-anchor='middle'>{}</text>"#,
+                <text x='{:.1}' y='{:.1}' font-size='20' font-family='monospace' font-weight='700' fill='{circle_stroke}' text-anchor='middle'>{}</text>"#,
                 p.sx, p.sy,
                 p.sx, p.sy + 7.0,
                 p.num
@@ -855,8 +855,8 @@ pub fn generate_mission_overview_html(
         svg_elements.push(format!(
             r#"<g transform='translate({bx:.1}, {by:.1})'>
               <rect x='0' y='0' width='{bw:.1}' height='{bh:.1}' rx='6' fill='rgba(255, 255, 255, 0.96)' stroke='{border_col}' stroke-width='2.5' />
-              <text x='8' y='20' font-size='19' font-weight='900' fill='{lbl_col}'>{title_text}</text>
-              <text x='8' y='40' font-size='16' font-family='monospace' font-weight='800' fill='#334155'>{sub_text}</text>
+              <text x='8' y='20' font-size='19' font-weight='700' fill='{lbl_col}'>{title_text}</text>
+              <text x='8' y='40' font-size='16' font-family='monospace' font-weight='700' fill='#334155'>{sub_text}</text>
             </g>"#
         ));
     }
@@ -869,7 +869,7 @@ pub fn generate_mission_overview_html(
           <line x1='0' y1='0' x2='{scale_px:.1}' y2='0' stroke='#0F172A' stroke-width='5' />
           <line x1='0' y1='-8' x2='0' y2='8' stroke='#0F172A' stroke-width='3.5' />
           <line x1='{scale_px:.1}' y1='-8' x2='{scale_px:.1}' y2='8' stroke='#0F172A' stroke-width='3.5' />
-          <text x='{:.1}' y='-8' font-size='20' font-weight='900' fill='#0F172A' text-anchor='middle'>{scale_nm} NM</text>
+          <text x='{:.1}' y='-8' font-size='20' font-weight='700' fill='#0F172A' text-anchor='middle'>{scale_nm} NM</text>
         </g>
         <!-- North Arrow (Large VR Identifiable) -->
         <g transform='translate({:.1}, 60)'>
@@ -878,7 +878,7 @@ pub fn generate_mission_overview_html(
           <polygon points='0,-28 -9,-5 0,0' fill='#1E293B' />
           <polygon points='0,28 9,5 0,0' fill='#94A3B8' />
           <polygon points='0,28 -9,5 0,0' fill='#CBD5E1' />
-          <text x='0' y='-30' font-size='24' font-weight='900' fill='#DC2626' text-anchor='middle'>N</text>
+          <text x='0' y='-30' font-size='24' font-weight='700' fill='#DC2626' text-anchor='middle'>N</text>
         </g>"#,
         h_svg - 45.0,
         scale_px + 36.0,
@@ -917,7 +917,7 @@ pub fn generate_mission_overview_html(
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{
     background-color: #FAFAF8;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
     color: #1A1A1A;
     width: 1024px;
     height: 1554px;
@@ -929,14 +929,14 @@ pub fn generate_mission_overview_html(
   }}
   .title {{
     font-size: 38px;
-    font-weight: 900;
+    font-weight: 700;
     color: #0D47A1;
     letter-spacing: 0.5px;
     line-height: 1.1;
   }}
   .sub-line {{
     font-size: 22px;
-    font-weight: 800;
+    font-weight: 700;
     color: #334155;
     font-family: monospace;
     margin-top: 4px;
@@ -977,7 +977,7 @@ pub fn generate_mission_overview_html(
   }}
   .pill-label {{
     font-size: 16px;
-    font-weight: 900;
+    font-weight: 700;
     color: #64748B;
     letter-spacing: 1px;
   }}
@@ -986,7 +986,7 @@ pub fn generate_mission_overview_html(
   .pill-col.threat-clear .pill-label {{ color: #16A34A; }}
   .pill-value {{
     font-size: 26px;
-    font-weight: 900;
+    font-weight: 700;
     font-family: monospace;
     color: #0F172A;
     margin-top: 2px;
@@ -1159,9 +1159,9 @@ pub fn generate_tactical_target_html(
         <circle cx='{tx:.1}' cy='{ty:.1}' r='{r5_px:.1}' fill='none' stroke='#0284C7' stroke-width='2.5' stroke-dasharray='8,6' opacity='0.7' />
         <circle cx='{tx:.1}' cy='{ty:.1}' r='{r10_px:.1}' fill='none' stroke='#0284C7' stroke-width='2.5' stroke-dasharray='8,6' opacity='0.7' />
         <circle cx='{tx:.1}' cy='{ty:.1}' r='{r15_px:.1}' fill='none' stroke='#0284C7' stroke-width='2.5' stroke-dasharray='8,6' opacity='0.7' />
-        <text x='{tx:.1}' y='{:.1}' font-size='18' font-weight='900' fill='#0369A1' opacity='0.9' text-anchor='middle'>5 NM</text>
-        <text x='{tx:.1}' y='{:.1}' font-size='18' font-weight='900' fill='#0369A1' opacity='0.9' text-anchor='middle'>10 NM</text>
-        <text x='{tx:.1}' y='{:.1}' font-size='18' font-weight='900' fill='#0369A1' opacity='0.9' text-anchor='middle'>15 NM</text>"#,
+        <text x='{tx:.1}' y='{:.1}' font-size='18' font-weight='700' fill='#0369A1' opacity='0.9' text-anchor='middle'>5 NM</text>
+        <text x='{tx:.1}' y='{:.1}' font-size='18' font-weight='700' fill='#0369A1' opacity='0.9' text-anchor='middle'>10 NM</text>
+        <text x='{tx:.1}' y='{:.1}' font-size='18' font-weight='700' fill='#0369A1' opacity='0.9' text-anchor='middle'>15 NM</text>"#,
         ty - r5_px + 18.0,
         ty - r10_px + 18.0,
         ty - r15_px + 18.0
@@ -1185,7 +1185,7 @@ pub fn generate_tactical_target_html(
                 r#"<circle cx='{thx:.1}' cy='{thy:.1}' r='{r_px:.1}' fill='rgba(220, 38, 38, 0.16)' stroke='#DC2626' stroke-width='3.5' stroke-dasharray='10,6' />
                 <circle cx='{thx:.1}' cy='{thy:.1}' r='8' fill='#DC2626' stroke='#FFFFFF' stroke-width='2.5' />
                 <rect x='{:.1}' y='{:.1}' width='150' height='30' rx='4' fill='rgba(255, 255, 255, 0.96)' stroke='#DC2626' stroke-width='2' />
-                <text x='{thx:.1}' y='{:.1}' font-size='17' font-weight='900' fill='#DC2626' text-anchor='middle'>{name} ({:.0}NM)</text>"#,
+                <text x='{thx:.1}' y='{:.1}' font-size='17' font-weight='700' fill='#DC2626' text-anchor='middle'>{name} ({:.0}NM)</text>"#,
                 thx - 75.0,
                 thy - r_px - 30.0,
                 thy - r_px - 9.0,
@@ -1316,11 +1316,11 @@ pub fn generate_tactical_target_html(
             };
             svg_elements.push(format!(
                 r#"<rect x='{:.1}' y='{:.1}' width='36' height='36' fill='#D97706' stroke='#FFFFFF' stroke-width='3.5' />
-                <text x='{raw_ip_x:.1}' y='{:.1}' font-size='19' font-family='monospace' font-weight='900' fill='#FFFFFF' text-anchor='middle'>IP</text>
+                <text x='{raw_ip_x:.1}' y='{:.1}' font-size='19' font-family='monospace' font-weight='700' fill='#FFFFFF' text-anchor='middle'>IP</text>
                 <g transform='translate({ibx:.1}, {iby:.1})'>
                   <rect x='0' y='0' width='{ibw:.1}' height='{ibh:.1}' rx='6' fill='rgba(255, 255, 255, 0.96)' stroke='#D97706' stroke-width='2.5' />
-                  <text x='8' y='20' font-size='19' font-weight='900' fill='#D97706'>STPT {}: {}</text>
-                  <text x='8' y='40' font-size='16' font-family='monospace' font-weight='800' fill='#334155'>{} | {}</text>
+                  <text x='8' y='20' font-size='19' font-weight='700' fill='#D97706'>STPT {}: {}</text>
+                  <text x='8' y='40' font-size='16' font-family='monospace' font-weight='700' fill='#334155'>{} | {}</text>
                 </g>"#,
                 raw_ip_x - 18.0, raw_ip_y - 18.0,
                 raw_ip_y + 7.0,
@@ -1335,7 +1335,7 @@ pub fn generate_tactical_target_html(
                 r#"<!-- Ingress Inbound Edge Indicator -->
                 <g transform='translate({edge_x:.1}, {edge_y:.1})'>
                   <rect x='-115' y='-22' width='230' height='44' rx='8' fill='rgba(255, 255, 255, 0.96)' stroke='#16A34A' stroke-width='3.5' />
-                  <text x='0' y='7' font-size='19' font-weight='900' fill='#15803D' text-anchor='middle'>INBOUND: {}° ({}NM)</text>
+                  <text x='0' y='7' font-size='19' font-weight='700' fill='#15803D' text-anchor='middle'>INBOUND: {}° ({}NM)</text>
                 </g>"#,
                 tgt_pt.head, tgt_pt.dist
             ));
@@ -1377,11 +1377,11 @@ pub fn generate_tactical_target_html(
             }
             svg_elements.push(format!(
                 r#"<circle cx='{raw_eg_x:.1}' cy='{raw_eg_y:.1}' r='18' fill='#FFFFFF' stroke='#D97706' stroke-width='4' />
-                <text x='{raw_eg_x:.1}' y='{:.1}' font-size='20' font-family='monospace' font-weight='900' fill='#D97706' text-anchor='middle'>{}</text>
+                <text x='{raw_eg_x:.1}' y='{:.1}' font-size='20' font-family='monospace' font-weight='700' fill='#D97706' text-anchor='middle'>{}</text>
                 <g transform='translate({ebx:.1}, {eby:.1})'>
                   <rect x='0' y='0' width='{ebw:.1}' height='{ebh:.1}' rx='6' fill='rgba(255, 255, 255, 0.96)' stroke='#D97706' stroke-width='2.5' />
-                  <text x='8' y='20' font-size='19' font-weight='900' fill='#D97706'>STPT {}: EGRESS</text>
-                  <text x='8' y='40' font-size='16' font-family='monospace' font-weight='800' fill='#334155'>{} | {}</text>
+                  <text x='8' y='20' font-size='19' font-weight='700' fill='#D97706'>STPT {}: EGRESS</text>
+                  <text x='8' y='40' font-size='16' font-family='monospace' font-weight='700' fill='#334155'>{} | {}</text>
                 </g>"#,
                 raw_eg_y + 7.0,
                 eg.num, eg.num,
@@ -1395,7 +1395,7 @@ pub fn generate_tactical_target_html(
                 r#"<!-- Egress Outbound Edge Indicator -->
                 <g transform='translate({edge_x:.1}, {edge_y:.1})'>
                   <rect x='-110' y='-22' width='220' height='44' rx='8' fill='rgba(255, 255, 255, 0.96)' stroke='#D97706' stroke-width='3.5' />
-                  <text x='0' y='7' font-size='19' font-weight='900' fill='#B45309' text-anchor='middle'>OUTBOUND: {}°</text>
+                  <text x='0' y='7' font-size='19' font-weight='700' fill='#B45309' text-anchor='middle'>OUTBOUND: {}°</text>
                 </g>"#,
                 eg.head
             ));
@@ -1443,8 +1443,8 @@ pub fn generate_tactical_target_html(
         <line x1='{tx:.1}' y1='{:.1}' x2='{tx:.1}' y2='{:.1}' stroke='#FFFFFF' stroke-width='2.5' stroke-dasharray='10,6' />
         <g transform='translate({tbx:.1}, {tby:.1})'>
           <rect x='0' y='0' width='{tbw:.1}' height='{tbh:.1}' rx='6' fill='rgba(255, 255, 255, 0.96)' stroke='#DC2626' stroke-width='3' />
-          <text x='10' y='22' font-size='22' font-weight='900' fill='#DC2626'>TGT {tgt_num}: {tgt_desc_sub}</text>
-          <text x='10' y='46' font-size='18' font-family='monospace' font-weight='800' fill='#0F172A'>TOT: {} | {}</text>
+          <text x='10' y='22' font-size='22' font-weight='700' fill='#DC2626'>TGT {tgt_num}: {tgt_desc_sub}</text>
+          <text x='10' y='46' font-size='18' font-family='monospace' font-weight='700' fill='#0F172A'>TOT: {} | {}</text>
         </g>"#,
         tx, ty - d_sz,
         tx + d_sz, ty,
@@ -1465,7 +1465,7 @@ pub fn generate_tactical_target_html(
           <line x1='0' y1='0' x2='{scale_5nm_px:.1}' y2='0' stroke='#0F172A' stroke-width='5' />
           <line x1='0' y1='-8' x2='0' y2='8' stroke='#0F172A' stroke-width='3.5' />
           <line x1='{scale_5nm_px:.1}' y1='-8' x2='{scale_5nm_px:.1}' y2='8' stroke='#0F172A' stroke-width='3.5' />
-          <text x='{:.1}' y='-8' font-size='20' font-weight='900' fill='#0F172A' text-anchor='middle'>5 NM</text>
+          <text x='{:.1}' y='-8' font-size='20' font-weight='700' fill='#0F172A' text-anchor='middle'>5 NM</text>
         </g>
         <!-- North Arrow (Top Right) -->
         <g transform='translate({:.1}, 60)'>
@@ -1474,7 +1474,7 @@ pub fn generate_tactical_target_html(
           <polygon points='0,-28 -9,-5 0,0' fill='#1E293B' />
           <polygon points='0,28 9,5 0,0' fill='#94A3B8' />
           <polygon points='0,28 -9,5 0,0' fill='#CBD5E1' />
-          <text x='0' y='-30' font-size='24' font-weight='900' fill='#DC2626' text-anchor='middle'>N</text>
+          <text x='0' y='-30' font-size='24' font-weight='700' fill='#DC2626' text-anchor='middle'>N</text>
         </g>"#,
         scale_5nm_px + 36.0,
         scale_5nm_px / 2.0,
@@ -1532,7 +1532,7 @@ pub fn generate_tactical_target_html(
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{
     background-color: #FAFAF8;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
     color: #1A1A1A;
     width: 1024px;
     height: 1554px;
@@ -1544,14 +1544,14 @@ pub fn generate_tactical_target_html(
   }}
   .title {{
     font-size: 38px;
-    font-weight: 900;
+    font-weight: 700;
     color: #DC2626;
     letter-spacing: 0.5px;
     line-height: 1.1;
   }}
   .sub-line {{
     font-size: 22px;
-    font-weight: 800;
+    font-weight: 700;
     color: #334155;
     font-family: monospace;
     margin-top: 4px;
@@ -1592,7 +1592,7 @@ pub fn generate_tactical_target_html(
   }}
   .pill-label {{
     font-size: 16px;
-    font-weight: 900;
+    font-weight: 700;
     color: #64748B;
     letter-spacing: 1px;
   }}
@@ -1601,7 +1601,7 @@ pub fn generate_tactical_target_html(
   .pill-col.threat-clear .pill-label {{ color: #16A34A; }}
   .pill-value {{
     font-size: 26px;
-    font-weight: 900;
+    font-weight: 700;
     font-family: monospace;
     color: #0F172A;
     margin-top: 2px;
@@ -1652,7 +1652,7 @@ pub fn generate_tactical_target_html(
   }}
   .corner-title {{
     font-size: 22px;
-    font-weight: 900;
+    font-weight: 700;
     padding-bottom: 6px;
     margin-bottom: 8px;
     border-bottom: 2px solid #E2E8F0;
@@ -1671,7 +1671,7 @@ pub fn generate_tactical_target_html(
     white-space: nowrap;
   }}
   .card-row .val {{
-    font-weight: 900;
+    font-weight: 700;
     color: #0F172A;
   }}
 </style>

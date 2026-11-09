@@ -229,7 +229,7 @@ Whenever you plan a mission in Campaign or Tactical Engagement:
   <em>Click the 'Print' button in the BMS Briefing window to generate User/Briefings/briefing.txt.</em>
 </p>
 
-4. Falcon BMS immediately outputs `briefing.txt`. AeroGraph detects the change in milliseconds, renders your complete kneeboard suite, and injects textures directly into your cockpit. It can take a few seconds, just wait for `DATA` sound (you'll understand when you hear it), and than you are ready for departure!
+4. Falcon BMS immediately outputs `briefing.txt`. AeroGraph detects the change in milliseconds, plays an audible generation chime, renders your complete kneeboard suite, and injects textures directly into your cockpit. When texture injection finishes, the completion chime (the warning with "DATA" callout) confirms your kneeboards are loaded and you are ready for departure!
 
 ---
 
@@ -323,8 +323,11 @@ start_with_windows = false
 # Live file monitoring on User/Briefings/briefing.txt
 auto_kneeboards = true
 
-# Sound cue playback ("DATA" sound effect) on kneeboard texture regeneration
+# Sound cue playback (commit start chime & init completion chime) on kneeboard texture regeneration
 play_sound_on_update = true
+
+# Invert Alt + Scroll Wheel page navigation direction in the Kneeboard Binder
+invert_kneeboard_scroll = false
 
 # Graphical Tactical Avionics Console preferences
 gui_open_on_startup = false
@@ -374,6 +377,7 @@ The **Kneeboard Binder** is an interactive dual-station kneepad viewer and layou
   - **Zoom In (`+`) & Zoom Out (`-`)**: Smooth granular zoom with click-and-drag canvas panning. You can also use `CTRL+Scroll Wheel` to control zoom levels.
 - **Rapid Navigation & Radial Dial**:
   - Step forward and backward through pages using the navigation arrows or the `Left` / `Right` keyboard arrow keys.
+  - Hold `Alt` and scroll the mouse wheel forward or backward to flip pages rapidly (wheel forward advances pages, wheel backward steps back; direction can be reversed in Cockpit Settings).
   - Click any page badge (e.g. `1L`, `5R`) to open the **Circular Page Dial**, enabling instant 1-click jumps across all 16 slots.
 - **Staged In-Memory Editing**: Any adjustments made to slots, notes, or layouts remain safely staged in memory without writing directly to game files until you commit.
 - **Action Ribbon Controls**:
@@ -579,9 +583,10 @@ The **Cockpit Settings** view provides console personalization and background si
   - **Combat Crimson** (`#F43F5E`): High-urgency master caution emergency lighting.
 - **Cockpit Acoustic Feedback Relays**: Realistic mechanical toggle clicks on switch movements synthesized via Web Audio API, with adjustable master volume slider and a **Test Relay Clunk / Chime** button.
 - **Flight Sim Automation & Zero-Cost Dormancy**:
-  - **3D Cockpit Auto-Dock**: Automatically closes / docks the console window when Falcon BMS enters 3D flight (`in_3d != 0`), ensuring zero GPU or CPU competition during the game runtime. Restores automatically when exiting back to the 2D UI.
+  - **3D Cockpit Auto-Dock**: Automatically closes / docks the console window when Falcon BMS enters 3D flight, ensuring zero GPU or CPU competition during the game runtime. When exiting 3D flight back to the 2D UI, the console window is automatically restored if it was open prior to entering 3D.
   - **Auto-Engage Voice Recognition**: Automatically engages voice recognition and controller polling when Falcon BMS launches, and automatically disengages voice recognition into zero-CPU sleep when BMS closes. You can still manually engage voice anytime for offline testing!
-  - **Auto-Kneeboards**: Continuously monitors `User/Briefings/briefing.txt` and plays the "DATA" sound effect upon regeneration.
+  - **Invert Alt + Scroll Direction**: Reverses the page flip direction when scrolling pages in the Binder view with the `Alt` key held.
+  - **Auto-Kneeboards**: Continuously monitors `User/Briefings/briefing.txt`. Plays an audible chime start cue when a new briefing is detected, and plays the "DATA" sound effect upon regeneration.
   - **Foreground Boot**: Opens the Tactical Console window automatically on application launch.
   - **Start with Windows**: Automatically runs AeroGraph minimized to system tray on Windows startup.
 - **Diagnostics & System Logs**:

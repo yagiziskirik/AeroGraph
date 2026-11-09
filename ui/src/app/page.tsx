@@ -246,6 +246,7 @@ export default function Home() {
             accentColor={accentColor}
             onSelectAccent={handleSelectAccent}
             generatedImages={generatedImages}
+            config={config}
           />
         </div>
 

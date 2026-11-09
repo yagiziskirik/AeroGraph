@@ -31,6 +31,11 @@ export default function RootLayout({
             `,
           }}
         />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.addEventListener('contextmenu', function(e) { e.preventDefault(); });`,
+          }}
+        />
       </head>
       <body
         style={{ backgroundColor: '#0A0A0C', background: '#0A0A0C' }}

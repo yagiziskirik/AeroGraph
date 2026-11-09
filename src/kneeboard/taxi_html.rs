@@ -332,7 +332,7 @@ pub fn generate_taxi_chart_html(
                 cx - 16.0,
                 cy - 22.0
             ));
-            svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='11' fill='#FFFFFF' text-anchor='middle'>TWR</text>", cx, cy - 11.0));
+            svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='700' font-size='11' fill='#FFFFFF' text-anchor='middle'>TWR</text>", cx, cy - 11.0));
         } else if k == "shelter" {
             svg_parts.push(format!("<rect x='{:.1}' y='{:.1}' width='{:.1}' height='{:.1}' fill='#78909C' stroke='#37474F' stroke-width='0.8' transform='rotate({:.1} {:.1} {:.1})'/>", cx - fw / 2.0, cy - fl / 2.0, fw, fl, rot_h, cx, cy));
         } else if k == "hangar" {
@@ -500,7 +500,7 @@ pub fn generate_taxi_chart_html(
             }
             placed_signs.push((px, py));
             svg_parts.push(format!("<rect x='{:.1}' y='{:.1}' width='46' height='42' rx='6' fill='#FFEB3B' stroke='#000000' stroke-width='3'/>", px - 23.0, py - 21.0));
-            svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='28' fill='#000000' text-anchor='middle'>{}</text>", px, py + 11.0, l));
+            svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='700' font-size='28' fill='#000000' text-anchor='middle'>{}</text>", px, py + 11.0, l));
         }
     }
 
@@ -519,7 +519,7 @@ pub fn generate_taxi_chart_html(
             "<circle cx='{:.1}' cy='{:.1}' r='{:.1}' fill='{}' stroke='{}' stroke-width='{:.1}'/>",
             ex, ey, r_size, badge_bg, badge_border, stroke_w
         ));
-        svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='{}' fill='#FFFFFF' text-anchor='middle'>{}</text>", ex, ey + 8.5, font_size, desig));
+        svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='700' font-size='{}' fill='#FFFFFF' text-anchor='middle'>{}</text>", ex, ey + 8.5, font_size, desig));
     }
 
     // Hold short markers
@@ -550,7 +550,7 @@ pub fn generate_taxi_chart_html(
         if sp.is_alert {
             placed_spot_labels.push((px, py));
             svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='12' fill='#D32F2F' stroke='#FFFFFF' stroke-width='2'/>", px, py));
-            svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='13' fill='#FFFFFF' text-anchor='middle'>Q</text>", px, py + 5.0));
+            svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='700' font-size='13' fill='#FFFFFF' text-anchor='middle'>Q</text>", px, py + 5.0));
             continue;
         }
 
@@ -563,7 +563,7 @@ pub fn generate_taxi_chart_html(
 
         placed_spot_labels.push((px, py));
         svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='10' fill='#FFFFFF' stroke='#263238' stroke-width='1.8'/>", px, py));
-        svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='11.5' fill='#000000' text-anchor='middle'>{:02}</text>", px, py + 4.5, sp.n));
+        svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='700' font-size='11.5' fill='#000000' text-anchor='middle'>{:02}</text>", px, py + 4.5, sp.n));
     }
 
     // 7. Ramp Parking Detail Inset
@@ -759,7 +759,7 @@ pub fn generate_taxi_chart_html(
                 "<rect x='{:.1}' y='{:.1}' width='{:.1}' height='{:.1}' rx='4' fill='#1A237E'/>",
                 p.px, p.py, p.pw, header_h
             ));
-            svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='{}' fill='#FFFFFF' text-anchor='middle'>{}</text>", p.px + p.pw / 2.0, header_text_y, font_size, p.p_title));
+            svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='700' font-size='{}' fill='#FFFFFF' text-anchor='middle'>{}</text>", p.px + p.pw / 2.0, header_text_y, font_size, p.p_title));
             svg_parts.push(format!("<g clip-path='url(#{})'>", clip_id));
 
             // Paved inside panel
@@ -962,10 +962,10 @@ pub fn generate_taxi_chart_html(
                 ));
                 if is_alert {
                     svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='16' fill='#D32F2F' stroke='#FFFFFF' stroke-width='2.5'/>", sp_x, sp_y));
-                    svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='17' fill='#FFFFFF' text-anchor='middle'>Q</text>", sp_x, sp_y + 6.0));
+                    svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='700' font-size='17' fill='#FFFFFF' text-anchor='middle'>Q</text>", sp_x, sp_y + 6.0));
                 } else {
                     svg_parts.push(format!("<circle cx='{:.1}' cy='{:.1}' r='15' fill='#FFFFFF' stroke='#1A237E' stroke-width='2.5'/>", sp_x, sp_y));
-                    svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='900' font-size='17' fill='#1A237E' text-anchor='middle'>{:02}</text>", sp_x, sp_y + 6.0, n_val));
+                    svg_parts.push(format!("<text x='{:.1}' y='{:.1}' font-family='Arial, sans-serif' font-weight='700' font-size='17' fill='#1A237E' text-anchor='middle'>{:02}</text>", sp_x, sp_y + 6.0, n_val));
                 }
             }
 
@@ -1150,7 +1150,7 @@ pub fn generate_taxi_chart_html(
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
         background-color: #FAFAF8;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
         color: #1A1A1A;
         width: 1024px;
         height: 1554px;
@@ -1176,7 +1176,7 @@ pub fn generate_taxi_chart_html(
         padding: 5px 15px;
         border-radius: 6px;
         font-size: 28px;
-        font-weight: 900;
+        font-weight: 700;
         letter-spacing: 0.5px;
         margin-right: 14px;
         vertical-align: middle;
@@ -1184,7 +1184,7 @@ pub fn generate_taxi_chart_html(
     .airport-title {{
         display: inline-block;
         font-size: 34px;
-        font-weight: 900;
+        font-weight: 700;
         color: #0D47A1;
         letter-spacing: 0.5px;
         vertical-align: middle;
@@ -1196,7 +1196,7 @@ pub fn generate_taxi_chart_html(
         padding: 6px 16px;
         border-radius: 6px;
         font-size: 18px;
-        font-weight: 900;
+        font-weight: 700;
         letter-spacing: 0.5px;
         text-align: right;
         margin-bottom: 4px;
@@ -1204,7 +1204,7 @@ pub fn generate_taxi_chart_html(
     .elev-text {{
         color: #0D47A1;
         font-size: 19px;
-        font-weight: 900;
+        font-weight: 700;
         letter-spacing: 0.5px;
         text-align: right;
     }}
@@ -1227,7 +1227,7 @@ pub fn generate_taxi_chart_html(
         padding: 7px 4px;
         text-align: center;
         font-size: 20px;
-        font-weight: 800;
+        font-weight: 700;
         color: #1B5E20;
         white-space: nowrap;
         box-sizing: border-box;
@@ -1235,7 +1235,7 @@ pub fn generate_taxi_chart_html(
     }}
     .banner-pill b {{
         color: #000000;
-        font-weight: 900;
+        font-weight: 700;
     }}
     
     .comms-table {{
@@ -1259,14 +1259,14 @@ pub fn generate_taxi_chart_html(
     }}
     .comm-lbl {{
         font-size: 16px;
-        font-weight: 900;
+        font-weight: 700;
         color: #546E7A;
         letter-spacing: 0.5px;
         margin-bottom: 3px;
     }}
     .comm-val {{
         font-size: 22px;
-        font-weight: 900;
+        font-weight: 700;
         color: #0D47A1;
     }}
     
@@ -1293,7 +1293,7 @@ pub fn generate_taxi_chart_html(
     .footer-table th {{
         background: #1A237E;
         color: #FFFFFF;
-        font-weight: 900;
+        font-weight: 700;
         font-size: 21px;
         padding: 7px 10px;
         text-align: left;
@@ -1306,9 +1306,9 @@ pub fn generate_taxi_chart_html(
         color: #263238;
         font-size: 22px;
     }}
-    .col-rwy {{ font-size: 24px; font-weight: 900; }}
+    .col-rwy {{ font-size: 24px; font-weight: 700; }}
     .col-ils {{ font-size: 21px; color: #0D47A1; }}
-    .col-ptrn {{ font-size: 21px; font-weight: 900; color: #1A237E; }}
+    .col-ptrn {{ font-size: 21px; font-weight: 700; color: #1A237E; }}
     .rwy-active {{
         background: #E8F5E9;
     }}
@@ -1317,7 +1317,7 @@ pub fn generate_taxi_chart_html(
         background: #2E7D32;
         color: #FFFFFF;
         font-size: 15px;
-        font-weight: 900;
+        font-weight: 700;
         padding: 3px 10px;
         border-radius: 4px;
         margin-left: 8px;

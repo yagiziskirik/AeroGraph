@@ -135,13 +135,22 @@ impl StateEngine {
         self.variables
             .insert("lightBits.RefuelDSC".to_string(), refuel_dsc.to_string());
 
-        // In3D state from hsi_bits Flying bit (0x80000000)
-        let in_3d = if (data.hsi_bits & 0x80000000) != 0 {
+        // In3D state from light_bits Flying bit (0x80000000: true if player is attached to an aircraft in 3D)
+        let in_3d = if (data.light_bits & 0x80000000) != 0 {
             "True"
         } else {
             "False"
         };
         self.variables.insert("In3D".to_string(), in_3d.to_string());
+
+        // OnGround state from light_bits ONGROUND bit (0x10: weight-on-wheels flag)
+        let on_ground = if (data.light_bits & 0x10) != 0 {
+            "True"
+        } else {
+            "False"
+        };
+        self.variables
+            .insert("OnGround".to_string(), on_ground.to_string());
     }
 
     /// Sets BMS connection status and associated profile variables.
