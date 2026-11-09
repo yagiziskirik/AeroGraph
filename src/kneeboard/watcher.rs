@@ -79,40 +79,50 @@ impl KneeboardWatcher {
                 let briefing_path = bms_dir.join("User").join("Briefings").join("briefing.txt");
 
                 let mut needs_regen = manual_requested;
+                let mut briefing_detected = false;
                 if briefing_path.exists() {
                     if let Ok(metadata) = fs::metadata(&briefing_path) {
                         if let Ok(mtime) = metadata.modified() {
                             if let Some(last_mtime) = last_briefing_mtime {
                                 if mtime > last_mtime {
                                     needs_regen = true;
+                                    briefing_detected = true;
                                 }
-                            } else {
-                                needs_regen = true;
                             }
+                            // Cache current mtime on startup without triggering unprompted regeneration
                             last_briefing_mtime = Some(mtime);
                         }
                     }
                 } else if last_briefing_mtime.is_none() {
-                    // First run and no briefing.txt! Check if images exist on disk.
-                    let images_dir = AppConfig::find_assets_dir().join("images");
-                    let is_empty = !images_dir.exists()
-                        || fs::read_dir(&images_dir)
-                            .map(|mut d| d.next().is_none())
-                            .unwrap_or(true);
-                    if is_empty {
-                        needs_regen = true;
-                    }
+                    // First run and no briefing.txt: record epoch without unprompted background generation
                     last_briefing_mtime = Some(std::time::SystemTime::UNIX_EPOCH);
                 } else if last_briefing_mtime != Some(std::time::SystemTime::UNIX_EPOCH) {
                     // Briefing file was previously tracked but has now been deleted
                     needs_regen = true;
+                    briefing_detected = true;
                     last_briefing_mtime = Some(std::time::SystemTime::UNIX_EPOCH);
                 }
 
                 if needs_regen {
+                    let cfg = config.lock().unwrap().clone();
+
+                    // Play start audio cue (commit.mp3) when a new briefing.txt file change is detected from Falcon BMS.
+                    if briefing_detected && !manual_requested && cfg.play_sound_on_update {
+                        if let Some(player) = audio_player.as_ref() {
+                            player.play_system_sound_sync(
+                                "assets/sounds/commit.mp3",
+                                crate::engine::audio::COMMIT_SOUND_BYTES,
+                            );
+                        } else if let Ok(player) = AudioPlayer::new() {
+                            player.play_system_sound_sync(
+                                "assets/sounds/commit.mp3",
+                                crate::engine::audio::COMMIT_SOUND_BYTES,
+                            );
+                        }
+                    }
+
                     let t0 = Instant::now();
                     log::info!("📋 [Kneeboards] Briefing change triggered! Regenerating kneeboards in pure Rust...");
-                    let cfg = config.lock().unwrap().clone();
                     Self::execute_pipeline(&cfg, bms_dir, audio_player.as_ref());
                     if let Some(ref cb) = on_complete {
                         cb();

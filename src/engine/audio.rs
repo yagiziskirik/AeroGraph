@@ -109,9 +109,20 @@ impl AudioPlayer {
             self.play_bytes(fallback_bytes);
         }
     }
+
+    /// Plays a system sound synchronously, waiting until playback finishes so short cues aren't cut off when a temporary player drops.
+    pub fn play_system_sound_sync(&self, filename: &str, fallback_bytes: &'static [u8]) {
+        let local_path = Path::new(filename);
+        if local_path.exists() {
+            self.play_sound(local_path, &[], true);
+        } else {
+            self.play_bytes_sync(fallback_bytes);
+        }
+    }
 }
 
 pub const CHIRP_BYTES: &[u8] = include_bytes!("../../assets/sounds/chirp.mp3");
 pub const LOUD_N_CLEAR_BYTES: &[u8] = include_bytes!("../../assets/sounds/loud-n-clear.mp3");
 pub const STANDING_BY_BYTES: &[u8] = include_bytes!("../../assets/sounds/standing-by.mp3");
 pub const INIT_SOUND_BYTES: &[u8] = include_bytes!("../../assets/sounds/init.mp3");
+pub const COMMIT_SOUND_BYTES: &[u8] = include_bytes!("../../assets/sounds/commit.mp3");
