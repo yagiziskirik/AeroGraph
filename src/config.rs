@@ -94,6 +94,9 @@ pub struct AppConfig {
     pub auto_engage_voice: bool,
     #[serde(default = "default_true")]
     pub invert_wheel_brakes: bool,
+
+    #[serde(default = "default_false")]
+    pub invert_kneeboard_scroll: bool,
 }
 
 fn default_github_repo() -> String {
@@ -155,6 +158,7 @@ impl Default for AppConfig {
             start_with_windows: false,
             auto_engage_voice: default_true(),
             invert_wheel_brakes: default_true(),
+            invert_kneeboard_scroll: default_false(),
         }
     }
 }

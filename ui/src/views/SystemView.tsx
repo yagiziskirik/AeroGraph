@@ -217,7 +217,7 @@ export const SystemView: React.FC<SystemViewProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 font-mono text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3 font-mono text-xs">
           {/* 3D Auto-Dock */}
           <div
             onClick={() => toggleSetting('gui_auto_dock_on_3d')}
@@ -303,6 +303,24 @@ export const SystemView: React.FC<SystemViewProps> = ({
               <MechanicalToggle
                 size="sm"
                 checked={config.start_with_windows ?? false}
+                interactive={false}
+              />
+            </div>
+          </div>
+
+          {/* Invert Kneeboard Scroll Wheel */}
+          <div
+            onClick={() => toggleSetting('invert_kneeboard_scroll')}
+            className="p-3 rounded bg-[#18181B] border border-white/[0.06] hover:border-white/[0.15] flex items-center justify-between cursor-pointer transition-colors"
+          >
+            <div>
+              <div className="text-white font-semibold">INVERT ALT + SCROLL DIRECTION</div>
+              <div className="text-[10px] text-zinc-500">Reverse page flip direction when scrolling with the Alt key.</div>
+            </div>
+            <div className="pointer-events-none">
+              <MechanicalToggle
+                size="sm"
+                checked={config.invert_kneeboard_scroll ?? false}
                 interactive={false}
               />
             </div>
