@@ -79,7 +79,7 @@ pub struct PrimaryFlightData {
     pub hsi_bits: u32,
 }
 
-/// Minimal C-repr subset of IntellivibeData
+/// Minimal C-repr subset of IntellivibeData from Falcon BMS IVibeData.h
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct IntellivibeData {
@@ -89,7 +89,8 @@ pub struct IntellivibeData {
     pub flare_dropped: u8,
     pub chaff_dropped: u8,
     pub bullets_fired: u8,
-    pub collision_counter: u8,
+    // 2 bytes compiler alignment padding before 4-byte int
+    pub collision_counter: i32,
     pub is_firing_gun: u8,
     pub is_end_flight: u8,
     pub is_ejecting: u8,
@@ -301,5 +302,20 @@ impl BmsSharedMemoryClient {
         }
 
         info
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_intellivibe_layout() {
+        assert_eq!(std::mem::offset_of!(IntellivibeData, collision_counter), 8);
+        assert_eq!(std::mem::offset_of!(IntellivibeData, is_firing_gun), 12);
+        assert_eq!(std::mem::offset_of!(IntellivibeData, is_end_flight), 13);
+        assert_eq!(std::mem::offset_of!(IntellivibeData, is_ejecting), 14);
+        assert_eq!(std::mem::offset_of!(IntellivibeData, in_3d), 15);
+        assert_eq!(std::mem::offset_of!(IntellivibeData, is_on_ground), 19);
     }
 }
