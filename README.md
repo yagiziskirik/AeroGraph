@@ -317,6 +317,24 @@ auto_engage_voice = true
 # DirectInput wheel brake pedal axis inversion (true = invert raw 1.0 resting pedals to 0.0 idle, toggleable via UI)
 invert_wheel_brakes = true
 
+# SAPI speech recognition minimum confidence floor (0-100%, default 50%)
+min_confidence = 50
+
+# Hardware PTT minimum switch hold interval (ms) to debounce accidental momentary taps
+min_ptt_duration_ms = 300
+
+# Push-To-Talk post-release grace window (ms) buffering speech while concluding phrases
+ptt_release_grace_ms = 1500
+
+# Silence timeout (ms) after speaking before SAPI triggers an unambiguous command
+end_silence_timeout_ms = 1000
+
+# Silence timeout (ms) when multiple grammar rules potentially match (arbitration buffer)
+end_silence_timeout_ambiguous_ms = 1500
+
+# Maximum duration (ms) SAPI waits for speech to begin after PTT activation before closing
+initial_silence_timeout_ms = 5000
+
 # Start AeroGraph minimized to system tray when Windows boots
 start_with_windows = false
 
@@ -434,7 +452,7 @@ The **Template Catalog** provides a unified visual browser for all available kne
 </p>
 
 Clicking **Edit** on any notes slot switches the console into a real-time, side-by-side Markdown editor:
-- **Split-Screen Live Rendering**: Type in the left editor pane and see the exact 1024×1554 cockpit texture update in real time on the right preview pane.
+- **Top Bar For Quick Styling**: You don't have to know about the Markdown or come back to this file as a guide every time, you can use the included top bar to style your notes.
 - **Header Customization**: Set the top header title, subtitle, T.O. code, and page identifier.
 - **Hazard Stripe Presets**: Select from `standard` (black/white), `caution` (yellow), `warning` (red), `emergency` (solid red), `tactical` (navy/blue), or `green` (forest green), with optional `spaced` stripe styling.
 - **Full Semantic Markdown Syntax**:
@@ -445,23 +463,31 @@ Clicking **Edit** on any notes slot switches the console into a real-time, side-
 | `## Section` | **Secondary Section Header** | Bold dark section header with horizontal divider |
 | `### Subheader` | **Minor Subhead** | Compact slate-gray subhead |
 | `[SECTION]` | **Category Pill Badge** | Dark rectangular badge with bold white text |
+| `> Note text` | **Callout Blockquote** | Stylized callout box with thick left accent border and shaded background |
+| `![Alt](path/image.png)` | **Embedded Image** | Centered high-resolution image scaled cleanly to page width |
 | `WARNING: text` | **Safety Alert Box** | Red-bordered callout box with bold `WARNING` badge |
 | `CAUTION: text` | **Advisory Caution Box** | Amber-bordered callout box with bold `CAUTION` badge |
 | `[ ] Item` or `- [ ] Item` | **Pending Checkbox** | Square checkbox for pending cockpit checklist items |
 | `[x] Item` or `- [x] Item` | **Checked Box** | Green square with checkmark for completed items |
 | `- Item` or `* Item` | **Bullet Point** | Clean list item with square bullet dot |
 | `KEY: VALUE` | **Two-Column Data Card** | Monospace highlight badge (e.g. `BULLSEYE: 045 / 60NM`) |
+| `**bold text**` | **Inline Bold** | High-contrast bold typography (`<strong>bold text</strong>`) |
+| `*italic*` or `_italic_` | **Inline Italic** | Distinct italicized emphasis (`<em>italic</em>`) |
+| `\:` | **Escaped Colon** | Keeps a colon on plain text lines without splitting into a two-column card |
+| `\[...\]` | **Escaped Brackets** | Renders literal brackets without creating a solid section badge |
+| `\WARNING:` / `\CAUTION:` | **Escaped Alerts** | Renders literal warning/caution text without creating alert banners |
 
 - **Aviation Semantic Inline Color Tags**:
   - `{green: text}`: Active states, primary laser codes, authorized clearances.
   - `{yellow: text}`: Caution advisories, standby frequencies, secondary codes.
   - `{red: text}`: Danger warnings, SAM threat types, emergency bingo levels.
   - `{blue: text}`: Tactical navigation coordinates, Bullseye vectors, VHF frequencies.
-  - `{orange: text}` / `{cyan: text}` / `{gray: text}`: Tactical color coding.
+  - `{orange: text}` / `{cyan: text}` / `{purple: text}` / `{magenta: text}` / `{pink: text}` / `{violet: text}` / `{teal: text}` / `{lime: text}` / `{brown: text}` / `{gray: text}`: Rich tactical color palette.
   - `{#HEX: text}`: Any custom hex color (e.g. `{#E91E63: strike}`).
   - `{highlight: text}` or `{bg-yellow: text}`: High-visibility black-on-yellow callout.
-  - `{bg-red: text}` / `{bg-green: text}` / `{bg-blue: text}`: Tinted background pill badges.
+  - `{bg-red: text}` / `{bg-green: text}` / `{bg-blue: text}` / `{bg-purple: text}`: Tinted background pill badges.
   - `{white: text}`: White text on dark high-contrast badge.
+  - `{black: text}`: Bold black text for daylight clarity.
 
 ---
 
@@ -551,16 +577,69 @@ The **Crew Chief BIT** view is a dedicated pre-flight diagnostic station for fli
 
 <p align="center">
   <img src="docs/images/foxvox-station.webp" alt="FoxVox Communications Station" width="950" /><br />
-  <em>FoxVox Station: Real-time CoreAudio microphone VU-meter, polling rate selector, pilot voice toggle, and live speech terminal.</em>
+  <em>FoxVox Station: Real-time CoreAudio microphone VU-meter, live SAPI speech recognition terminal, and profile controller.</em>
 </p>
 
-The **FoxVox Station** is a dedicated comms operations center and real-time speech terminal:
-- **High-Precision Microphone VU-Meter**: Direct CoreAudio peak sampling provides a smooth, real-time volume bar with visual noise-gate threshold.
-- **Master Voice Engine Controls**: Master Speech Recognition toggle and hands-free Listening switch (Active vs Standby).
-- **Hardware Polling Rate Hz**: Select discrete sampling rates (**10 Hz, 20 Hz, 25 Hz, 33 Hz, 50 Hz, 100 Hz**) to balance controller responsiveness with minimal CPU impact.
-- **Pilot Voice Gender**: One-click toggle between Male and Female pilot voice responses.
-- **Active Profile Card**: Displays currently loaded `.fvx` profile name, command count, profile path, and buttons to browse profiles (`Select Profile`), recompile binary grammar (`Reload Grammar`), or restore default profile.
-- **Terminal & Audio Tester**: Real-time diagnostic terminal displaying recognized phrases and confidence values. Includes a voice test transmission box to play test phrases through your headphones without speaking.
+The **FoxVox Station** is your comms center and real-time speech operations dashboard, uniting profile management, real-time audio meters, and live phrase recognition:
+
+#### 8.1 Profile Controller & Engine Management
+- **Voice Recognition Master Toggle**: One-click switch to turn speech recognition and controller switch sampling `ON` or `OFF`.
+- **Microphone Listening State (`LISTENING` vs `STANDBY (MUTED)`)**: Quickly mute or unmute the microphone via the UI button or spoken commands (*"Stand by"* to mute, *"Radio check"* to unmute).
+- **Active Profile Banner**: Displays the currently loaded `.fvx` profile name, filepath, and quick-action buttons to **Reload Profile** or **Reset to Default**.
+- **Pilot Voice Gender**: Toggle between **♂ Male (Default)** and **♀ Female** callsign phrasing for ground crew and wingman acknowledgments.
+- **Telemetry Polling Rate**: Discrete frequency selectors (**20 Hz, 25 Hz, 30 Hz, 50 Hz, 60 Hz**) to balance DirectInput switch responsiveness with minimal CPU footprint.
+
+#### 8.2 Live Microphone VU-Meter & Recognition Terminal
+- **High-Precision Microphone VU-Meter**:
+  - Live CoreAudio continuous peak sampling measures your system microphone input level.
+  - Perceptual logarithmic dBFS readout ($-45\text{ dB}$ to $0\text{ dB}$) and percentage gauge.
+  - Color-coded safety zones: Green ($-45\text{ dB}$ to $-15\text{ dB}$), Amber ($-15\text{ dB}$ to $-6\text{ dB}$), and Red ($-6\text{ dB}$ to $0\text{ dB}$).
+  - Persistent peak-hold needle and noise-gate status indicators (`IDLE`, `VOICE DETECTED`, `MUTED`, `OFFLINE`).
+- **Live SAPI Speech Recognition Terminal**:
+  - Displays the exact phrase detected by Windows SAPI in real time with high-visibility styling.
+  - Reports the engine's acoustic confidence percentage (e.g. `98.5%`), exact timestamp, and verification status (`VERIFIED` vs `STANDBY`).
+  - **Transmit Radio Check**: One-click button to play a test audio transmission through your headphones without speaking, verifying SAPI audio output and volume levels.
+
+---
+
+#### 8.3 SAPI Speech Recognition & PTT Timings Calibration
+
+<p align="center">
+  <img src="docs/images/foxvox-sapi-settings.webp" alt="SAPI Speech Recognition and PTT Timings Calibration" width="950" /><br />
+  <em>SAPI Speech Recognition &amp; PTT Calibration: Interactive 6-slider matrix for confidence floors, switch debouncing, and phrase arbitration.</em>
+</p>
+
+Different pilots fly with different microphones, headset background noise, and HOTAS switch gear. AeroGraph features a dedicated $3 \times 2$ calibration matrix with 6 interactive sliders to fine-tune speech recognition and Push-To-Talk timing for your exact setup:
+
+#### The 6 Calibration Sliders Explained:
+
+> [!TIP] 
+> I found myself setting **Speech Confidence Floor** up to **80%**, since the confidence levels are too high most of the time. 80% gives a good middle ground.
+
+1. **Speech Confidence Floor (`0%` – `100%`, Default: `50%`)**:
+   - *What it does*: Sets how confident Windows SAPI must be before executing a voice command in the cockpit. Phrases scored below this floor are safely discarded.
+   - *Everyday tuning*: If ambient room noise, heavy breathing, or Discord chatter accidentally triggers cockpit switches, slide this up toward **Strict (`60%–70%`)**. If the simulator consistently ignores your voice on the first try, nudge it down toward **Permissive (`40%–45%`)**.
+2. **PTT Minimum Hold Duration (`0ms` – `1000ms`, Default: `300ms`)**:
+   - *What it does*: Debounces your HOTAS Push-To-Talk button by requiring it to be held for a minimum duration before accepting speech. You can press and hold PTT button in the grace period (see down below) and it will still execute the spoken command. This setting is to prevent accidental executions (or to mimic readbacks when you don't want them to be sent to the tower by just clicking the button in a very short time like I use it for).
+   - *Everyday tuning*: Prevents accidental brush clicks or momentary switch bounces from opening the radio. If you frequently bump your PTT switch by mistake, leave this at `300ms` or raise to `400ms`. If you use crisp microswitches and speak immediately upon clicking, you can lower it to `100ms–150ms`.
+3. **PTT Post-Release Grace Window (`0ms` – `2000ms`, Default: `1500ms`)**:
+   - *What it does*: Detects in which period after the **speach is detected** and your button press detected. If too short, the speech detection can take a while to process that information and your button press will be negated. The algorithm will think that you didn't press the PTT button while you speak.
+   - *Everyday tuning*: If you find yourself that in the program logs the button was not pressed so the speech is discarded, you can increase the setting. If you find it too relaxed for your fast-paced talking habits, you can shorten it, while giving the program some time to convert your speech to text. Therefore, `0ms` is **not recommended**!
+4. **End-of-Phrase Response Delay (`300ms` – `2000ms`, Default: `1000ms`)**:
+   - *What it does*: Silence timeout required after you finish speaking an unambiguous command (like *"Tower, Inbound"*) before SAPI fires the command.
+   - *Everyday tuning*: Lower values (`500ms–700ms`, Hair-Trigger) execute commands with lightning speed. Higher values (`1200ms–1500ms`, Relaxed) give you breathing room so the engine doesn't cut you off if you pause naturally between words.
+5. **Ambiguous Phrase Arbitration Timeout (`500ms` – `3000ms`, Default: `1500ms`)**:
+   - *What it does*: Extended pause required when multiple commands share the same opening words (e.g. *"Flight Rejoin"* vs *"Flight Return"*).
+   - *Everyday tuning*: Gives SAPI additional arbitration time to confirm whether you're about to speak another word before deciding which command you meant.
+6. **Initial Silence Timeout (`1000ms` – `10000ms`, Default: `5000ms`)**:
+   - *What it does*: Maximum time SAPI waits for you to begin speaking after keying the mic before closing the window.
+   - *Everyday tuning*: If you key the radio but hesitate or get interrupted, this timer closes the listening window so the microphone doesn't stay open waiting indefinitely. In stressful situations, we tend to press the button and forget to speak. That's what this setting is for.
+
+#### Controls & Safety:
+- **Individual Slider Reset (`↺`)**: Click the circular reset arrow on any slider card to instantly revert that specific setting back to its factory default.
+- **`RESET ALL DEFAULTS`**: One-click reset to restore all six calibration parameters together.
+- **`DISCARD`**: Abandons unsaved slider changes and restores your currently saved configuration.
+- **`APPLY CONFIGURATION (UNSAVED)`**: A pulse-highlighted emerald button appears whenever any slider is adjusted. Clicking it writes your changes to `aerograph.toml` and hot-reloads the active Windows SAPI engine parameters live in memory without restarting AeroGraph or interrupting Falcon BMS!
 
 ---
 
@@ -667,9 +746,13 @@ You can provide notes either directly in `kneeboards.json` or by pointing to an 
   "notes": [
     "## 1. BVR COMBAT RULES OF ENGAGEMENT",
     "- Hostile criteria: 2x sensor confirmation or AWACS Bogey Dope {yellow: 'HOT/HOSTILE'}",
+    "- Primary target {purple: SA-6 BATTERY} with **high priority** and _tactical precision_",
     "- Weapons Free beyond {green: 25nm} Bullseye 045/60",
     "- Primary Laser Code: {green: 1688} / Secondary: {yellow: 1111}",
     "",
+    "> Ensure FLCS power supply switch is set to NORM and ground pins are stowed",
+    "",
+    "[WEAPONS MATRIX]",
     "BULLSEYE: {blue: 045 / 60NM}",
     "PACKAGE VHF: {blue: 138.250}",
     "RAMROD: {blue: CHARLIE}",
@@ -679,8 +762,12 @@ You can provide notes either directly in `kneeboards.json` or by pointing to an 
     "[ ] Master Arm {yellow: ARM} at STPT 4 (Fence In)",
     "[ ] Laser Arm {green: ON} prior to 5nm to Target",
     "",
+    "![Tactical Ingress](custom/threat_diagram.png)",
+    "",
     "WARNING: {highlight: Active SA-10 Grumble} radar tracking near STPT 6",
-    "CAUTION: Maintain minimum 18,000 FT MSL until IP ingress"
+    "CAUTION: Maintain minimum 18,000 FT MSL until IP ingress",
+    "",
+    "Flight directive with escaped colon\\: that remains on a single text line"
   ]
 }
 ```
@@ -765,19 +852,32 @@ You can customize the top hazard stripe pattern and header bar colors using buil
 | `## Section` | **Secondary Section Header** | Bold dark header with horizontal underline |
 | `### Subheader` | **Minor Subhead** | Compact slate-gray subhead |
 | `[SECTION]` | **Category Pill Badge** | Dark rectangular badge with bold white text |
-| `WARNING: text` | **Safety Alert Box** | Red-bordered callout box with a bold `WARNING` badge |
-| `CAUTION: text` | **Advisory Caution Box** | Amber-bordered callout box with a bold `CAUTION` badge |
+| `> Note text` | **Callout Blockquote** | Stylized callout box with thick left accent border and shaded background |
+| `![Alt](path/image.png)` | **Embedded Image** | Centered high-resolution graphic scaled cleanly to kneeboard dimensions |
+| `WARNING: text` / `[WARNING] text` | **Safety Alert Box** | Red-bordered callout box with a bold `WARNING` badge |
+| `CAUTION: text` / `[CAUTION] text` | **Advisory Caution Box** | Amber-bordered callout box with a bold `CAUTION` badge |
 | `[ ] Item` or `- [ ] Item` | **Empty Checkbox** | Square checkbox for pending cockpit checklist items |
 | `[x] Item` or `- [x] Item` | **Checked Box** | Green square with checkmark for completed items |
 | `- Item` or `* Item` | **Bullet Point** | Clean list item with square bullet dot |
 | `KEY: VALUE` | **Two-Column Data Card** | Monospace highlight badge (e.g. `BULLSEYE: 045 / 60NM`) |
+| `**bold text**` | **Inline Bold** | High-contrast bold typography (`<strong>bold text</strong>`) |
+| `*italic*` or `_italic_` | **Inline Italic** | Distinct italicized emphasis (`<em>italic</em>`) |
+| `\:` | **Escaped Colon** | Prevents plain text lines from breaking into a two-column card |
+| `\[...\]` | **Escaped Brackets** | Renders literal brackets without creating a solid section badge |
+| `\WARNING:` / `\CAUTION:` | **Escaped Alert Prefixes** | Renders literal alert text without triggering full-width alert banners |
+| `\#`, `\>`, `\*`, `\_` | **Escaped Markdown Characters** | Renders literal markdown characters without formatting |
 
-#### Inline Text Coloring:
-Use `{color: text}` anywhere in your titles, keys, values, warnings, cautions, and checklist items:
-- `{red: text}`, `{yellow: text}`, `{green: text}`, `{blue: text}`, `{orange: text}`, `{cyan: text}`, `{gray: text}`, `{black: text}`
-- `{#E91E63: custom hex color}`
-- `{highlight: yellow marker highlight}` or `{bg-yellow: text}`
-- `{bg-red: text}`, `{bg-green: text}`, `{bg-blue: text}`, `{white: white text on dark badge}`
+#### Inline Text & Background Coloring:
+Use `{color: text}` anywhere in your titles, keys, values, warnings, cautions, checklists, and bullet items:
+- **Foreground Colors**: `{red: text}`, `{green: text}`, `{blue: text}`, `{yellow: text}`, `{orange: text}`, `{cyan: text}`, `{purple: text}`, `{magenta: text}`, `{pink: text}`, `{violet: text}`, `{teal: text}`, `{lime: text}`, `{brown: text}`, `{gray: text}`, `{black: text}`
+- **Custom Hex Colors**: `{#HEX: text}` (e.g. `{#E91E63: strike}`, `{#00E676: clear}`)
+- **Background Callouts**:
+  - `{highlight: yellow marker highlight}` or `{bg-yellow: text}`: High-visibility black text on caution yellow highlight.
+  - `{bg-red: text}`: Dark red text on soft red badge.
+  - `{bg-green: text}`: Forest green text on soft green badge.
+  - `{bg-blue: text}`: Navy blue text on soft blue badge.
+  - `{bg-purple: text}`: Deep violet text on soft purple badge.
+  - `{white: text}`: White text on dark high-contrast pill badge.
 
 ---
 
