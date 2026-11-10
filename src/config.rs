@@ -42,6 +42,24 @@ pub struct AppConfig {
     #[serde(default = "default_true")]
     pub listening_enabled: bool,
 
+    #[serde(default = "default_min_confidence")]
+    pub min_confidence: u32,
+
+    #[serde(default = "default_min_ptt_duration")]
+    pub min_ptt_duration_ms: u32,
+
+    #[serde(default = "default_ptt_release_grace")]
+    pub ptt_release_grace_ms: u32,
+
+    #[serde(default = "default_end_silence_timeout")]
+    pub end_silence_timeout_ms: u32,
+
+    #[serde(default = "default_end_silence_timeout_ambiguous")]
+    pub end_silence_timeout_ambiguous_ms: u32,
+
+    #[serde(default = "default_initial_silence_timeout")]
+    pub initial_silence_timeout_ms: u32,
+
     // --- Kneeboard Auto-Monitoring Settings ---
     #[serde(alias = "ezwatch_enabled", default = "default_true")]
     pub auto_kneeboards: bool,
@@ -127,6 +145,30 @@ fn default_window_size() -> (u32, u32) {
     (1200, 740)
 }
 
+fn default_min_confidence() -> u32 {
+    50
+}
+
+fn default_min_ptt_duration() -> u32 {
+    300
+}
+
+fn default_ptt_release_grace() -> u32 {
+    1500
+}
+
+fn default_end_silence_timeout() -> u32 {
+    1000
+}
+
+fn default_end_silence_timeout_ambiguous() -> u32 {
+    1500
+}
+
+fn default_initial_silence_timeout() -> u32 {
+    5000
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -140,6 +182,12 @@ impl Default for AppConfig {
             show_console: false,
             voice_recognition: true,
             listening_enabled: true,
+            min_confidence: default_min_confidence(),
+            min_ptt_duration_ms: default_min_ptt_duration(),
+            ptt_release_grace_ms: default_ptt_release_grace(),
+            end_silence_timeout_ms: default_end_silence_timeout(),
+            end_silence_timeout_ambiguous_ms: default_end_silence_timeout_ambiguous(),
+            initial_silence_timeout_ms: default_initial_silence_timeout(),
             auto_kneeboards: true,
             bms_base_dir: None,
             play_sound_on_update: true,

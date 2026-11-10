@@ -27,7 +27,7 @@ pub struct SapiEngine {
 unsafe impl Send for SapiEngine {}
 
 impl SapiEngine {
-    pub fn new() -> Result<Self> {
+    pub fn new(end_silence_ms: u32, amb_silence_ms: u32, init_silence_ms: u32) -> Result<Self> {
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
             // In-process recognizer
@@ -48,8 +48,10 @@ impl SapiEngine {
             // Adjust silence timeouts to allow natural pauses without cutting off mid-sentence
             let prop_end: Vec<u16> = "EndSilenceTimeout\0".encode_utf16().collect();
             let prop_amb: Vec<u16> = "EndSilenceTimeoutAmbiguous\0".encode_utf16().collect();
-            let _ = recognizer.SetPropertyNum(PCWSTR(prop_end.as_ptr()), 1000);
-            let _ = recognizer.SetPropertyNum(PCWSTR(prop_amb.as_ptr()), 1500);
+            let prop_init: Vec<u16> = "InitialSilenceTimeout\0".encode_utf16().collect();
+            let _ = recognizer.SetPropertyNum(PCWSTR(prop_end.as_ptr()), end_silence_ms as i32);
+            let _ = recognizer.SetPropertyNum(PCWSTR(prop_amb.as_ptr()), amb_silence_ms as i32);
+            let _ = recognizer.SetPropertyNum(PCWSTR(prop_init.as_ptr()), init_silence_ms as i32);
 
             let context = recognizer.CreateRecoContext()?;
             let _ = context.SetNotifyWin32Event();
@@ -64,6 +66,24 @@ impl SapiEngine {
                 grammar: None,
                 phrase_map: HashMap::new(),
             })
+        }
+    }
+
+    /// Dynamically updates EndSilenceTimeout, EndSilenceTimeoutAmbiguous, and InitialSilenceTimeout properties.
+    pub fn set_silence_timeouts(&self, end_ms: u32, amb_ms: u32, init_ms: u32) {
+        unsafe {
+            let prop_end: Vec<u16> = "EndSilenceTimeout\0".encode_utf16().collect();
+            let prop_amb: Vec<u16> = "EndSilenceTimeoutAmbiguous\0".encode_utf16().collect();
+            let prop_init: Vec<u16> = "InitialSilenceTimeout\0".encode_utf16().collect();
+            let _ = self
+                ._recognizer
+                .SetPropertyNum(PCWSTR(prop_end.as_ptr()), end_ms as i32);
+            let _ = self
+                ._recognizer
+                .SetPropertyNum(PCWSTR(prop_amb.as_ptr()), amb_ms as i32);
+            let _ = self
+                ._recognizer
+                .SetPropertyNum(PCWSTR(prop_init.as_ptr()), init_ms as i32);
         }
     }
 
