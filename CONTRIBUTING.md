@@ -34,7 +34,8 @@ Before building AeroGraph locally, ensure you have the following installed:
 
 ## 🌿 2. Branching & Pull Request Workflow
 
-> ⚠️ **Important: Never push commits directly to `main`!**  
+> [!IMPORTANT]
+> **Never push commits directly to `main`!**  
 > The `main` branch is protected and always reflects stable, tested releases. All work must follow a feature branch workflow and be submitted via Pull Requests. Every PR is personally tested on a live Falcon BMS setup before merging.
 
 ### Branch Naming Conventions:
@@ -82,7 +83,7 @@ Common types:
 
 > [!NOTE]
 > **Do NOT bump version numbers in feature branches!**  
-> `Cargo.toml` version bumping and release tagging are managed exclusively on `main` by the maintainer when preparing an official release.
+> `Cargo.toml` version bumping and release tagging are managed exclusively on `main` by the maintainer when preparing an official release. You might see me doing that occasionally, but that's because of a fast development purposes.
 
 ---
 

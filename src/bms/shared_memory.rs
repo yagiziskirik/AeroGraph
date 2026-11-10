@@ -114,6 +114,10 @@ pub struct BmsStringInfo {
     pub alternate: String,
     pub tanker: String,
     pub awacs: String,
+    pub ai_seat1: bool,
+    pub ai_seat2: bool,
+    pub ai_seat3: bool,
+    pub ai_seat4: bool,
 }
 
 /// Safe memory mapped area wrapper
@@ -241,67 +245,149 @@ impl BmsSharedMemoryClient {
     }
 
     /// Reads callsigns and airport names from String Shared Memory Area
-    pub fn read_string_info(&self) -> BmsStringInfo {
-        let mut info = BmsStringInfo::default();
+    pub fn read_string_info(&mut self) -> BmsStringInfo {
+        if self.string_area.is_none() {
+            self.string_area = MappedArea::open(STRING_SHARED_MEMORY_NAME);
+        }
         let area = match self.string_area.as_ref() {
             Some(a) => a,
-            None => return info,
+            None => return BmsStringInfo::default(),
         };
 
         unsafe {
-            // String memory layout: uint32 VersionNum, uint32 NoOfStrings, uint32 dataSize
+            // Read header to determine dataSize
             let header_ptr = area.ptr::<u32>();
-            let num_strings = ptr::read_unaligned(header_ptr.add(1)) as usize;
             let data_size = ptr::read_unaligned(header_ptr.add(2)) as usize;
+            if data_size == 0 {
+                return BmsStringInfo::default();
+            }
+            let total_size = 12 + data_size;
+            let slice = std::slice::from_raw_parts(area.view as *const u8, total_size);
+            Self::unpack_string_data_bytes(slice)
+        }
+    }
 
-            if num_strings == 0 || data_size == 0 {
-                return info;
+    /// Unpacks raw string shared memory bytes according to Falcon BMS FlightData.h StringData layout.
+    pub fn unpack_string_data_bytes(bytes: &[u8]) -> BmsStringInfo {
+        let mut info = BmsStringInfo::default();
+        if bytes.len() < 12 {
+            return info;
+        }
+
+        let num_strings = u32::from_le_bytes(bytes[4..8].try_into().unwrap_or([0; 4])) as usize;
+        let data_size = u32::from_le_bytes(bytes[8..12].try_into().unwrap_or([0; 4])) as usize;
+
+        if num_strings == 0 || data_size == 0 {
+            return info;
+        }
+
+        let total_size = (12 + data_size).min(bytes.len());
+        let mut offset = 12usize;
+
+        for _ in 0..num_strings {
+            if offset + 8 > total_size {
+                break;
+            }
+            let str_id = u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap_or([0; 4]));
+            let str_len =
+                u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap_or([0; 4]))
+                    as usize;
+            offset += 8;
+
+            if offset + str_len > total_size {
+                break;
             }
 
-            // Following the 12-byte header is array of string structures
-            // Each entry: uint32 strId, uint32 strLength, followed by chars
-            let mut offset = 12usize;
-            let base_bytes = area.view as *const u8;
+            let slice = &bytes[offset..offset + str_len];
+            let text = String::from_utf8_lossy(slice)
+                .trim_matches('\0')
+                .trim()
+                .to_string();
 
-            for _ in 0..num_strings {
-                if offset + 8 > data_size + 12 {
-                    break;
+            // Advance past string payload AND its null-terminator byte (char[strLength + 1])
+            offset += str_len + 1;
+
+            // Match known string IDs from Falcon BMS FlightData.h (StringIdentifier enum):
+            // 29: AcName
+            // 35: VoiceHelpers (<player>|<seats>,<tanker>,<awacs>,<departure>,<arrival>,<alternate>)
+            match str_id {
+                29 => {
+                    if !text.is_empty() {
+                        info.aircraft = text;
+                    }
                 }
-                let str_id = ptr::read_unaligned(base_bytes.add(offset) as *const u32);
-                let str_len =
-                    ptr::read_unaligned(base_bytes.add(offset + 4) as *const u32) as usize;
-                offset += 8;
-
-                if offset + str_len > data_size + 12 {
-                    break;
+                35 => {
+                    Self::parse_voice_helpers_into(&text, &mut info);
                 }
-
-                let slice = std::slice::from_raw_parts(base_bytes.add(offset), str_len);
-                // Null-terminated or raw string
-                let text = String::from_utf8_lossy(slice)
-                    .trim_matches('\0')
-                    .trim()
-                    .to_string();
-                offset += str_len;
-
-                // Match known string IDs from Falcon BMS Headers:
-                // 1: Callsign, 2: Package Size, 3: Aircraft, 4: Seat, 5: Departure, 6: Arrival, 7: Alternate, 8: Tanker, 9: Awacs
-                match str_id {
-                    1 => info.callsign = text,
-                    2 => info.package_size = text,
-                    3 => info.aircraft = text,
-                    4 => info.seat = text,
-                    5 => info.departure = text,
-                    6 => info.arrival = text,
-                    7 => info.alternate = text,
-                    8 => info.tanker = text,
-                    9 => info.awacs = text,
-                    _ => {}
-                }
+                _ => {}
             }
         }
 
         info
+    }
+
+    /// Parses the VoiceHelpers payload (str_id 35) into BmsStringInfo
+    pub fn parse_voice_helpers_into(raw: &str, info: &mut BmsStringInfo) {
+        // Format: <player>|<seats>,<tanker>,<awacs>,<departure>,<arrival>,<alternate>
+        // Example: "Cowboy1|PAAX,Texaco7,Chalice9,Osan,Osan,Pyeongtaek"
+        if let Some((player_callsign, rest)) = raw.split_once('|') {
+            let cs = player_callsign.trim();
+            if !cs.is_empty() {
+                info.callsign = cs.to_string();
+            }
+
+            let tokens: Vec<&str> = rest.split(',').map(|s| s.trim()).collect();
+            if let Some(&seats) = tokens.first() {
+                let chars: Vec<char> = seats.chars().collect();
+                info.ai_seat1 = chars.first().is_some_and(|&c| c == 'A' || c == 'H');
+                info.ai_seat2 = chars.get(1).is_some_and(|&c| c == 'A' || c == 'H');
+                info.ai_seat3 = chars.get(2).is_some_and(|&c| c == 'A' || c == 'H');
+                info.ai_seat4 = chars.get(3).is_some_and(|&c| c == 'A' || c == 'H');
+
+                let total_active = chars.iter().filter(|&&c| c != 'X').count();
+                info.package_size = match total_active {
+                    1 => "Singleton".to_string(),
+                    2 => "2 Ship".to_string(),
+                    3 => "3 Ship".to_string(),
+                    4 => "4 Ship".to_string(),
+                    _ => total_active.to_string(),
+                };
+
+                if let Some(player_seat) = chars.iter().position(|&c| c == 'P') {
+                    info.seat = (player_seat + 1).to_string();
+                }
+            }
+
+            if let Some(&tanker) = tokens.get(1) {
+                if !tanker.is_empty() && !tanker.eq_ignore_ascii_case("none") {
+                    info.tanker = tanker.to_string();
+                }
+            }
+
+            if let Some(&awacs) = tokens.get(2) {
+                if !awacs.is_empty() && !awacs.eq_ignore_ascii_case("none") {
+                    info.awacs = awacs.to_string();
+                }
+            }
+
+            if let Some(&dep) = tokens.get(3) {
+                if !dep.is_empty() && !dep.eq_ignore_ascii_case("none") {
+                    info.departure = dep.to_string();
+                }
+            }
+
+            if let Some(&arr) = tokens.get(4) {
+                if !arr.is_empty() && !arr.eq_ignore_ascii_case("none") {
+                    info.arrival = arr.to_string();
+                }
+            }
+
+            if let Some(&alt) = tokens.get(5) {
+                if !alt.is_empty() && !alt.eq_ignore_ascii_case("none") {
+                    info.alternate = alt.to_string();
+                }
+            }
+        }
     }
 }
 
@@ -317,5 +403,85 @@ mod tests {
         assert_eq!(std::mem::offset_of!(IntellivibeData, is_ejecting), 14);
         assert_eq!(std::mem::offset_of!(IntellivibeData, in_3d), 15);
         assert_eq!(std::mem::offset_of!(IntellivibeData, is_on_ground), 19);
+    }
+
+    #[test]
+    fn test_voice_helpers_parsing() {
+        let payload = "Cowboy1|PAAX,Texaco7,Chalice9,Osan,Osan,Pyeongtaek";
+        let mut info = BmsStringInfo::default();
+        BmsSharedMemoryClient::parse_voice_helpers_into(payload, &mut info);
+
+        assert_eq!(info.callsign, "Cowboy1");
+        assert_eq!(info.package_size, "3 Ship");
+        assert_eq!(info.seat, "1");
+        assert!(!info.ai_seat1); // Player in seat 1
+        assert!(info.ai_seat2); // AI in seat 2
+        assert!(info.ai_seat3); // AI in seat 3
+        assert!(!info.ai_seat4); // 'X'
+        assert_eq!(info.tanker, "Texaco7");
+        assert_eq!(info.awacs, "Chalice9");
+        assert_eq!(info.departure, "Osan");
+        assert_eq!(info.arrival, "Osan");
+        assert_eq!(info.alternate, "Pyeongtaek");
+    }
+
+    #[test]
+    fn test_voice_helpers_none_tanker_awacs() {
+        let payload = "Goblin2|PXXX,None,None,Gunsan,Gunsan,Osan";
+        let mut info = BmsStringInfo::default();
+        BmsSharedMemoryClient::parse_voice_helpers_into(payload, &mut info);
+
+        assert_eq!(info.callsign, "Goblin2");
+        assert_eq!(info.package_size, "Singleton");
+        assert_eq!(info.seat, "1");
+        assert!(!info.ai_seat1);
+        assert!(!info.ai_seat2);
+        assert_eq!(info.tanker, "");
+        assert_eq!(info.awacs, "");
+    }
+
+    #[test]
+    fn test_unpack_multi_string_stream() {
+        // Construct a realistic FalconSharedMemoryAreaString payload with multiple entries
+        // Header: VersionNum=5, NoOfStrings=4, dataSize
+        let string_entries: Vec<(u32, &str)> = vec![
+            (0, "C:\\Games\\Falcon BMS 4.38\\Bin\\x64\\Falcon BMS.exe"), // BmsExe
+            (1, "BMS - Full.key"),                                       // KeyFile
+            (29, "F-16C-52"),                                            // AcName
+            (35, "Cowboy1|PAAX,Texaco7,Chalice9,Osan,Osan,Pyeongtaek"),  // VoiceHelpers
+        ];
+
+        let mut data_blob = Vec::new();
+        for (str_id, s) in &string_entries {
+            data_blob.extend_from_slice(&str_id.to_le_bytes());
+            let str_len = s.len() as u32;
+            data_blob.extend_from_slice(&str_len.to_le_bytes());
+            data_blob.extend_from_slice(s.as_bytes());
+            data_blob.push(0); // Null terminator byte
+        }
+
+        let mut stream = Vec::new();
+        let version_num = 5u32;
+        let num_strings = string_entries.len() as u32;
+        let data_size = data_blob.len() as u32;
+        stream.extend_from_slice(&version_num.to_le_bytes());
+        stream.extend_from_slice(&num_strings.to_le_bytes());
+        stream.extend_from_slice(&data_size.to_le_bytes());
+        stream.extend_from_slice(&data_blob);
+
+        let info = BmsSharedMemoryClient::unpack_string_data_bytes(&stream);
+        assert_eq!(info.aircraft, "F-16C-52");
+        assert_eq!(info.callsign, "Cowboy1");
+        assert_eq!(info.tanker, "Texaco7");
+        assert_eq!(info.awacs, "Chalice9");
+        assert_eq!(info.departure, "Osan");
+        assert_eq!(info.arrival, "Osan");
+        assert_eq!(info.alternate, "Pyeongtaek");
+        assert_eq!(info.package_size, "3 Ship");
+        assert_eq!(info.seat, "1");
+        assert!(!info.ai_seat1);
+        assert!(info.ai_seat2);
+        assert!(info.ai_seat3);
+        assert!(!info.ai_seat4);
     }
 }

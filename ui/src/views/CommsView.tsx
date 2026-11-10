@@ -5,6 +5,88 @@ import { Ipc } from '../services/ipc';
 import { Sound } from '../services/sound';
 import { AppConfig, TelemetryData } from '../types/ipc';
 import { SpeakerToggle, MicrophoneToggle } from '../components/inputs';
+import { HelpCircle, RotateCcw, Check, SlidersHorizontal, Undo2 } from 'lucide-react';
+
+const SAPI_PTT_DEFAULTS = {
+  min_confidence: 50,
+  min_ptt_duration_ms: 300,
+  ptt_release_grace_ms: 1500,
+  end_silence_timeout_ms: 1000,
+  end_silence_timeout_ambiguous_ms: 1500,
+  initial_silence_timeout_ms: 5000,
+};
+
+const getConfidenceBadge = (val: number) => {
+  if (val < 35) {
+    return { label: 'PERMISSIVE', color: '#EF4444', bg: 'rgba(239, 68, 68, 0.15)', border: 'rgba(239, 68, 68, 0.4)' };
+  }
+  if (val < 50) {
+    return { label: 'RELAXED', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.4)' };
+  }
+  if (val < 70) {
+    return { label: 'BALANCED', color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.4)' };
+  }
+  if (val < 85) {
+    return { label: 'STRICT', color: '#06B6D4', bg: 'rgba(6, 182, 212, 0.15)', border: 'rgba(6, 182, 212, 0.4)' };
+  }
+  return { label: 'HIGH PRECISION', color: '#A855F7', bg: 'rgba(168, 85, 247, 0.15)', border: 'rgba(168, 85, 247, 0.4)' };
+};
+
+const getPttHoldBadge = (val: number) => {
+  if (val === 0) {
+    return { label: 'INSTANT (0ms)', color: '#71717A', bg: 'rgba(113, 113, 122, 0.15)', border: 'rgba(113, 113, 122, 0.4)' };
+  }
+  if (val <= 200) {
+    return { label: 'LIGHT DEBOUNCE', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.4)' };
+  }
+  if (val <= 450) {
+    return { label: 'OPTIMAL (300ms)', color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.4)' };
+  }
+  return { label: 'DELIBERATE HOLD', color: '#06B6D4', bg: 'rgba(6, 182, 212, 0.15)', border: 'rgba(6, 182, 212, 0.4)' };
+};
+
+const getPttGraceBadge = (val: number) => {
+  if (val === 0) {
+    return { label: 'ZERO GRACE', color: '#EF4444', bg: 'rgba(239, 68, 68, 0.15)', border: 'rgba(239, 68, 68, 0.4)' };
+  }
+  if (val <= 750) {
+    return { label: 'TIGHT WINDOW', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.4)' };
+  }
+  if (val <= 1600) {
+    return { label: 'NATURAL (1.5s)', color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.4)' };
+  }
+  return { label: 'EXTENDED BUFFER', color: '#06B6D4', bg: 'rgba(6, 182, 212, 0.15)', border: 'rgba(6, 182, 212, 0.4)' };
+};
+
+const getEndSilenceBadge = (val: number) => {
+  if (val <= 600) {
+    return { label: 'HAIR-TRIGGER', color: '#F97316', bg: 'rgba(249, 115, 22, 0.15)', border: 'rgba(249, 115, 22, 0.4)' };
+  }
+  if (val <= 1200) {
+    return { label: 'BALANCED (1.0s)', color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.4)' };
+  }
+  return { label: 'RELAXED CADENCE', color: '#06B6D4', bg: 'rgba(6, 182, 212, 0.15)', border: 'rgba(6, 182, 212, 0.4)' };
+};
+
+const getAmbSilenceBadge = (val: number) => {
+  if (val < 1000) {
+    return { label: 'FAST DECISION', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.4)' };
+  }
+  if (val <= 2000) {
+    return { label: 'BALANCED (1.5s)', color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.4)' };
+  }
+  return { label: 'THOROUGH ARBITRATION', color: '#06B6D4', bg: 'rgba(6, 182, 212, 0.15)', border: 'rgba(6, 182, 212, 0.4)' };
+};
+
+const getInitSilenceBadge = (val: number) => {
+  if (val < 3000) {
+    return { label: 'FAST CUTOFF', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.4)' };
+  }
+  if (val <= 6000) {
+    return { label: 'BALANCED (5.0s)', color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.4)' };
+  }
+  return { label: 'EXTENDED WAIT', color: '#06B6D4', bg: 'rgba(6, 182, 212, 0.15)', border: 'rgba(6, 182, 212, 0.4)' };
+};
 
 interface CommsViewProps {
   config: AppConfig;
@@ -154,6 +236,97 @@ export const CommsView: React.FC<CommsViewProps> = ({
   const handleSetPollingRate = (hz: number) => {
     Sound.playClick();
     const updated = { ...config, polling_rate_hz: hz };
+    onUpdateConfig(updated);
+    Ipc.updateConfig(updated);
+  };
+
+  // Staged SAPI & PTT parameters (permits interactive slider tweaking before committing to disk)
+  const [stagedParams, setStagedParams] = useState({
+    min_confidence: config.min_confidence ?? SAPI_PTT_DEFAULTS.min_confidence,
+    min_ptt_duration_ms: config.min_ptt_duration_ms ?? SAPI_PTT_DEFAULTS.min_ptt_duration_ms,
+    ptt_release_grace_ms: config.ptt_release_grace_ms ?? SAPI_PTT_DEFAULTS.ptt_release_grace_ms,
+    end_silence_timeout_ms: config.end_silence_timeout_ms ?? SAPI_PTT_DEFAULTS.end_silence_timeout_ms,
+    end_silence_timeout_ambiguous_ms:
+      config.end_silence_timeout_ambiguous_ms ?? SAPI_PTT_DEFAULTS.end_silence_timeout_ambiguous_ms,
+    initial_silence_timeout_ms:
+      config.initial_silence_timeout_ms ?? SAPI_PTT_DEFAULTS.initial_silence_timeout_ms,
+  });
+
+  const [hoveredTooltip, setHoveredTooltip] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStagedParams({
+      min_confidence: config.min_confidence ?? SAPI_PTT_DEFAULTS.min_confidence,
+      min_ptt_duration_ms: config.min_ptt_duration_ms ?? SAPI_PTT_DEFAULTS.min_ptt_duration_ms,
+      ptt_release_grace_ms: config.ptt_release_grace_ms ?? SAPI_PTT_DEFAULTS.ptt_release_grace_ms,
+      end_silence_timeout_ms: config.end_silence_timeout_ms ?? SAPI_PTT_DEFAULTS.end_silence_timeout_ms,
+      end_silence_timeout_ambiguous_ms:
+        config.end_silence_timeout_ambiguous_ms ?? SAPI_PTT_DEFAULTS.end_silence_timeout_ambiguous_ms,
+      initial_silence_timeout_ms:
+        config.initial_silence_timeout_ms ?? SAPI_PTT_DEFAULTS.initial_silence_timeout_ms,
+    });
+  }, [
+    config.min_confidence,
+    config.min_ptt_duration_ms,
+    config.ptt_release_grace_ms,
+    config.end_silence_timeout_ms,
+    config.end_silence_timeout_ambiguous_ms,
+    config.initial_silence_timeout_ms,
+  ]);
+
+  const isTuningDirty = useMemo(() => {
+    const curConf = config.min_confidence ?? SAPI_PTT_DEFAULTS.min_confidence;
+    const curPtt = config.min_ptt_duration_ms ?? SAPI_PTT_DEFAULTS.min_ptt_duration_ms;
+    const curGrace = config.ptt_release_grace_ms ?? SAPI_PTT_DEFAULTS.ptt_release_grace_ms;
+    const curEnd = config.end_silence_timeout_ms ?? SAPI_PTT_DEFAULTS.end_silence_timeout_ms;
+    const curAmb = config.end_silence_timeout_ambiguous_ms ?? SAPI_PTT_DEFAULTS.end_silence_timeout_ambiguous_ms;
+    const curInit = config.initial_silence_timeout_ms ?? SAPI_PTT_DEFAULTS.initial_silence_timeout_ms;
+
+    return (
+      stagedParams.min_confidence !== curConf ||
+      stagedParams.min_ptt_duration_ms !== curPtt ||
+      stagedParams.ptt_release_grace_ms !== curGrace ||
+      stagedParams.end_silence_timeout_ms !== curEnd ||
+      stagedParams.end_silence_timeout_ambiguous_ms !== curAmb ||
+      stagedParams.initial_silence_timeout_ms !== curInit
+    );
+  }, [config, stagedParams]);
+
+  const handleResetSlider = (key: keyof typeof SAPI_PTT_DEFAULTS) => {
+    Sound.playSwitch();
+    setStagedParams((prev) => ({ ...prev, [key]: SAPI_PTT_DEFAULTS[key] }));
+  };
+
+  const handleResetAllToDefaults = () => {
+    Sound.playSwitch();
+    setStagedParams(SAPI_PTT_DEFAULTS);
+  };
+
+  const handleDiscardTuning = () => {
+    Sound.playSwitch();
+    setStagedParams({
+      min_confidence: config.min_confidence ?? SAPI_PTT_DEFAULTS.min_confidence,
+      min_ptt_duration_ms: config.min_ptt_duration_ms ?? SAPI_PTT_DEFAULTS.min_ptt_duration_ms,
+      ptt_release_grace_ms: config.ptt_release_grace_ms ?? SAPI_PTT_DEFAULTS.ptt_release_grace_ms,
+      end_silence_timeout_ms: config.end_silence_timeout_ms ?? SAPI_PTT_DEFAULTS.end_silence_timeout_ms,
+      end_silence_timeout_ambiguous_ms:
+        config.end_silence_timeout_ambiguous_ms ?? SAPI_PTT_DEFAULTS.end_silence_timeout_ambiguous_ms,
+      initial_silence_timeout_ms:
+        config.initial_silence_timeout_ms ?? SAPI_PTT_DEFAULTS.initial_silence_timeout_ms,
+    });
+  };
+
+  const handleApplyTuning = () => {
+    Sound.playCommit();
+    const updated = {
+      ...config,
+      min_confidence: stagedParams.min_confidence,
+      min_ptt_duration_ms: stagedParams.min_ptt_duration_ms,
+      ptt_release_grace_ms: stagedParams.ptt_release_grace_ms,
+      end_silence_timeout_ms: stagedParams.end_silence_timeout_ms,
+      end_silence_timeout_ambiguous_ms: stagedParams.end_silence_timeout_ambiguous_ms,
+      initial_silence_timeout_ms: stagedParams.initial_silence_timeout_ms,
+    };
     onUpdateConfig(updated);
     Ipc.updateConfig(updated);
   };
@@ -524,6 +697,580 @@ export const CommsView: React.FC<CommsViewProps> = ({
             <span>SAPI GRAMMAR RULES: ACTIVE</span>
             <span>PTT OVERRIDE: HOTAS GATED</span>
           </div>
+        </div>
+      </div>
+
+      {/* 3. SAPI Speech Engine & Push-To-Talk Timings Station */}
+      <div className="bg-[#121214] border border-white/[0.08] rounded p-4 shadow-xl">
+        <style jsx>{`
+          .calib-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: border-color 0.15s ease;
+          }
+          .calib-slider:hover {
+            border-color: rgba(255, 255, 255, 0.25);
+          }
+          .calib-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 2px solid var(--thumb-color, #10b981);
+            box-shadow: 0 0 8px var(--thumb-color, #10b981);
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+          }
+          .calib-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 12px var(--thumb-color, #10b981);
+          }
+          .calib-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 2px solid var(--thumb-color, #10b981);
+            box-shadow: 0 0 8px var(--thumb-color, #10b981);
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+          }
+        `}</style>
+
+        {/* Section Header & Staged Commit Action Bar */}
+        <div className="flex items-center justify-between pb-3 border-b border-white/[0.08] mb-4">
+          <div>
+            <div className="flex items-center space-x-2">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-accent" />
+              <h2 className="text-xs font-bold tracking-[0.2em] text-white uppercase font-mono">
+                SAPI SPEECH RECOGNITION &amp; PTT TIMINGS // CALIBRATION
+              </h2>
+            </div>
+            <p className="text-[11px] text-zinc-500 font-mono mt-0.5">
+              Precision tuning for acoustic confidence floor, hardware switch debouncing, and phrase arbitration.
+            </p>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={handleResetAllToDefaults}
+              className="h-7 px-2.5 rounded bg-[#18181B] hover:bg-[#1E1E22] border border-white/[0.08] text-zinc-400 hover:text-white font-mono text-[10px] font-bold uppercase transition-colors cursor-pointer flex items-center space-x-1.5"
+              title="Reset all 6 parameters to standard factory defaults"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>RESET ALL DEFAULTS</span>
+            </button>
+
+            {isTuningDirty && (
+              <button
+                type="button"
+                onClick={handleDiscardTuning}
+                className="h-7 px-2.5 rounded bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-600 text-zinc-300 font-mono text-[10px] font-bold uppercase transition-colors cursor-pointer flex items-center space-x-1.5"
+                title="Discard unapplied changes and restore saved configuration"
+              >
+                <Undo2 className="w-3 h-3" />
+                <span>DISCARD</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleApplyTuning}
+              disabled={!isTuningDirty}
+              className={`h-7 px-3 rounded font-mono font-bold text-[10px] border uppercase transition-[background-color,border-color,box-shadow,color] duration-200 cursor-pointer flex items-center space-x-1.5 ${
+                isTuningDirty
+                  ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.35)] animate-pulse'
+                  : 'bg-[#18181B] border-white/[0.06] text-zinc-600 cursor-not-allowed'
+              }`}
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>{isTuningDirty ? 'APPLY CONFIGURATION (UNSAVED)' : 'CONFIG SYNCHRONIZED'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Sliders Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {/* 1. Speech Confidence Floor */}
+          {(() => {
+            const badge = getConfidenceBadge(stagedParams.min_confidence);
+            const isModified = stagedParams.min_confidence !== SAPI_PTT_DEFAULTS.min_confidence;
+            const pct = stagedParams.min_confidence;
+            return (
+              <div className="p-3.5 rounded bg-[#18181B] border border-white/[0.06] flex flex-col justify-between space-y-3 font-mono text-xs relative">
+                <div className="flex items-center justify-between">
+                  <div className="relative flex items-center space-x-1.5">
+                    <span className="text-white font-bold text-[11px] tracking-wider uppercase">CONFIDENCE FLOOR</span>
+                    <button
+                      type="button"
+                      onMouseEnter={() => setHoveredTooltip('confidence')}
+                      onMouseLeave={() => setHoveredTooltip(null)}
+                      className="text-zinc-500 hover:text-zinc-300 transition-colors p-0.5 rounded cursor-help"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
+                    {hoveredTooltip === 'confidence' && (
+                      <div className="absolute left-0 bottom-full mb-2 w-72 bg-[#1A1A1E] border border-white/[0.15] text-zinc-300 shadow-2xl rounded p-3 text-[11px] font-sans leading-relaxed z-50 pointer-events-none will-change-[opacity,transform] transition-[opacity,transform] duration-150">
+                        <div className="text-white font-bold font-mono text-[11px] mb-1 flex items-center justify-between">
+                          <span>SPEECH CONFIDENCE FLOOR</span>
+                          <span className="text-zinc-500 font-normal">Default: 50%</span>
+                        </div>
+                        <div>
+                          Minimum acoustic confidence score required by Windows SAPI to execute a voice command. Phrases scored below this floor are safely discarded to avoid unintended cockpit triggers.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleResetSlider('min_confidence')}
+                      disabled={!isModified}
+                      className={`p-1 rounded border transition-colors ${
+                        isModified
+                          ? 'border-white/20 text-zinc-300 hover:text-white hover:bg-white/10 cursor-pointer'
+                          : 'border-transparent text-zinc-700 cursor-not-allowed opacity-40'
+                      }`}
+                      title="Reset Confidence Floor to Default (50%)"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </button>
+                    <span className="text-white font-bold text-xs">{stagedParams.min_confidence}%</span>
+                    <span
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded border transition-[background-color,border-color,color] duration-150"
+                      style={{ color: badge.color, backgroundColor: badge.bg, borderColor: badge.border }}
+                    >
+                      {badge.label}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={stagedParams.min_confidence}
+                    onChange={(e) => setStagedParams({ ...stagedParams, min_confidence: parseInt(e.target.value) || 0 })}
+                    className="calib-slider"
+                    style={{
+                      background: `linear-gradient(to right, ${badge.color} 0%, ${badge.color} ${pct}%, rgba(255, 255, 255, 0.08) ${pct}%, rgba(255, 255, 255, 0.08) 100%)`,
+                      ['--thumb-color' as any]: badge.color,
+                    }}
+                  />
+                  <div className="flex items-center justify-between text-[9px] text-zinc-500 mt-1 font-mono">
+                    <span>0% (PERMISSIVE)</span>
+                    <span>100% (STRICT)</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 2. PTT Minimum Hold Duration */}
+          {(() => {
+            const badge = getPttHoldBadge(stagedParams.min_ptt_duration_ms);
+            const isModified = stagedParams.min_ptt_duration_ms !== SAPI_PTT_DEFAULTS.min_ptt_duration_ms;
+            const pct = (stagedParams.min_ptt_duration_ms / 1000) * 100;
+            return (
+              <div className="p-3.5 rounded bg-[#18181B] border border-white/[0.06] flex flex-col justify-between space-y-3 font-mono text-xs relative">
+                <div className="flex items-center justify-between">
+                  <div className="relative flex items-center space-x-1.5">
+                    <span className="text-white font-bold text-[11px] tracking-wider uppercase">PTT MIN HOLD</span>
+                    <button
+                      type="button"
+                      onMouseEnter={() => setHoveredTooltip('ptt_hold')}
+                      onMouseLeave={() => setHoveredTooltip(null)}
+                      className="text-zinc-500 hover:text-zinc-300 transition-colors p-0.5 rounded cursor-help"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
+                    {hoveredTooltip === 'ptt_hold' && (
+                      <div className="absolute left-0 bottom-full mb-2 w-72 bg-[#1A1A1E] border border-white/[0.15] text-zinc-300 shadow-2xl rounded p-3 text-[11px] font-sans leading-relaxed z-50 pointer-events-none will-change-[opacity,transform] transition-[opacity,transform] duration-150">
+                        <div className="text-white font-bold font-mono text-[11px] mb-1 flex items-center justify-between">
+                          <span>PTT MINIMUM HOLD DURATION</span>
+                          <span className="text-zinc-500 font-normal">Default: 300ms</span>
+                        </div>
+                        <div>
+                          Minimum duration the Push-To-Talk switch must be held before a transmission is accepted. Momentary switch bounces and accidental bumps under this threshold are ignored.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleResetSlider('min_ptt_duration_ms')}
+                      disabled={!isModified}
+                      className={`p-1 rounded border transition-colors ${
+                        isModified
+                          ? 'border-white/20 text-zinc-300 hover:text-white hover:bg-white/10 cursor-pointer'
+                          : 'border-transparent text-zinc-700 cursor-not-allowed opacity-40'
+                      }`}
+                      title="Reset PTT Min Hold to Default (300ms)"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </button>
+                    <span className="text-white font-bold text-xs">{stagedParams.min_ptt_duration_ms}ms</span>
+                    <span
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded border transition-[background-color,border-color,color] duration-150"
+                      style={{ color: badge.color, backgroundColor: badge.bg, borderColor: badge.border }}
+                    >
+                      {badge.label}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1000}
+                    step={25}
+                    value={stagedParams.min_ptt_duration_ms}
+                    onChange={(e) => setStagedParams({ ...stagedParams, min_ptt_duration_ms: parseInt(e.target.value) || 0 })}
+                    className="calib-slider"
+                    style={{
+                      background: `linear-gradient(to right, ${badge.color} 0%, ${badge.color} ${pct}%, rgba(255, 255, 255, 0.08) ${pct}%, rgba(255, 255, 255, 0.08) 100%)`,
+                      ['--thumb-color' as any]: badge.color,
+                    }}
+                  />
+                  <div className="flex items-center justify-between text-[9px] text-zinc-500 mt-1 font-mono">
+                    <span>0ms (INSTANT)</span>
+                    <span>1000ms (1.0s)</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 3. PTT Post-Release Grace Window */}
+          {(() => {
+            const badge = getPttGraceBadge(stagedParams.ptt_release_grace_ms);
+            const isModified = stagedParams.ptt_release_grace_ms !== SAPI_PTT_DEFAULTS.ptt_release_grace_ms;
+            const pct = (stagedParams.ptt_release_grace_ms / 2000) * 100;
+            return (
+              <div className="p-3.5 rounded bg-[#18181B] border border-white/[0.06] flex flex-col justify-between space-y-3 font-mono text-xs relative">
+                <div className="flex items-center justify-between">
+                  <div className="relative flex items-center space-x-1.5">
+                    <span className="text-white font-bold text-[11px] tracking-wider uppercase">PTT RELEASE GRACE</span>
+                    <button
+                      type="button"
+                      onMouseEnter={() => setHoveredTooltip('ptt_grace')}
+                      onMouseLeave={() => setHoveredTooltip(null)}
+                      className="text-zinc-500 hover:text-zinc-300 transition-colors p-0.5 rounded cursor-help"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
+                    {hoveredTooltip === 'ptt_grace' && (
+                      <div className="absolute left-0 bottom-full mb-2 w-72 bg-[#1A1A1E] border border-white/[0.15] text-zinc-300 shadow-2xl rounded p-3 text-[11px] font-sans leading-relaxed z-50 pointer-events-none will-change-[opacity,transform] transition-[opacity,transform] duration-150">
+                        <div className="text-white font-bold font-mono text-[11px] mb-1 flex items-center justify-between">
+                          <span>PTT POST-RELEASE GRACE</span>
+                          <span className="text-zinc-500 font-normal">Default: 1500ms</span>
+                        </div>
+                        <div>
+                          Time window after releasing PTT during which speech recognition is still accepted. Allows you to release the radio switch naturally right as you conclude your sentence while audio buffers process.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleResetSlider('ptt_release_grace_ms')}
+                      disabled={!isModified}
+                      className={`p-1 rounded border transition-colors ${
+                        isModified
+                          ? 'border-white/20 text-zinc-300 hover:text-white hover:bg-white/10 cursor-pointer'
+                          : 'border-transparent text-zinc-700 cursor-not-allowed opacity-40'
+                      }`}
+                      title="Reset PTT Grace to Default (1500ms)"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </button>
+                    <span className="text-white font-bold text-xs">{stagedParams.ptt_release_grace_ms}ms</span>
+                    <span
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded border transition-[background-color,border-color,color] duration-150"
+                      style={{ color: badge.color, backgroundColor: badge.bg, borderColor: badge.border }}
+                    >
+                      {badge.label}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={2000}
+                    step={50}
+                    value={stagedParams.ptt_release_grace_ms}
+                    onChange={(e) => setStagedParams({ ...stagedParams, ptt_release_grace_ms: parseInt(e.target.value) || 0 })}
+                    className="calib-slider"
+                    style={{
+                      background: `linear-gradient(to right, ${badge.color} 0%, ${badge.color} ${pct}%, rgba(255, 255, 255, 0.08) ${pct}%, rgba(255, 255, 255, 0.08) 100%)`,
+                      ['--thumb-color' as any]: badge.color,
+                    }}
+                  />
+                  <div className="flex items-center justify-between text-[9px] text-zinc-500 mt-1 font-mono">
+                    <span>0ms (OFF)</span>
+                    <span>2000ms (2.0s)</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 4. End-of-Phrase Response (Silence Timeout) */}
+          {(() => {
+            const badge = getEndSilenceBadge(stagedParams.end_silence_timeout_ms);
+            const isModified = stagedParams.end_silence_timeout_ms !== SAPI_PTT_DEFAULTS.end_silence_timeout_ms;
+            const pct = ((stagedParams.end_silence_timeout_ms - 300) / (2000 - 300)) * 100;
+            return (
+              <div className="p-3.5 rounded bg-[#18181B] border border-white/[0.06] flex flex-col justify-between space-y-3 font-mono text-xs relative">
+                <div className="flex items-center justify-between">
+                  <div className="relative flex items-center space-x-1.5">
+                    <span className="text-white font-bold text-[11px] tracking-wider uppercase">END PHRASE TIMEOUT</span>
+                    <button
+                      type="button"
+                      onMouseEnter={() => setHoveredTooltip('end_silence')}
+                      onMouseLeave={() => setHoveredTooltip(null)}
+                      className="text-zinc-500 hover:text-zinc-300 transition-colors p-0.5 rounded cursor-help"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
+                    {hoveredTooltip === 'end_silence' && (
+                      <div className="absolute left-0 bottom-full mb-2 w-72 bg-[#1A1A1E] border border-white/[0.15] text-zinc-300 shadow-2xl rounded p-3 text-[11px] font-sans leading-relaxed z-50 pointer-events-none will-change-[opacity,transform] transition-[opacity,transform] duration-150">
+                        <div className="text-white font-bold font-mono text-[11px] mb-1 flex items-center justify-between">
+                          <span>END-OF-PHRASE RESPONSE DELAY</span>
+                          <span className="text-zinc-500 font-normal">Default: 1000ms</span>
+                        </div>
+                        <div>
+                          Silence duration required after speaking before SAPI concludes an unambiguous command. Lower values execute keystrokes faster; higher values give you time to pause naturally between words.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleResetSlider('end_silence_timeout_ms')}
+                      disabled={!isModified}
+                      className={`p-1 rounded border transition-colors ${
+                        isModified
+                          ? 'border-white/20 text-zinc-300 hover:text-white hover:bg-white/10 cursor-pointer'
+                          : 'border-transparent text-zinc-700 cursor-not-allowed opacity-40'
+                      }`}
+                      title="Reset End Phrase Timeout to Default (1000ms)"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </button>
+                    <span className="text-white font-bold text-xs">{stagedParams.end_silence_timeout_ms}ms</span>
+                    <span
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded border transition-[background-color,border-color,color] duration-150"
+                      style={{ color: badge.color, backgroundColor: badge.bg, borderColor: badge.border }}
+                    >
+                      {badge.label}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <input
+                    type="range"
+                    min={300}
+                    max={2000}
+                    step={50}
+                    value={stagedParams.end_silence_timeout_ms}
+                    onChange={(e) => setStagedParams({ ...stagedParams, end_silence_timeout_ms: parseInt(e.target.value) || 300 })}
+                    className="calib-slider"
+                    style={{
+                      background: `linear-gradient(to right, ${badge.color} 0%, ${badge.color} ${pct}%, rgba(255, 255, 255, 0.08) ${pct}%, rgba(255, 255, 255, 0.08) 100%)`,
+                      ['--thumb-color' as any]: badge.color,
+                    }}
+                  />
+                  <div className="flex items-center justify-between text-[9px] text-zinc-500 mt-1 font-mono">
+                    <span>300ms (FAST)</span>
+                    <span>2000ms (RELAXED)</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 5. Ambiguous Phrase Arbitration Timeout */}
+          {(() => {
+            const badge = getAmbSilenceBadge(stagedParams.end_silence_timeout_ambiguous_ms);
+            const isModified = stagedParams.end_silence_timeout_ambiguous_ms !== SAPI_PTT_DEFAULTS.end_silence_timeout_ambiguous_ms;
+            const pct = ((stagedParams.end_silence_timeout_ambiguous_ms - 500) / (3000 - 500)) * 100;
+            return (
+              <div className="p-3.5 rounded bg-[#18181B] border border-white/[0.06] flex flex-col justify-between space-y-3 font-mono text-xs relative">
+                <div className="flex items-center justify-between">
+                  <div className="relative flex items-center space-x-1.5">
+                    <span className="text-white font-bold text-[11px] tracking-wider uppercase">AMBIGUOUS ARBITRATION</span>
+                    <button
+                      type="button"
+                      onMouseEnter={() => setHoveredTooltip('amb_silence')}
+                      onMouseLeave={() => setHoveredTooltip(null)}
+                      className="text-zinc-500 hover:text-zinc-300 transition-colors p-0.5 rounded cursor-help"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
+                    {hoveredTooltip === 'amb_silence' && (
+                      <div className="absolute left-0 bottom-full mb-2 w-72 bg-[#1A1A1E] border border-white/[0.15] text-zinc-300 shadow-2xl rounded p-3 text-[11px] font-sans leading-relaxed z-50 pointer-events-none will-change-[opacity,transform] transition-[opacity,transform] duration-150">
+                        <div className="text-white font-bold font-mono text-[11px] mb-1 flex items-center justify-between">
+                          <span>AMBIGUOUS PHRASE TIMEOUT</span>
+                          <span className="text-zinc-500 font-normal">Default: 1500ms</span>
+                        </div>
+                        <div>
+                          Silence duration required when multiple grammar phrases could potentially match (e.g. &apos;Flight Rejoin&apos; vs &apos;Flight Return&apos;). Gives SAPI additional time to arbitrate the correct command.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleResetSlider('end_silence_timeout_ambiguous_ms')}
+                      disabled={!isModified}
+                      className={`p-1 rounded border transition-colors ${
+                        isModified
+                          ? 'border-white/20 text-zinc-300 hover:text-white hover:bg-white/10 cursor-pointer'
+                          : 'border-transparent text-zinc-700 cursor-not-allowed opacity-40'
+                      }`}
+                      title="Reset Ambiguous Timeout to Default (1500ms)"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </button>
+                    <span className="text-white font-bold text-xs">{stagedParams.end_silence_timeout_ambiguous_ms}ms</span>
+                    <span
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded border transition-[background-color,border-color,color] duration-150"
+                      style={{ color: badge.color, backgroundColor: badge.bg, borderColor: badge.border }}
+                    >
+                      {badge.label}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <input
+                    type="range"
+                    min={500}
+                    max={3000}
+                    step={50}
+                    value={stagedParams.end_silence_timeout_ambiguous_ms}
+                    onChange={(e) =>
+                      setStagedParams({ ...stagedParams, end_silence_timeout_ambiguous_ms: parseInt(e.target.value) || 500 })
+                    }
+                    className="calib-slider"
+                    style={{
+                      background: `linear-gradient(to right, ${badge.color} 0%, ${badge.color} ${pct}%, rgba(255, 255, 255, 0.08) ${pct}%, rgba(255, 255, 255, 0.08) 100%)`,
+                      ['--thumb-color' as any]: badge.color,
+                    }}
+                  />
+                  <div className="flex items-center justify-between text-[9px] text-zinc-500 mt-1 font-mono">
+                    <span>500ms (FAST)</span>
+                    <span>3000ms (3.0s)</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 6. Initial Silence Timeout */}
+          {(() => {
+            const badge = getInitSilenceBadge(stagedParams.initial_silence_timeout_ms);
+            const isModified = stagedParams.initial_silence_timeout_ms !== SAPI_PTT_DEFAULTS.initial_silence_timeout_ms;
+            const pct = ((stagedParams.initial_silence_timeout_ms - 1000) / (10000 - 1000)) * 100;
+            return (
+              <div className="p-3.5 rounded bg-[#18181B] border border-white/[0.06] flex flex-col justify-between space-y-3 font-mono text-xs relative">
+                <div className="flex items-center justify-between">
+                  <div className="relative flex items-center space-x-1.5">
+                    <span className="text-white font-bold text-[11px] tracking-wider uppercase">INITIAL SILENCE TIMEOUT</span>
+                    <button
+                      type="button"
+                      onMouseEnter={() => setHoveredTooltip('init_silence')}
+                      onMouseLeave={() => setHoveredTooltip(null)}
+                      className="text-zinc-500 hover:text-zinc-300 transition-colors p-0.5 rounded cursor-help"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
+                    {hoveredTooltip === 'init_silence' && (
+                      <div className="absolute left-0 bottom-full mb-2 w-72 bg-[#1A1A1E] border border-white/[0.15] text-zinc-300 shadow-2xl rounded p-3 text-[11px] font-sans leading-relaxed z-50 pointer-events-none will-change-[opacity,transform] transition-[opacity,transform] duration-150">
+                        <div className="text-white font-bold font-mono text-[11px] mb-1 flex items-center justify-between">
+                          <span>INITIAL SILENCE TIMEOUT</span>
+                          <span className="text-zinc-500 font-normal">Default: 5000ms</span>
+                        </div>
+                        <div>
+                          Maximum duration Windows SAPI waits for speech to begin after Push-To-Talk switch activation or engine listen state before timing out. Prevents recognition from staying open indefinitely if no sound is detected.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleResetSlider('initial_silence_timeout_ms')}
+                      disabled={!isModified}
+                      className={`p-1 rounded border transition-colors ${
+                        isModified
+                          ? 'border-white/20 text-zinc-300 hover:text-white hover:bg-white/10 cursor-pointer'
+                          : 'border-transparent text-zinc-700 cursor-not-allowed opacity-40'
+                      }`}
+                      title="Reset Initial Silence Timeout to Default (5000ms)"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </button>
+                    <span className="text-white font-bold text-xs">{stagedParams.initial_silence_timeout_ms}ms</span>
+                    <span
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded border transition-[background-color,border-color,color] duration-150"
+                      style={{ color: badge.color, backgroundColor: badge.bg, borderColor: badge.border }}
+                    >
+                      {badge.label}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <input
+                    type="range"
+                    min={1000}
+                    max={10000}
+                    step={250}
+                    value={stagedParams.initial_silence_timeout_ms}
+                    onChange={(e) =>
+                      setStagedParams({ ...stagedParams, initial_silence_timeout_ms: parseInt(e.target.value) || 1000 })
+                    }
+                    className="calib-slider"
+                    style={{
+                      background: `linear-gradient(to right, ${badge.color} 0%, ${badge.color} ${pct}%, rgba(255, 255, 255, 0.08) ${pct}%, rgba(255, 255, 255, 0.08) 100%)`,
+                      ['--thumb-color' as any]: badge.color,
+                    }}
+                  />
+                  <div className="flex items-center justify-between text-[9px] text-zinc-500 mt-1 font-mono">
+                    <span>1000ms (1.0s)</span>
+                    <span>10000ms (10.0s)</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>

@@ -9,6 +9,12 @@ export interface AppConfig {
   show_console: boolean;
   voice_recognition: boolean;
   listening_enabled: boolean;
+  min_confidence?: number;
+  min_ptt_duration_ms?: number;
+  ptt_release_grace_ms?: number;
+  end_silence_timeout_ms?: number;
+  end_silence_timeout_ambiguous_ms?: number;
+  initial_silence_timeout_ms?: number;
   auto_kneeboards: boolean;
   bms_base_dir?: string | null;
   play_sound_on_update: boolean;

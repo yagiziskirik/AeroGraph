@@ -2282,8 +2282,13 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
     let mut last_compiled_strings: Option<crate::bms::shared_memory::BmsStringInfo> = None;
     let mut last_ptt_com1 = false;
     let mut last_ptt_com2 = false;
-    let mut last_ptt_com1_time: Option<Instant> = None;
-    let mut last_ptt_com2_time: Option<Instant> = None;
+    let mut ptt_com1_press_start: Option<Instant> = None;
+    let mut ptt_com2_press_start: Option<Instant> = None;
+    let mut last_valid_ptt1_time: Option<Instant> = None;
+    let mut last_valid_ptt2_time: Option<Instant> = None;
+    let mut last_end_silence: u32 = 0;
+    let mut last_amb_silence: u32 = 0;
+    let mut last_init_silence: u32 = 0;
     let mut last_chief_engaged = false;
     let mut last_bms_connect_attempt = std::time::Instant::now();
     let mut last_sampler_attempt = std::time::Instant::now();
@@ -2355,9 +2360,25 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
 
         if voice_enabled && sapi.is_none() {
             log::info!("Voice recognition enabled: initializing SAPI Recognizer...");
-            sapi = match SapiEngine::new() {
+            let (end_silence, amb_silence, init_silence) = {
+                let cfg = config_lock.lock().unwrap();
+                (
+                    cfg.end_silence_timeout_ms,
+                    cfg.end_silence_timeout_ambiguous_ms,
+                    cfg.initial_silence_timeout_ms,
+                )
+            };
+            sapi = match SapiEngine::new(end_silence, amb_silence, init_silence) {
                 Ok(s) => {
-                    log::info!("SAPI Speech Recognizer initialized successfully");
+                    log::info!(
+                        "SAPI Speech Recognizer initialized successfully (EndSilence: {}ms, Ambiguous: {}ms, InitialSilence: {}ms)",
+                        end_silence,
+                        amb_silence,
+                        init_silence
+                    );
+                    last_end_silence = end_silence;
+                    last_amb_silence = amb_silence;
+                    last_init_silence = init_silence;
                     Some(s)
                 }
                 Err(e) => {
@@ -2380,73 +2401,6 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
             last_chief_engaged = false;
         }
 
-        state_engine.set_bms_connected(bms_conn);
-
-        let mut in_3d_state = false;
-        if let Some(flight_data) = bms_client.read_primary_data() {
-            state_engine.update_from_flight_data(&flight_data);
-            if (flight_data.hsi_bits & 0x8000_0000) != 0 {
-                in_3d_state = true;
-            }
-        }
-
-        if let Some(vibe) = bms_client.read_vibe_data() {
-            if vibe.in_3d != 0 {
-                in_3d_state = true;
-            }
-            let on_ground = if vibe.is_on_ground != 0 {
-                "True"
-            } else {
-                "False"
-            };
-            state_engine
-                .variables
-                .insert("OnGround".to_string(), on_ground.to_string());
-        }
-
-        let in_3d = if in_3d_state { "True" } else { "False" };
-        state_engine
-            .variables
-            .insert("In3D".to_string(), in_3d.to_string());
-
-        let strings = bms_client.read_string_info();
-        if !strings.awacs.is_empty() {
-            state_engine
-                .variables
-                .insert("Awacs".to_string(), strings.awacs.clone());
-        } else {
-            state_engine.variables.remove("Awacs");
-        }
-        if !strings.tanker.is_empty() {
-            state_engine
-                .variables
-                .insert("Tanker".to_string(), strings.tanker.clone());
-        } else {
-            state_engine.variables.remove("Tanker");
-        }
-        let pkg_size: usize = strings.package_size.trim().parse().unwrap_or(0);
-        if pkg_size >= 2 {
-            state_engine
-                .variables
-                .insert("AISeat2".to_string(), "True".to_string());
-        } else {
-            state_engine.variables.remove("AISeat2");
-        }
-        if pkg_size >= 3 {
-            state_engine
-                .variables
-                .insert("AISeat3".to_string(), "True".to_string());
-        } else {
-            state_engine.variables.remove("AISeat3");
-        }
-        if pkg_size >= 4 {
-            state_engine
-                .variables
-                .insert("AISeat4".to_string(), "True".to_string());
-        } else {
-            state_engine.variables.remove("AISeat4");
-        }
-
         // Process profile
         let profile_opt = profile_lock.lock().unwrap();
         if let Some(loaded) = profile_opt.as_ref() {
@@ -2456,6 +2410,7 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
             if profile_changed {
                 active_profile_name = Some(profile_name.clone());
                 log::info!("Loaded profile: {}", profile_name);
+                state_engine.compile_profile_subscriptions(loaded);
 
                 let bms_cfg = if let Some(ref _dir) = bms_dir {
                     cached_bms_cfg.clone()
@@ -2476,6 +2431,9 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                     }
                 }
             }
+
+            // Demand-driven sampling: reads ONLY variables subscribed by the profile + mandatory internal variables
+            let (_in_3d, _bms_conn, strings) = state_engine.sample_bms(&mut bms_client);
 
             // Retry initializing DirectInput sampler if disconnected
             if axis_sampler.is_none() && last_sampler_attempt.elapsed() >= Duration::from_secs(3) {
@@ -2507,8 +2465,35 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                 || strings_changed;
 
             if profile_changed || state_changed {
-                if strings_changed && last_compiled_strings.is_some() {
-                    log::info!("🔄 [BMS Flight Data] Callsign or airbase updated from Falcon BMS (Callsign: \"{}\", Base: \"{}\")", strings.callsign, strings.departure);
+                if strings_changed
+                    && (!strings.callsign.is_empty()
+                        || !strings.departure.is_empty()
+                        || !strings.tanker.is_empty()
+                        || !strings.awacs.is_empty())
+                {
+                    log::info!(
+                        "📻 [BMS VoiceHelpers] Callsign: \"{}\", Tanker: \"{}\", AWACS: \"{}\", Base: \"{}\"",
+                        if strings.callsign.is_empty() {
+                            "None"
+                        } else {
+                            &strings.callsign
+                        },
+                        if strings.tanker.is_empty() {
+                            "None"
+                        } else {
+                            &strings.tanker
+                        },
+                        if strings.awacs.is_empty() {
+                            "None"
+                        } else {
+                            &strings.awacs
+                        },
+                        if strings.departure.is_empty() {
+                            "None"
+                        } else {
+                            &strings.departure
+                        },
+                    );
                 }
                 if let Some(ref mut engine) = sapi {
                     let cfg_id = state_engine.active_configuration.as_deref();
@@ -2548,32 +2533,89 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                 input_vars = snapshot.active_variables;
             }
 
-            if ptt_com1 != last_ptt_com1 {
-                log::info!(
-                    "📻 [PTT COM1 (UHF)] {}",
-                    if ptt_com1 { "PRESSED" } else { "RELEASED" }
-                );
-                last_ptt_com1 = ptt_com1;
-            }
-            if ptt_com2 != last_ptt_com2 {
-                log::info!(
-                    "📻 [PTT COM2 (VHF)] {}",
-                    if ptt_com2 { "PRESSED" } else { "RELEASED" }
-                );
-                last_ptt_com2 = ptt_com2;
-            }
-
-            if ptt_com1 {
-                last_ptt_com1_time = Some(Instant::now());
-            }
-            if ptt_com2 {
-                last_ptt_com2_time = Some(Instant::now());
-            }
-
-            let listening_enabled = {
+            let (
+                listening_enabled,
+                min_ptt_hold,
+                ptt_grace,
+                min_conf,
+                end_silence,
+                amb_silence,
+                init_silence,
+            ) = {
                 let cfg = config_lock.lock().unwrap();
-                cfg.listening_enabled
+                (
+                    cfg.listening_enabled,
+                    Duration::from_millis(cfg.min_ptt_duration_ms as u64),
+                    Duration::from_millis(cfg.ptt_release_grace_ms as u64),
+                    cfg.min_confidence as f32 / 100.0,
+                    cfg.end_silence_timeout_ms,
+                    cfg.end_silence_timeout_ambiguous_ms,
+                    cfg.initial_silence_timeout_ms,
+                )
             };
+
+            // Dynamically update SAPI silence timeouts if changed in settings
+            if let Some(ref s) = sapi {
+                if end_silence != last_end_silence
+                    || amb_silence != last_amb_silence
+                    || init_silence != last_init_silence
+                {
+                    s.set_silence_timeouts(end_silence, amb_silence, init_silence);
+                    log::info!(
+                        "🔄 [SAPI] Silence timeouts reloaded: EndSilence={}ms, Ambiguous={}ms, InitialSilence={}ms",
+                        end_silence,
+                        amb_silence,
+                        init_silence
+                    );
+                    last_end_silence = end_silence;
+                    last_amb_silence = amb_silence;
+                    last_init_silence = init_silence;
+                }
+            }
+
+            // PTT COM1 (UHF) transition logic
+            if ptt_com1 && !last_ptt_com1 {
+                log::info!("📻 [PTT COM1 (UHF)] PRESSED");
+                ptt_com1_press_start = Some(Instant::now());
+                last_ptt_com1 = true;
+            } else if !ptt_com1 && last_ptt_com1 {
+                log::info!("📻 [PTT COM1 (UHF)] RELEASED");
+                if let Some(start) = ptt_com1_press_start.take() {
+                    let held = start.elapsed();
+                    if held >= min_ptt_hold {
+                        last_valid_ptt1_time = Some(Instant::now());
+                    } else {
+                        log::debug!(
+                            "📻 [PTT Debounce] COM1 pressed for only {}ms (< {}ms threshold) - ignored as transient press",
+                            held.as_millis(),
+                            min_ptt_hold.as_millis()
+                        );
+                    }
+                }
+                last_ptt_com1 = false;
+            }
+
+            // PTT COM2 (VHF) transition logic
+            if ptt_com2 && !last_ptt_com2 {
+                log::info!("📻 [PTT COM2 (VHF)] PRESSED");
+                ptt_com2_press_start = Some(Instant::now());
+                last_ptt_com2 = true;
+            } else if !ptt_com2 && last_ptt_com2 {
+                log::info!("📻 [PTT COM2 (VHF)] RELEASED");
+                if let Some(start) = ptt_com2_press_start.take() {
+                    let held = start.elapsed();
+                    if held >= min_ptt_hold {
+                        last_valid_ptt2_time = Some(Instant::now());
+                    } else {
+                        log::debug!(
+                            "📻 [PTT Debounce] COM2 pressed for only {}ms (< {}ms threshold) - ignored as transient press",
+                            held.as_millis(),
+                            min_ptt_hold.as_millis()
+                        );
+                    }
+                }
+                last_ptt_com2 = false;
+            }
 
             if let Some(ref engine) = sapi {
                 if let Some((g_idx, c_idx, text, confidence)) = engine.poll_recognition() {
@@ -2585,7 +2627,15 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
 
                     // System-wide Standby and Comms Check override EVERYTHING else
                     if clean_text == "stand by" || clean_text == "standby" {
-                        log::info!("🛑 [Voice Command] \"{}\" -> Pausing voice recognition (System-wide Mute)", text);
+                        if !listening_enabled {
+                            log::debug!("Speech \"{}\" ignored: already on Standby", clean_text);
+                            continue;
+                        }
+
+                        log::info!(
+                            "🛑 [Voice Command] \"{}\" -> Pausing voice recognition (System-wide Mute)",
+                            text
+                        );
                         {
                             let mut cfg = config_lock.lock().unwrap();
                             cfg.listening_enabled = false;
@@ -2642,10 +2692,11 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                         continue;
                     }
 
-                    if confidence < 0.50 && confidence > 0.0 {
+                    if confidence < min_conf && confidence > 0.0 {
                         log::warn!(
-                            "🎤 [Low Confidence {:.2}] Discarding ambiguous speech: \"{}\"",
+                            "🎤 [Low Confidence {:.2} < {:.2}] Discarding ambiguous speech: \"{}\"",
                             confidence,
+                            min_conf,
                             text
                         );
                         continue;
@@ -2667,11 +2718,14 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                                     .any(|v| v.Name == "SimTransmitCom2")
                             });
 
-                            let ptt_grace = Duration::from_millis(1500);
-                            let ptt1_held = ptt_com1
-                                || last_ptt_com1_time.is_some_and(|t| t.elapsed() <= ptt_grace);
-                            let ptt2_held = ptt_com2
-                                || last_ptt_com2_time.is_some_and(|t| t.elapsed() <= ptt_grace);
+                            let ptt1_held = (ptt_com1
+                                && ptt_com1_press_start
+                                    .is_some_and(|t| t.elapsed() >= min_ptt_hold))
+                                || last_valid_ptt1_time.is_some_and(|t| t.elapsed() <= ptt_grace);
+                            let ptt2_held = (ptt_com2
+                                && ptt_com2_press_start
+                                    .is_some_and(|t| t.elapsed() >= min_ptt_hold))
+                                || last_valid_ptt2_time.is_some_and(|t| t.elapsed() <= ptt_grace);
 
                             let ptt_allowed = if requires_ptt1 {
                                 ptt1_held

@@ -70,6 +70,11 @@ impl LoadedProfile {
         Ok(())
     }
 
+    /// Dynamically harvests the complete set of unique variable names declared, queried, or updated in this profile.
+    pub fn harvest_required_variables(&self) -> HashSet<String> {
+        crate::fvx::harvester::harvest_profile_variables(&self.profile)
+    }
+
     /// Queries the current MPO Switch button or key binding from the profile definition.
     /// Returns (id, device_or_key_name, device_guid, is_keyboard_key).
     pub fn get_mpo_binding(&self) -> (u32, String, String, bool) {
