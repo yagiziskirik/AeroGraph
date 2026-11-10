@@ -179,12 +179,18 @@ impl BmsSubscriptionPlan {
             );
         }
 
-        // 3. BMS Version constants
-        if self.active_variable_names.contains("BMSVersionMajor") {
-            target_map.insert("BMSVersionMajor".to_string(), "4".to_string());
-        }
-        if self.active_variable_names.contains("BMSVersionMinor") {
-            target_map.insert("BMSVersionMinor".to_string(), "38".to_string());
+        // 3. BMS Version constants: only expose version numbers when Falcon BMS is actively connected.
+        // When BMS is offline, these variables remain unset so FoxVox offline simulation tags (Test: ...) can fire.
+        if bms_connected {
+            if self.active_variable_names.contains("BMSVersionMajor") {
+                target_map.insert("BMSVersionMajor".to_string(), "4".to_string());
+            }
+            if self.active_variable_names.contains("BMSVersionMinor") {
+                target_map.insert("BMSVersionMinor".to_string(), "38".to_string());
+            }
+        } else {
+            target_map.remove("BMSVersionMajor");
+            target_map.remove("BMSVersionMinor");
         }
 
         // 4. Sample subscribed scalars directly from PrimaryFlightData
@@ -511,5 +517,26 @@ mod tests {
             elapsed_new <= elapsed_old,
             "New subscription sampling must be at least as fast or faster than baseline"
         );
+    }
+
+    #[test]
+    fn test_bms_version_absent_when_offline_present_when_online() {
+        let mut vars = HashSet::new();
+        vars.insert("BMSVersionMajor".to_string());
+        vars.insert("BMSVersionMinor".to_string());
+        let plan = BmsSubscriptionPlan::compile(&vars);
+
+        let mut bms_client = BmsSharedMemoryClient::default();
+        let mut state_map = HashMap::new();
+
+        // Initially put dummy values to test removal
+        state_map.insert("BMSVersionMajor".to_string(), "old".to_string());
+        state_map.insert("BMSVersionMinor".to_string(), "old".to_string());
+
+        // When offline (bms_client has no memory mapped in unit test):
+        let (_in_3d, bms_conn, _strings) = plan.sample_into(&mut bms_client, &mut state_map);
+        assert!(!bms_conn);
+        assert!(!state_map.contains_key("BMSVersionMajor"));
+        assert!(!state_map.contains_key("BMSVersionMinor"));
     }
 }
