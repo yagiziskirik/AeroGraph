@@ -607,3 +607,87 @@ impl StateEngine {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bms::shared_memory::BmsSharedMemoryClient;
+    use crate::fvx::loader::LoadedProfile;
+
+    #[test]
+    fn test_crew_chief_offline_start_two_progression() {
+        let path = "assets/profiles/Falcon BMS 4.38 v1.3.1/Falcon BMS 4.38 v1.3.1.fvx";
+        let lp = match LoadedProfile::load_from_file(path) {
+            Ok(p) => p,
+            Err(_) => return, // Skip if test asset not reachable
+        };
+
+        let mut engine = StateEngine::new(false);
+        engine.compile_profile_subscriptions(&lp);
+
+        let mut bms_client = BmsSharedMemoryClient::default();
+        let (_in_3d, bms_conn, _strings) = engine.sample_bms(&mut bms_client);
+        assert!(!bms_conn);
+        assert!(!engine.variables.contains_key("BMSVersionMajor"));
+
+        // Engage Crew Chief: find Engage Crew Chief command and execute it
+        let engage_cmd = lp
+            .profile
+            .CommandGroups
+            .iter()
+            .find(|g| g.Name.as_deref() == Some("Engage Crew Chief"))
+            .and_then(|g| g.Commands.first());
+        if let Some(cmd) = engage_cmd {
+            engine.execute_command(cmd, &lp);
+        } else {
+            engine.active_configuration = Some("3c7af383-7d72-46a4-9e32-233bb9fa2bc7".to_string());
+        }
+        assert!(engine.is_chief_engaged());
+
+        // Execute Command 4: "Ready Start Two"
+        let ready_start_two = &lp.profile.CommandGroups[0].Commands[4];
+        assert_eq!(ready_start_two.Name.as_deref(), Some("Ready Start Two"));
+
+        engine.execute_command(ready_start_two, &lp);
+
+        // Verify Output 0 set Step to "Start"
+        assert_eq!(
+            engine.variables.get("Step").map(|s| s.as_str()),
+            Some("Start")
+        );
+        // Verify Output 1 ("Test: rpm to 65") executed because BMSVersionMajor was absent
+        assert_eq!(engine.variables.get("rpm").map(|s| s.as_str()), Some("65"));
+        assert_eq!(engine.variables.get("Test").map(|s| s.as_str()), Some("On"));
+
+        // Now evaluate reactive KeyCommandGroups: "Good Start" should fire
+        engine.evaluate_reactive_groups(&lp, &HashMap::new());
+
+        // Verify "Good Start" fired and transitioned Step to "RDY SEC"
+        assert_eq!(
+            engine.variables.get("Step").map(|s| s.as_str()),
+            Some("RDY SEC")
+        );
+
+        // Test next dialogue: Command 7 ("Clear for SEC Check")
+        let clear_sec = &lp.profile.CommandGroups[0].Commands[7];
+        assert_eq!(clear_sec.Name.as_deref(), Some("Clear for SEC Check"));
+        engine.execute_command(clear_sec, &lp);
+
+        // Verify Step transitioned to "SEC" and nozzlePos test tag executed
+        assert_eq!(
+            engine.variables.get("Step").map(|s| s.as_str()),
+            Some("SEC")
+        );
+        assert_eq!(
+            engine.variables.get("nozzlePos").map(|s| s.as_str()),
+            Some("0.01")
+        );
+
+        // Evaluate reactive KeyCommandGroups: "Nozzle Closed Clear for SEC" should fire
+        engine.evaluate_reactive_groups(&lp, &HashMap::new());
+        assert_eq!(
+            engine.variables.get("Step").map(|s| s.as_str()),
+            Some("NozzleOpen")
+        );
+    }
+}
