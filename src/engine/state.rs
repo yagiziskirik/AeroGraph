@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use crate::bms::shared_memory::PrimaryFlightData;
 use crate::engine::audio::AudioPlayer;
 use crate::engine::keyboard::KeyboardDispatcher;
+use crate::engine::sampler::BmsSubscriptionPlan;
 use crate::fvx::loader::LoadedProfile;
 use crate::fvx::models::{ActionOutput, CommandDef, ConditionGroup, VariableCondition};
 
@@ -14,6 +15,7 @@ pub struct StateEngine {
     pub audio_player: Option<AudioPlayer>,
     pub fired_commands: std::collections::HashSet<String>,
     pub bms_connected: bool,
+    pub subscription_plan: BmsSubscriptionPlan,
 }
 
 impl StateEngine {
@@ -37,6 +39,7 @@ impl StateEngine {
             audio_player: audio,
             fired_commands: std::collections::HashSet::new(),
             bms_connected: false,
+            subscription_plan: BmsSubscriptionPlan::default(),
         }
     }
 
@@ -165,6 +168,42 @@ impl StateEngine {
             self.variables.remove("BMSVersionMajor");
             self.variables.remove("BMSVersionMinor");
         }
+    }
+
+    /// Compiles a demand-driven subscription plan for the loaded profile, guaranteeing that
+    /// only required variables are sampled while mandatory engine variables (such as `In3D`)
+    /// are permanently subscribed.
+    pub fn compile_profile_subscriptions(&mut self, profile: &LoadedProfile) {
+        let harvested = profile.harvest_required_variables();
+        log::info!(
+            "📋 Compiled demand-driven variable plan for profile '{}': {} variables requested",
+            profile.profile.Name,
+            harvested.len()
+        );
+        self.subscription_plan = BmsSubscriptionPlan::compile(&harvested);
+
+        // Seed any declared VariableInits into dynamic state
+        if let Some(inits) = &profile.profile.VariableInits {
+            for init in inits {
+                let name = init.Name.trim().to_string();
+                if !name.is_empty() && !self.variables.contains_key(&name) {
+                    self.variables.insert(name, "True".to_string());
+                }
+            }
+        }
+    }
+
+    /// Demand-driven sample method: reads ONLY subscribed variables from Falcon BMS.
+    /// Returns `(in_3d, bms_connected, strings)`.
+    pub fn sample_bms(
+        &mut self,
+        bms_client: &mut crate::bms::shared_memory::BmsSharedMemoryClient,
+    ) -> (bool, bool, crate::bms::shared_memory::BmsStringInfo) {
+        let (in_3d, connected, strings) = self
+            .subscription_plan
+            .sample_into(bms_client, &mut self.variables);
+        self.bms_connected = connected;
+        (in_3d, connected, strings)
     }
 
     /// Evaluates reactive KeyCommandGroups (e.g. Crew Chief automated voice triggers).
