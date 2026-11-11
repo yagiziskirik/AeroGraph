@@ -96,8 +96,8 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
   };
 
   // Forward cycle (Left click):
-  // If skipBattOnForwardCycle is true: OFF -> MAIN_PWR -> OFF
-  // If skipBattOnForwardCycle is false (default): OFF -> BATT -> MAIN_PWR -> OFF
+  // If skipBattOnForwardCycle is true: OFF -> MAIN_PWR (stops at MAIN_PWR)
+  // If skipBattOnForwardCycle is false: OFF -> BATT -> MAIN_PWR (stops at MAIN_PWR)
   const handleForwardCycle = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!allowSwitchClick) return;
@@ -105,30 +105,35 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
     if (skipBattOnForwardCycle) {
       if (activeSwitchPosition === 'OFF') {
         setSwitchPosition('MAIN_PWR');
-      } else {
-        setSwitchPosition('OFF');
       }
     } else {
       if (activeSwitchPosition === 'OFF') {
         setSwitchPosition('BATT');
       } else if (activeSwitchPosition === 'BATT') {
         setSwitchPosition('MAIN_PWR');
-      } else {
-        setSwitchPosition('OFF');
       }
+      // If already at MAIN_PWR, stop and do not loop back to OFF
     }
   };
 
   // Backward cycle (Right click / context menu):
-  // MAIN_PWR -> BATT -> OFF
+  // If skipBattOnForwardCycle is true: MAIN_PWR -> OFF (stops at OFF)
+  // If skipBattOnForwardCycle is false: MAIN_PWR -> BATT -> OFF (stops at OFF)
   const handleBackwardCycle = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!allowSwitchClick) return;
 
-    if (activeSwitchPosition === 'MAIN_PWR') {
-      setSwitchPosition('BATT');
-    } else if (activeSwitchPosition === 'BATT') {
-      setSwitchPosition('OFF');
+    if (skipBattOnForwardCycle) {
+      if (activeSwitchPosition === 'MAIN_PWR') {
+        setSwitchPosition('OFF');
+      }
+    } else {
+      if (activeSwitchPosition === 'MAIN_PWR') {
+        setSwitchPosition('BATT');
+      } else if (activeSwitchPosition === 'BATT') {
+        setSwitchPosition('OFF');
+      }
+      // If already at OFF, stop and do not loop back to MAIN_PWR
     }
   };
 
