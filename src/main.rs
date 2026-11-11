@@ -17,7 +17,21 @@ pub enum AppEvent {
     IpcMessage(crate::gui::ipc::IpcRequest),
     ToggleConsole,
     CloseConsole,
-    SpeechRecognized { text: String, confidence: f32 },
+    SpeechRecognized {
+        text: String,
+        confidence: f32,
+        group: String,
+        command: String,
+        status: String,
+        reason: Option<String>,
+    },
+    CrewChiefStateChanged {
+        step: String,
+        completed: String,
+        is_chief_engaged: bool,
+        last_command: String,
+        last_phrase: String,
+    },
     KneeboardRegenFinished,
     ImportPresetFile(PathBuf),
 }
@@ -423,6 +437,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let shared_profile = Arc::new(Mutex::new(loaded_profile));
     let shared_config = Arc::new(Mutex::new(config.clone()));
     let reload_trigger = Arc::new(AtomicBool::new(false));
+    let engage_trigger = Arc::new(AtomicBool::new(false));
 
     let (manual_trigger_tx, manual_trigger_rx) = mpsc::channel::<()>();
     let shared_input_snapshot = Arc::new(Mutex::new(
@@ -446,6 +461,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let v_profile = shared_profile.clone();
     let v_config = shared_config.clone();
     let v_reload = reload_trigger.clone();
+    let v_engage = engage_trigger.clone();
     let v_proxy = proxy.clone();
     let v_input = shared_input_snapshot.clone();
     let v_hardware_active = ui_hardware_active.clone();
@@ -457,6 +473,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         profile_lock: v_profile,
         config_lock: v_config,
         reload_trigger: v_reload,
+        engage_trigger: v_engage,
         proxy: v_proxy,
         input_lock: v_input,
         ui_hardware_active: v_hardware_active,
@@ -540,15 +557,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     win.send_event("ListeningChanged", &json.to_string());
                 }
             }
-            Event::UserEvent(AppEvent::SpeechRecognized { text, confidence }) => {
+            Event::UserEvent(AppEvent::SpeechRecognized {
+                text,
+                confidence,
+                group,
+                command,
+                status,
+                reason,
+            }) => {
                 if let Some(win) = tactical_console.active_window() {
                     let json = serde_json::json!({
                         "phrase": text,
                         "confidence": (confidence * 100.0).round(),
-                        "timestamp": "",
-                        "status": "VERIFIED"
+                        "group": group,
+                        "command": command,
+                        "status": status,
+                        "reason": reason,
+                        "timestamp": ""
                     });
                     win.send_event("SpeechRecognized", &json.to_string());
+                }
+            }
+            Event::UserEvent(AppEvent::CrewChiefStateChanged {
+                step,
+                completed,
+                is_chief_engaged,
+                last_command,
+                last_phrase,
+            }) => {
+                if let Some(win) = tactical_console.active_window() {
+                    let json = serde_json::json!({
+                        "step": step,
+                        "completed": completed,
+                        "is_chief_engaged": is_chief_engaged,
+                        "last_command": last_command,
+                        "last_phrase": last_phrase
+                    });
+                    win.send_event("CrewChiefState", &json.to_string());
                 }
             }
             Event::UserEvent(AppEvent::ToggleConsole) => {
@@ -676,6 +721,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     shared_config: &shared_config,
                     shared_profile: &shared_profile,
                     reload_trigger: &reload_trigger,
+                    engage_trigger: &engage_trigger,
                     manual_trigger_tx: &manual_trigger_tx,
                     tray: &tray,
                     last_tray_listening: &mut last_tray_listening,
@@ -1130,6 +1176,7 @@ struct IpcContext<'a> {
     shared_config: &'a Arc<Mutex<AppConfig>>,
     shared_profile: &'a Arc<Mutex<Option<LoadedProfile>>>,
     reload_trigger: &'a Arc<AtomicBool>,
+    engage_trigger: &'a Arc<AtomicBool>,
     manual_trigger_tx: &'a mpsc::Sender<()>,
     tray: &'a AppTray,
     last_tray_listening: &'a mut bool,
@@ -1640,6 +1687,65 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
                 let cfg = ctx.shared_config.lock().unwrap().clone();
                 push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
             }
+        }
+        IpcRequest::LoadProfileByPath { path } => {
+            let p = std::path::PathBuf::from(&path);
+            if p.exists() {
+                if let Ok(new_lp) = LoadedProfile::load_from_file(&p) {
+                    ctx.tray.set_profile_name(&new_lp.profile.Name);
+                    {
+                        let mut cfg = ctx.shared_config.lock().unwrap();
+                        cfg.profile_path = Some(p.to_string_lossy().to_string());
+                        let _ = cfg.save();
+                    }
+                    {
+                        let mut prof_guard = ctx.shared_profile.lock().unwrap();
+                        *prof_guard = Some(new_lp);
+                    }
+                    ctx.reload_trigger.store(true, Ordering::SeqCst);
+                    log::info!("Profile loaded by path: {:?}", p);
+                    if let Some(win) = ctx.tactical_console.active_window() {
+                        let cfg = ctx.shared_config.lock().unwrap().clone();
+                        push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+                    }
+                }
+            }
+        }
+        IpcRequest::GetProfileVoiceCommands => {
+            let categories = {
+                let guard = ctx.shared_profile.lock().unwrap();
+                if let Some(ref lp) = *guard {
+                    lp.extract_category_views()
+                } else {
+                    Vec::new()
+                }
+            };
+            if let Some(win) = ctx.tactical_console.active_window() {
+                if let Ok(json) = serde_json::to_string(&categories) {
+                    win.send_event("ProfileVoiceCommands", &json);
+                }
+            }
+        }
+        IpcRequest::ResetCrewChief => {
+            log::info!("ResetCrewChief requested via Tactical Console: clearing StateEngine");
+            ctx.reload_trigger.store(true, Ordering::SeqCst);
+            if let Some(win) = ctx.tactical_console.active_window() {
+                let cfg = ctx.shared_config.lock().unwrap().clone();
+                push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+                win.send_event("CrewChiefReset", "{}");
+                let reset_state = serde_json::json!({
+                    "step": "",
+                    "completed": "0",
+                    "is_chief_engaged": false,
+                    "last_command": "Reset",
+                    "last_phrase": ""
+                });
+                win.send_event("CrewChiefState", &reset_state.to_string());
+            }
+        }
+        IpcRequest::EngageCrewChief => {
+            log::info!("EngageCrewChief requested via Tactical Console");
+            ctx.engage_trigger.store(true, Ordering::SeqCst);
         }
         IpcRequest::TestVoiceAudio { phrase } => {
             let is_3d = ctx
@@ -2243,6 +2349,7 @@ struct VoiceWorkerContext {
     profile_lock: Arc<Mutex<Option<LoadedProfile>>>,
     config_lock: Arc<Mutex<AppConfig>>,
     reload_trigger: Arc<AtomicBool>,
+    engage_trigger: Arc<AtomicBool>,
     proxy: tao::event_loop::EventLoopProxy<AppEvent>,
     input_lock: Arc<Mutex<crate::input::axis_sampler::InputSnapshot>>,
     ui_hardware_active: Arc<AtomicBool>,
@@ -2256,6 +2363,7 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
         profile_lock,
         config_lock,
         reload_trigger,
+        engage_trigger,
         proxy,
         input_lock,
         ui_hardware_active,
@@ -2294,6 +2402,9 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
     let mut last_sampler_attempt = std::time::Instant::now();
     let mut initial_chirp_played = false;
     let mut last_bms_connected = false;
+    let mut last_sent_step = String::new();
+    let mut last_sent_completed = String::new();
+    let mut last_sent_engaged = false;
 
     while running.load(Ordering::SeqCst) {
         let (polling_rate, voice_enabled, auto_engage) = {
@@ -2401,9 +2512,30 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
             last_chief_engaged = false;
         }
 
+        let engage = engage_trigger.swap(false, Ordering::SeqCst);
+
         // Process profile
         let profile_opt = profile_lock.lock().unwrap();
         if let Some(loaded) = profile_opt.as_ref() {
+            if engage {
+                log::info!(
+                    "🎙️ Manual Crew Chief engagement requested: executing Engage Crew Chief"
+                );
+                let engage_cmd = loaded
+                    .profile
+                    .CommandGroups
+                    .iter()
+                    .find(|g| g.Name.as_deref() == Some("Engage Crew Chief"))
+                    .and_then(|g| g.Commands.first());
+                if let Some(cmd) = engage_cmd {
+                    state_engine.execute_command(cmd, loaded);
+                } else {
+                    state_engine.active_configuration =
+                        Some("3c7af383-7d72-46a4-9e32-233bb9fa2bc7".to_string());
+                    state_engine.fired_commands.clear();
+                }
+            }
+
             let profile_name = &loaded.profile.Name;
             let profile_changed = active_profile_name.as_ref() != Some(profile_name) || reload;
 
@@ -2619,10 +2751,6 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
 
             if let Some(ref engine) = sapi {
                 if let Some((g_idx, c_idx, text, confidence)) = engine.poll_recognition() {
-                    let _ = proxy.send_event(AppEvent::SpeechRecognized {
-                        text: text.clone(),
-                        confidence,
-                    });
                     let clean_text = text.trim().to_lowercase();
 
                     // System-wide Standby and Comms Check override EVERYTHING else
@@ -2631,6 +2759,15 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                             log::debug!("Speech \"{}\" ignored: already on Standby", clean_text);
                             continue;
                         }
+
+                        let _ = proxy.send_event(AppEvent::SpeechRecognized {
+                            text: text.clone(),
+                            confidence,
+                            group: "System".to_string(),
+                            command: "Standby".to_string(),
+                            status: "VERIFIED".to_string(),
+                            reason: None,
+                        });
 
                         log::info!(
                             "🛑 [Voice Command] \"{}\" -> Pausing voice recognition (System-wide Mute)",
@@ -2655,6 +2792,14 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                             !cfg.listening_enabled
                         };
                         if was_muted {
+                            let _ = proxy.send_event(AppEvent::SpeechRecognized {
+                                text: text.clone(),
+                                confidence,
+                                group: "System".to_string(),
+                                command: "Comms Check".to_string(),
+                                status: "VERIFIED".to_string(),
+                                reason: None,
+                            });
                             log::info!("🎙️ [Voice Command] \"{}\" -> Resuming voice recognition (System-wide Unmute)", text);
                             {
                                 let mut cfg = config_lock.lock().unwrap();
@@ -2671,6 +2816,14 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                             continue;
                         } else {
                             if !state_engine.is_chief_engaged() {
+                                let _ = proxy.send_event(AppEvent::SpeechRecognized {
+                                    text: text.clone(),
+                                    confidence,
+                                    group: "System".to_string(),
+                                    command: "Comms Check".to_string(),
+                                    status: "VERIFIED".to_string(),
+                                    reason: None,
+                                });
                                 log::info!(
                                     "🎙️ [Voice Command] \"{}\" -> Cockpit comms check acknowledged",
                                     text
@@ -2706,6 +2859,14 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                         let grp_name = group.Name.as_deref().unwrap_or("Command");
                         if !state_engine.is_group_active(group) {
                             log::info!("🚫 [Condition Gated] Command group [{}] is inactive under current conditions. Ignoring \"{}\"", grp_name, text);
+                            let _ = proxy.send_event(AppEvent::SpeechRecognized {
+                                text: text.clone(),
+                                confidence,
+                                group: grp_name.to_string(),
+                                command: "".to_string(),
+                                status: "GROUP_INACTIVE".to_string(),
+                                reason: Some(format!("Group [{}] condition not met", grp_name)),
+                            });
                         } else {
                             let requires_ptt1 = group.PushToTalk.as_ref().is_some_and(|ptt| {
                                 ptt.VariableInputs
@@ -2743,6 +2904,26 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                                     if let Some(conds) = &cmd.Conditions {
                                         if !state_engine.evaluate_condition_groups(conds) {
                                             log::info!("🚫 [Condition Gated] Command [{}] condition not met under current state. Ignoring \"{}\"", cmd_name, text);
+                                            let _ = proxy.send_event(AppEvent::SpeechRecognized {
+                                                text: text.clone(),
+                                                confidence,
+                                                group: grp_name.to_string(),
+                                                command: cmd_name.to_string(),
+                                                status: "DENIED".to_string(),
+                                                reason: Some(format!(
+                                                    "Step='{}', rpm='{}'",
+                                                    state_engine
+                                                        .variables
+                                                        .get("Step")
+                                                        .map(|s| s.as_str())
+                                                        .unwrap_or(""),
+                                                    state_engine
+                                                        .variables
+                                                        .get("rpm")
+                                                        .map(|s| s.as_str())
+                                                        .unwrap_or("0")
+                                                )),
+                                            });
                                             continue;
                                         }
                                     }
@@ -2753,7 +2934,42 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                                         grp_name,
                                         cmd_name
                                     );
+                                    let _ = proxy.send_event(AppEvent::SpeechRecognized {
+                                        text: text.clone(),
+                                        confidence,
+                                        group: grp_name.to_string(),
+                                        command: cmd_name.to_string(),
+                                        status: "VERIFIED".to_string(),
+                                        reason: None,
+                                    });
                                     state_engine.execute_command(cmd, loaded);
+
+                                    let cur_step = state_engine
+                                        .variables
+                                        .get("Step")
+                                        .cloned()
+                                        .unwrap_or_default();
+                                    let cur_completed = state_engine
+                                        .variables
+                                        .get("Completed")
+                                        .cloned()
+                                        .unwrap_or_default();
+                                    let cur_engaged = state_engine.is_chief_engaged();
+                                    if cur_step != last_sent_step
+                                        || cur_completed != last_sent_completed
+                                        || cur_engaged != last_sent_engaged
+                                    {
+                                        let _ = proxy.send_event(AppEvent::CrewChiefStateChanged {
+                                            step: cur_step.clone(),
+                                            completed: cur_completed.clone(),
+                                            is_chief_engaged: cur_engaged,
+                                            last_command: cmd_name.to_string(),
+                                            last_phrase: text.clone(),
+                                        });
+                                        last_sent_step = cur_step;
+                                        last_sent_completed = cur_completed;
+                                        last_sent_engaged = cur_engaged;
+                                    }
                                 }
                             } else {
                                 let ptt_btn = if requires_ptt1 {
@@ -2762,6 +2978,19 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                                     "COM2 (VHF)"
                                 };
                                 log::info!("📻 [PTT Gated] Speech \"{}\" recognized for [{}], but {} was not held", text, grp_name, ptt_btn);
+                                let cmd_name = group
+                                    .Commands
+                                    .get(c_idx)
+                                    .and_then(|c| c.Name.clone())
+                                    .unwrap_or_default();
+                                let _ = proxy.send_event(AppEvent::SpeechRecognized {
+                                    text: text.clone(),
+                                    confidence,
+                                    group: grp_name.to_string(),
+                                    command: cmd_name,
+                                    status: "PTT_GATED".to_string(),
+                                    reason: Some(format!("Requires {} held", ptt_btn)),
+                                });
                             }
                         }
                     }
@@ -2770,6 +2999,32 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
 
             if voice_enabled && listening_enabled {
                 state_engine.evaluate_reactive_groups(loaded, &input_vars);
+                let cur_step = state_engine
+                    .variables
+                    .get("Step")
+                    .cloned()
+                    .unwrap_or_default();
+                let cur_completed = state_engine
+                    .variables
+                    .get("Completed")
+                    .cloned()
+                    .unwrap_or_default();
+                let cur_engaged = state_engine.is_chief_engaged();
+                if cur_step != last_sent_step
+                    || cur_completed != last_sent_completed
+                    || cur_engaged != last_sent_engaged
+                {
+                    let _ = proxy.send_event(AppEvent::CrewChiefStateChanged {
+                        step: cur_step.clone(),
+                        completed: cur_completed.clone(),
+                        is_chief_engaged: cur_engaged,
+                        last_command: "Reactive Trigger".to_string(),
+                        last_phrase: "".to_string(),
+                    });
+                    last_sent_step = cur_step;
+                    last_sent_completed = cur_completed;
+                    last_sent_engaged = cur_engaged;
+                }
             }
         }
 

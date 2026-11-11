@@ -89,8 +89,14 @@ pub enum IpcRequest {
 
     // Voice & Hardware
     SelectProfileFile,
+    LoadProfileByPath {
+        path: String,
+    },
     ReloadProfile,
     ResetDefaultProfile,
+    GetProfileVoiceCommands,
+    ResetCrewChief,
+    EngageCrewChief,
     TestVoiceAudio {
         phrase: String,
     },
