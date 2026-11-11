@@ -201,8 +201,20 @@ export const Ipc = {
   reloadProfile() {
     this.send('ReloadProfile');
   },
+  loadProfileByPath(path: string) {
+    this.send('LoadProfileByPath', { path });
+  },
   resetDefaultProfile() {
     this.send('ResetDefaultProfile');
+  },
+  getProfileVoiceCommands() {
+    this.send('GetProfileVoiceCommands');
+  },
+  resetCrewChief() {
+    this.send('ResetCrewChief');
+  },
+  engageCrewChief() {
+    this.send('EngageCrewChief');
   },
   testVoiceAudio(phrase: string) {
     this.send('TestVoiceAudio', { phrase });

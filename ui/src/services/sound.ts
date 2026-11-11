@@ -147,6 +147,32 @@ class SoundEngine {
     osc1.stop(t + 0.12);
     osc2.stop(t + 0.12);
   }
+
+  // 5. Master Caution Warning Beep (Dual pulse 750Hz tactical chirp)
+  public playCaution() {
+    if (!this.enabled || this.volume <= 0) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(750, t);
+    osc.frequency.setValueAtTime(750, t + 0.08);
+
+    gain.gain.setValueAtTime(0.25 * this.volume, t);
+    gain.gain.setValueAtTime(0.01, t + 0.04);
+    gain.gain.setValueAtTime(0.25 * this.volume, t + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.start(t);
+    osc.stop(t + 0.13);
+  }
 }
 
 export const Sound = new SoundEngine();

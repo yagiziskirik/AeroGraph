@@ -126,4 +126,27 @@ export interface StateSnapshot {
   generated_images?: string[];
 }
 
+export interface ProfileCategoryView {
+  name: string;
+  is_enabled: boolean;
+  prefix_phrases: string[];
+  commands: ProfileCommandView[];
+}
+
+export interface ProfileCommandView {
+  name: string;
+  is_enabled: boolean;
+  spoken_phrases: string[];
+  key_combination?: string | null;
+  description?: string | null;
+}
+
+export interface CrewChiefStateData {
+  step: string;
+  completed: string;
+  is_chief_engaged: boolean;
+  last_command: string;
+  last_phrase: string;
+}
+
 export type MasterMode = 'binder' | 'comms' | 'hardware' | 'system';
