@@ -12,4 +12,5 @@ export * from './RightBrowLights';
 export * from './RpmIndicator';
 export * from './SpeedBrakeIndicator';
 export * from './TestPanel';
+export * from './ThrottleQuadrant';
 
