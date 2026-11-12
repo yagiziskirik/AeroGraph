@@ -13,7 +13,7 @@ export interface SpeedBrakeIndicatorProps {
 export const SpeedBrakeIndicator: React.FC<SpeedBrakeIndicatorProps> = ({
   isOpen = false,
   status,
-  interactive = true,
+  interactive = false,
   onToggle,
   className = '',
 }) => {
