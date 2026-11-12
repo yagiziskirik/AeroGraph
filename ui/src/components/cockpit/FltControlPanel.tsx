@@ -208,28 +208,17 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
             <div className="grid grid-cols-3 items-start pt-1">
               {/* Col 1: DIGITAL BACKUP */}
               <div className="flex flex-col items-center justify-self-center w-[66px]">
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault();
-                      increaseSwitch('digitalBackup');
-                    }
-                  }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  disabled={!isSwitchAllowed('digitalBackup')}
-                  className={`text-[9px] font-black tracking-tight uppercase leading-tight text-center ${
-                    isSwitchAllowed('digitalBackup') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[9px] font-black tracking-tight uppercase leading-tight text-center select-none pointer-events-none ${
                     activeSwitches.digitalBackup
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   DIGITAL
                   <br />
                   BACKUP
-                </button>
+                </span>
 
                 <div
                   onMouseDown={(e) => {
@@ -248,26 +237,15 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                   <TwoWayToggle isUp={!!activeSwitches.digitalBackup} />
                 </div>
 
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault();
-                      decreaseSwitch('digitalBackup');
-                    }
-                  }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  disabled={!isSwitchAllowed('digitalBackup')}
-                  className={`text-[9.5px] font-black tracking-wider uppercase text-center ${
-                    isSwitchAllowed('digitalBackup') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[9.5px] font-black tracking-wider uppercase text-center select-none pointer-events-none ${
                     !activeSwitches.digitalBackup
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   OFF
-                </button>
+                </span>
               </div>
 
               {/* Col 2: Upper Panel Center Spacer */}
@@ -280,28 +258,17 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
 
               {/* Col 3: ALT FLAPS */}
               <div className="flex flex-col items-center justify-self-center w-[66px]">
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault();
-                      increaseSwitch('altFlaps');
-                    }
-                  }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  disabled={!isSwitchAllowed('altFlaps')}
-                  className={`text-[9px] font-black tracking-tight uppercase leading-tight text-center ${
-                    isSwitchAllowed('altFlaps') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[9px] font-black tracking-tight uppercase leading-tight text-center select-none pointer-events-none ${
                     activeSwitches.altFlaps
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   ALT FLAPS
                   <br />
                   EXTEND
-                </button>
+                </span>
 
                 <div
                   onMouseDown={(e) => {
@@ -320,26 +287,15 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                   <TwoWayToggle isUp={!!activeSwitches.altFlaps} />
                 </div>
 
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault();
-                      decreaseSwitch('altFlaps');
-                    }
-                  }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  disabled={!isSwitchAllowed('altFlaps')}
-                  className={`text-[9.5px] font-black tracking-wider uppercase text-center ${
-                    isSwitchAllowed('altFlaps') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[9.5px] font-black tracking-wider uppercase text-center select-none pointer-events-none ${
                     !activeSwitches.altFlaps
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   NORM
-                </button>
+                </span>
               </div>
             </div>
 
@@ -354,22 +310,11 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
 
               {/* Col 2: MANUAL TF FLYUP */}
               <div className="flex flex-col items-center justify-self-center w-[74px]">
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault();
-                      increaseSwitch('manualTfFlyup');
-                    }
-                  }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  disabled={!isSwitchAllowed('manualTfFlyup')}
-                  className={`text-[8.5px] font-black tracking-tight uppercase leading-tight text-center ${
-                    isSwitchAllowed('manualTfFlyup') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[8.5px] font-black tracking-tight uppercase leading-tight text-center select-none pointer-events-none ${
                     activeSwitches.manualTfFlyup
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   MANUAL TF
@@ -377,7 +322,7 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                   FLYUP
                   <br />
                   DISABLE
-                </button>
+                </span>
 
                 <div
                   onMouseDown={(e) => {
@@ -396,26 +341,15 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                   <TwoWayToggle isUp={!!activeSwitches.manualTfFlyup} />
                 </div>
 
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault();
-                      decreaseSwitch('manualTfFlyup');
-                    }
-                  }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  disabled={!isSwitchAllowed('manualTfFlyup')}
-                  className={`text-[9.5px] font-black tracking-wider uppercase text-center ${
-                    isSwitchAllowed('manualTfFlyup') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[9.5px] font-black tracking-wider uppercase text-center select-none pointer-events-none ${
                     !activeSwitches.manualTfFlyup
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   ENABLE
-                </button>
+                </span>
               </div>
 
               {/* Col 3: Strictly Square Dual Warning Light: RUN (Green Text Light) / FAIL (Black text on Red Light) */}
@@ -473,28 +407,17 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
             <div className="grid grid-cols-3 items-start pb-1">
               {/* Col 1: LE FLAPS */}
               <div className="flex flex-col items-center justify-self-center w-[66px]">
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault();
-                      increaseSwitch('leFlaps');
-                    }
-                  }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  disabled={!isSwitchAllowed('leFlaps')}
-                  className={`text-[8.5px] font-black tracking-tight uppercase leading-tight text-center ${
-                    isSwitchAllowed('leFlaps') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[8.5px] font-black tracking-tight uppercase leading-tight text-center select-none pointer-events-none ${
                     activeSwitches.leFlaps
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   LE FLAPS
                   <br />
                   LOCK
-                </button>
+                </span>
 
                 <div
                   onMouseDown={(e) => {
@@ -513,51 +436,30 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                   <TwoWayToggle isUp={!!activeSwitches.leFlaps} />
                 </div>
 
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault();
-                      decreaseSwitch('leFlaps');
-                    }
-                  }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  disabled={!isSwitchAllowed('leFlaps')}
-                  className={`text-[9.5px] font-black tracking-wider uppercase text-center ${
-                    isSwitchAllowed('leFlaps') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[9.5px] font-black tracking-wider uppercase text-center select-none pointer-events-none ${
                     !activeSwitches.leFlaps
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   AUTO
-                </button>
+                </span>
               </div>
 
               {/* Col 2: FLCS RESET (Momentary Switch Flanked by Two Wire Loop Guards - Left-Click Only) */}
               <div className="flex flex-col items-center justify-self-center w-[74px]">
-                <button
-                  type="button"
-                  onMouseDown={handleFlcsResetMouseDown}
-                  onMouseUp={handleFlcsResetMouseUp}
-                  onTouchStart={handleFlcsResetMouseDown}
-                  onTouchEnd={handleFlcsResetMouseUp}
-                  onTouchCancel={handleFlcsResetMouseUp}
-                  onContextMenu={(e) => e.preventDefault()}
-                  disabled={!isSwitchAllowed('flcsReset')}
-                  className={`text-[9px] font-black tracking-tight uppercase leading-tight text-center ${
-                    isSwitchAllowed('flcsReset') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[9px] font-black tracking-tight uppercase leading-tight text-center select-none pointer-events-none ${
                     activeSwitches.flcsReset
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   FLCS
                   <br />
                   RESET
-                </button>
+                </span>
 
                 {/* Wire Guards Flanking the Momentary Toggle */}
                 <div className="relative flex items-center justify-center my-1">
@@ -594,7 +496,7 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                 </div>
 
                 <span
-                  className={`text-[9.5px] font-black tracking-wider uppercase text-center ${
+                  className={`text-[9.5px] font-black tracking-wider uppercase text-center select-none pointer-events-none ${
                     !activeSwitches.flcsReset
                       ? 'text-amber-400 font-extrabold'
                       : 'text-zinc-200'
@@ -606,26 +508,15 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
 
               {/* Col 3: BIT (With Wire Loop Guards) */}
               <div className="flex flex-col items-center justify-self-center w-[74px]">
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault();
-                      increaseSwitch('bit');
-                    }
-                  }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  disabled={!isSwitchAllowed('bit')}
-                  className={`text-[9.5px] font-black tracking-wider uppercase text-center ${
-                    isSwitchAllowed('bit') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[9.5px] font-black tracking-wider uppercase text-center select-none pointer-events-none ${
                     activeSwitches.bit
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   BIT
-                </button>
+                </span>
 
                 {/* Wire Guards Flanking the BIT Toggle */}
                 <div className="relative flex items-center justify-center my-1">
@@ -664,26 +555,15 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                   />
                 </div>
 
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault();
-                      decreaseSwitch('bit');
-                    }
-                  }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  disabled={!isSwitchAllowed('bit')}
-                  className={`text-[9.5px] font-black tracking-wider uppercase text-center ${
-                    isSwitchAllowed('bit') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[9.5px] font-black tracking-wider uppercase text-center select-none pointer-events-none ${
                     !activeSwitches.bit
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   OFF
-                </button>
+                </span>
               </div>
             </div>
           </div>

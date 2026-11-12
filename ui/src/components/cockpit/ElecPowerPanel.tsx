@@ -232,27 +232,16 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
               <div className="flex flex-col justify-between h-[196px] flex-1 pr-2">
                 {/* 1. Stationary MAIN PWR Switch Column */}
                 <div className="flex flex-col items-center self-start w-[80px]">
-                  {/* MAIN PWR Label (Top) */}
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      if (e.button === 0) {
-                        e.preventDefault();
-                        setSwitchPosition('MAIN_PWR');
-                      }
-                    }}
-                    onContextMenu={(e) => e.preventDefault()}
-                    disabled={!isSwitchAllowed('mainPwr')}
-                    className={`text-[11px] font-black tracking-wider uppercase transition-colors text-center whitespace-nowrap ${
-                      isSwitchAllowed('mainPwr') ? 'cursor-pointer' : 'cursor-default'
-                    } ${
+                  {/* MAIN PWR Label (Top) - Non-clickable */}
+                  <span
+                    className={`text-[11px] font-black tracking-wider uppercase transition-colors text-center whitespace-nowrap select-none pointer-events-none ${
                       activeSwitchPosition === 'MAIN_PWR'
                         ? 'text-amber-400 font-extrabold'
-                        : 'text-zinc-200 hover:text-white'
+                        : 'text-zinc-200'
                     }`}
                   >
                     MAIN PWR
-                  </button>
+                  </span>
 
                   {/* Switch & BATT row */}
                   <div className="relative flex items-center justify-center w-full my-0.5">
@@ -274,27 +263,16 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
                     </div>
 
                     {/* BATT Label & Upper Panel Screw */}
-                    <div className="absolute -right-7 flex items-center space-x-1">
-                      <button
-                        type="button"
-                        onMouseDown={(e) => {
-                          if (e.button === 0) {
-                            e.preventDefault();
-                            setSwitchPosition('BATT');
-                          }
-                        }}
-                        onContextMenu={(e) => e.preventDefault()}
-                        disabled={!isSwitchAllowed('mainPwr')}
+                    <div className="absolute -right-7 flex items-center space-x-1 pointer-events-none select-none">
+                      <span
                         className={`text-[11px] font-black tracking-wider uppercase transition-colors ${
-                          isSwitchAllowed('mainPwr') ? 'cursor-pointer' : 'cursor-default'
-                        } ${
                           activeSwitchPosition === 'BATT'
                             ? 'text-amber-400 font-extrabold'
-                            : 'text-zinc-200 hover:text-white'
+                            : 'text-zinc-200'
                         }`}
                       >
                         BATT
-                      </button>
+                      </span>
                       <div className="w-2.5 h-2.5 rounded-full bg-[#18191c] border border-black shadow-inner flex items-center justify-center pointer-events-none">
                         <div className="w-1.5 h-[1px] bg-zinc-600 rotate-90" />
                         <div className="w-[1px] h-1.5 bg-zinc-600 absolute" />
@@ -302,27 +280,16 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
                     </div>
                   </div>
 
-                  {/* OFF Label (Bottom) */}
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      if (e.button === 0) {
-                        e.preventDefault();
-                        setSwitchPosition('OFF');
-                      }
-                    }}
-                    onContextMenu={(e) => e.preventDefault()}
-                    disabled={!isSwitchAllowed('mainPwr')}
-                    className={`text-[11px] font-black tracking-wider uppercase transition-colors text-center ${
-                      isSwitchAllowed('mainPwr') ? 'cursor-pointer' : 'cursor-default'
-                    } ${
+                  {/* OFF Label (Bottom) - Non-clickable */}
+                  <span
+                    className={`text-[11px] font-black tracking-wider uppercase transition-colors text-center select-none pointer-events-none ${
                       activeSwitchPosition === 'OFF'
                         ? 'text-amber-400 font-extrabold'
-                        : 'text-zinc-200 hover:text-white'
+                        : 'text-zinc-200'
                     }`}
                   >
                     OFF
-                  </button>
+                  </span>
                 </div>
 
                 {/* 2. Middle Row: Decorative Dark Phillips Screw (Bottom-right of MAIN PWR, left of CAUTION RESET) */}

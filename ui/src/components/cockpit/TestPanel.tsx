@@ -325,27 +325,17 @@ export const TestPanel: React.FC<TestPanelProps> = ({
 
               {/* Col 2: OBOGS BIT (Momentary Up) */}
               <div className="flex flex-col items-center justify-self-center w-[66px]">
-                <button
-                  type="button"
-                  onMouseDown={handleObogsMouseDown}
-                  onMouseUp={handleObogsMouseUp}
-                  onTouchStart={handleObogsMouseDown}
-                  onTouchEnd={handleObogsMouseUp}
-                  onTouchCancel={handleObogsMouseUp}
-                  onContextMenu={(e) => e.preventDefault()}
-                  disabled={!isSwitchAllowed('obogsBit')}
-                  className={`text-[9px] font-black tracking-tight uppercase leading-tight text-center ${
-                    isSwitchAllowed('obogsBit') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[9px] font-black tracking-tight uppercase leading-tight text-center select-none pointer-events-none ${
                     activeSwitches.obogsBit
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   OBOGS
                   <br />
                   BIT
-                </button>
+                </span>
 
                 <div
                   onMouseDown={handleObogsMouseDown}
@@ -412,28 +402,17 @@ export const TestPanel: React.FC<TestPanelProps> = ({
             <div className="grid grid-cols-3 items-center my-0.5">
               {/* Col 1: PROBE HEAT (3-Way: PROBE_HEAT [Up] / OFF [Right] / TEST [Down]) */}
               <div className="flex flex-col items-center justify-self-center w-[74px]">
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault();
-                      if (!isSwitchAllowed('probeHeat')) return;
-                      setSwitch('probeHeat', 'PROBE_HEAT');
-                    }
-                  }}
-                  disabled={!isSwitchAllowed('probeHeat')}
-                  className={`text-[8.5px] font-black tracking-tight uppercase leading-tight text-center ${
-                    isSwitchAllowed('probeHeat') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[8.5px] font-black tracking-tight uppercase leading-tight text-center select-none pointer-events-none ${
                     activeSwitches.probeHeat === 'PROBE_HEAT'
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   PROBE
                   <br />
                   HEAT
-                </button>
+                </span>
 
                 {/* Lever with OFF text on its right */}
                 <div className="relative flex items-center justify-center my-0.5">
@@ -463,71 +442,39 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                   </div>
 
                   {/* OFF text on the right side of the switch */}
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      if (e.button === 0) {
-                        e.preventDefault();
-                        if (!isSwitchAllowed('probeHeat')) return;
-                        setSwitch('probeHeat', 'OFF');
-                      }
-                    }}
-                    disabled={!isSwitchAllowed('probeHeat')}
-                    className={`absolute left-[calc(50%+22px)] text-[9px] font-black tracking-wider uppercase leading-none ${
-                      isSwitchAllowed('probeHeat') ? 'cursor-pointer' : 'cursor-default'
-                    } ${
+                  <span
+                    className={`absolute left-[calc(50%+22px)] text-[9px] font-black tracking-wider uppercase leading-none select-none pointer-events-none ${
                       activeSwitches.probeHeat === 'OFF'
                         ? 'text-amber-400 font-extrabold'
-                        : 'text-zinc-200 hover:text-white'
+                        : 'text-zinc-200'
                     }`}
                   >
                     OFF
-                  </button>
+                  </span>
                 </div>
 
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault();
-                      if (!isSwitchAllowed('probeHeat')) return;
-                      setSwitch('probeHeat', 'TEST');
-                    }
-                  }}
-                  disabled={!isSwitchAllowed('probeHeat')}
-                  className={`text-[9.5px] font-black tracking-wider uppercase text-center ${
-                    isSwitchAllowed('probeHeat') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[9.5px] font-black tracking-wider uppercase text-center select-none pointer-events-none ${
                     activeSwitches.probeHeat === 'TEST'
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   TEST
-                </button>
+                </span>
               </div>
 
               {/* Col 2: EPU/GEN (Momentary Up) */}
               <div className="flex flex-col items-center justify-self-center w-[66px]">
-                <button
-                  type="button"
-                  onMouseDown={handleEpuGenMouseDown}
-                  onMouseUp={handleEpuGenMouseUp}
-                  onTouchStart={handleEpuGenMouseDown}
-                  onTouchEnd={handleEpuGenMouseUp}
-                  onTouchCancel={handleEpuGenMouseUp}
-                  onContextMenu={(e) => e.preventDefault()}
-                  disabled={!isSwitchAllowed('epuGen')}
-                  className={`text-[9px] font-black tracking-tight uppercase leading-tight text-center ${
-                    isSwitchAllowed('epuGen') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[9px] font-black tracking-tight uppercase leading-tight text-center select-none pointer-events-none ${
                     activeSwitches.epuGen
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   EPU/GEN
-                </button>
+                </span>
 
                 <div
                   onMouseDown={handleEpuGenMouseDown}
@@ -706,52 +653,30 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                   <HorizontalLeverToggle position={activeSwitches.stickControl || 'FWD'} />
                 </div>
 
-                <div className="flex items-center justify-between w-full px-1 text-[8.5px] font-black uppercase text-zinc-400">
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      if (e.button === 0) {
-                        e.preventDefault();
-                        decreaseStickControl();
-                      }
-                    }}
-                    onContextMenu={(e) => e.preventDefault()}
-                    disabled={!isSwitchAllowed('stickControl')}
+                <div className="flex items-center justify-between w-full px-1 text-[8.5px] font-black uppercase text-zinc-400 select-none pointer-events-none">
+                  <span
                     className={`${
-                      isSwitchAllowed('stickControl') ? 'cursor-pointer' : 'cursor-default'
-                    } ${
                       activeSwitches.stickControl === 'AFT'
                         ? 'text-amber-400 font-extrabold'
-                        : 'text-zinc-300 hover:text-white'
+                        : 'text-zinc-300'
                     }`}
                   >
                     AFT
-                  </button>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      if (e.button === 0) {
-                        e.preventDefault();
-                        increaseStickControl();
-                      }
-                    }}
-                    onContextMenu={(e) => e.preventDefault()}
-                    disabled={!isSwitchAllowed('stickControl')}
+                  </span>
+                  <span
                     className={`${
-                      isSwitchAllowed('stickControl') ? 'cursor-pointer' : 'cursor-default'
-                    } ${
                       activeSwitches.stickControl === 'FWD'
                         ? 'text-amber-400 font-extrabold'
-                        : 'text-zinc-300 hover:text-white'
+                        : 'text-zinc-300'
                     }`}
                   >
                     FWD
-                  </button>
+                  </span>
                 </div>
               </div>
 
               {/* Col 2: Alignment Cross (+) */}
-              <div className="flex items-center justify-center select-none pt-4">
+              <div className="flex items-center justify-center select-none pt-4 pointer-events-none">
                 <span className="text-zinc-500 font-bold text-[13px] leading-none opacity-80">
                   +
                 </span>
@@ -760,25 +685,15 @@ export const TestPanel: React.FC<TestPanelProps> = ({
               {/* Col 3: FLCS PWR TEST (3-Position: TEST [MOM] / NORM [Right] / MAINT [Down]) */}
               <div className="flex flex-col items-center justify-self-center w-[74px]">
                 {/* TEST on Top */}
-                <button
-                  type="button"
-                  onMouseDown={handleFlcsTestMouseDown}
-                  onMouseUp={handleFlcsTestMouseUp}
-                  onTouchStart={handleFlcsTestMouseDown}
-                  onTouchEnd={handleFlcsTestMouseUp}
-                  onTouchCancel={handleFlcsTestMouseUp}
-                  onContextMenu={(e) => e.preventDefault()}
-                  disabled={!isSwitchAllowed('flcsPwrTest')}
-                  className={`text-[8.5px] font-black tracking-tight uppercase leading-tight text-center ${
-                    isSwitchAllowed('flcsPwrTest') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[8.5px] font-black tracking-tight uppercase leading-tight text-center select-none pointer-events-none ${
                     activeSwitches.flcsPwrTest === 'TEST'
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-200 hover:text-white'
+                      : 'text-zinc-200'
                   }`}
                 >
                   TEST
-                </button>
+                </span>
 
                 {/* Lever with NORM text on its right */}
                 <div className="relative flex items-center justify-center my-0.5">
@@ -805,49 +720,27 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                   </div>
 
                   {/* NORM text on the right side of the switch */}
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      if (e.button === 0) {
-                        e.preventDefault();
-                        if (!isSwitchAllowed('flcsPwrTest')) return;
-                        setSwitch('flcsPwrTest', 'NORM');
-                      }
-                    }}
-                    disabled={!isSwitchAllowed('flcsPwrTest')}
-                    className={`absolute left-[calc(50%+22px)] text-[8.5px] font-black tracking-wider uppercase leading-none whitespace-nowrap ${
-                      isSwitchAllowed('flcsPwrTest') ? 'cursor-pointer' : 'cursor-default'
-                    } ${
+                  <span
+                    className={`absolute left-[calc(50%+22px)] text-[8.5px] font-black tracking-wider uppercase leading-none whitespace-nowrap select-none pointer-events-none ${
                       activeSwitches.flcsPwrTest === 'NORM'
                         ? 'text-amber-400 font-extrabold'
-                        : 'text-zinc-200 hover:text-white'
+                        : 'text-zinc-200'
                     }`}
                   >
                     NORM
-                  </button>
+                  </span>
                 </div>
 
                 {/* MAINT on Bottom */}
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault();
-                      if (!isSwitchAllowed('flcsPwrTest')) return;
-                      setSwitch('flcsPwrTest', 'MAINT');
-                    }
-                  }}
-                  disabled={!isSwitchAllowed('flcsPwrTest')}
-                  className={`text-[8.5px] font-black tracking-tight uppercase text-center ${
-                    isSwitchAllowed('flcsPwrTest') ? 'cursor-pointer' : 'cursor-default'
-                  } ${
+                <span
+                  className={`text-[8.5px] font-black tracking-tight uppercase text-center select-none pointer-events-none ${
                     activeSwitches.flcsPwrTest === 'MAINT'
                       ? 'text-amber-400 font-extrabold'
-                      : 'text-zinc-300 hover:text-white'
+                      : 'text-zinc-300'
                   }`}
                 >
                   MAINT
-                </button>
+                </span>
               </div>
             </div>
           </div>

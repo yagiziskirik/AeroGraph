@@ -99,22 +99,14 @@ export const ManualPitchPanel: React.FC<ManualPitchPanelProps> = ({
 
           {/* Switch Row: OVRD (Left) | Horizontal Lever Switch | NORM (Right) */}
           <div className="flex items-center justify-between w-full px-1">
-            {/* OVRD Label (Left, Momentary Trigger) */}
-            <button
-              type="button"
-              onMouseDown={handleMouseDown}
-              onMouseUp={handleMouseUp}
-              onTouchStart={handleMouseDown}
-              onTouchEnd={handleMouseUp}
-              onTouchCancel={handleMouseUp}
-              onContextMenu={(e) => e.preventDefault()}
-              disabled={!allowSwitchClick}
-              className={`text-[8px] font-black tracking-tight uppercase leading-none select-none transition-colors ${
-                allowSwitchClick ? 'cursor-pointer' : 'cursor-default'
-              } ${activeIsOvrd ? 'text-amber-400 font-extrabold' : 'text-zinc-300 hover:text-white'}`}
+            {/* OVRD Label (Left, Non-clickable) */}
+            <span
+              className={`text-[8px] font-black tracking-tight uppercase leading-none select-none pointer-events-none transition-colors ${
+                activeIsOvrd ? 'text-amber-400 font-extrabold' : 'text-zinc-300'
+              }`}
             >
               OVRD
-            </button>
+            </span>
 
             {/* Horizontal (Sideways) Lever Toggle */}
             <div
