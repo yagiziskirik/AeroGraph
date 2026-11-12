@@ -1,3 +1,4 @@
+export * from './CockpitLocatorOverlay';
 export * from './ElecPowerPanel';
 export * from './EngJetStartPanel';
 export * from './EpuPanel';
