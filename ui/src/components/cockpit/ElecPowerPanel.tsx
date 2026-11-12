@@ -19,10 +19,12 @@ export interface ElecPanelLights {
 export interface ElecPowerPanelProps {
   switchPosition?: MainPwrPosition;
   onSwitchChange?: (position: MainPwrPosition) => void;
+  onCautionResetClick?: () => void;
   lights?: ElecPanelLights;
   onLightClick?: (lightKey: keyof ElecPanelLights) => void;
   allowLightInteractivity?: boolean; // Hover and click on light buttons (default: false)
-  allowSwitchClick?: boolean; // Allow or disallow MAIN PWR switch to be clickable (default: true)
+  allowSwitchClick?: boolean | { mainPwr?: boolean; cautionReset?: boolean }; // Global or per-switch toggle interactivity
+  enabledSwitches?: { mainPwr?: boolean; cautionReset?: boolean }; // Per-switch enabled overrides
   skipBattOnForwardCycle?: boolean; // Require 1 click (skip BATT) or 2 clicks (default: false, meaning 2 clicks)
   className?: string;
 }
@@ -30,19 +32,36 @@ export interface ElecPowerPanelProps {
 export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
   switchPosition: controlledSwitchPosition,
   onSwitchChange,
+  onCautionResetClick,
   lights: controlledLights,
   onLightClick,
   allowLightInteractivity = false,
   allowSwitchClick = true,
+  enabledSwitches,
   skipBattOnForwardCycle = false,
   className = '',
 }) => {
   const panelId = useId();
 
+  // Helper to determine if a specific switch/button is allowed to be clicked
+  const isSwitchAllowed = (key: 'mainPwr' | 'cautionReset'): boolean => {
+    if (typeof allowSwitchClick === 'boolean' && !allowSwitchClick) return false;
+    if (typeof allowSwitchClick === 'object' && allowSwitchClick[key] !== undefined) {
+      return !!allowSwitchClick[key];
+    }
+    if (enabledSwitches && enabledSwitches[key] !== undefined) {
+      return !!enabledSwitches[key];
+    }
+    return true;
+  };
+
   // Internal switch state if uncontrolled
   const [internalSwitchPosition, setInternalSwitchPosition] = useState<MainPwrPosition>('OFF');
   const activeSwitchPosition =
     controlledSwitchPosition !== undefined ? controlledSwitchPosition : internalSwitchPosition;
+
+  // Caution reset button press state for visual feedback
+  const [cautionResetPressed, setCautionResetPressed] = useState<boolean>(false);
 
   // Default lights based on switch position
   const getDefaultLightsForPosition = (pos: MainPwrPosition): ElecPanelLights => {
@@ -86,7 +105,8 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
 
   // Switch Position Setter
   const setSwitchPosition = (newPos: MainPwrPosition) => {
-    if (!allowSwitchClick) return;
+    if (!isSwitchAllowed('mainPwr')) return;
+    if (activeSwitchPosition === newPos) return;
     Sound.playSwitch();
     if (onSwitchChange) {
       onSwitchChange(newPos);
@@ -100,7 +120,7 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
   // If skipBattOnForwardCycle is false: OFF -> BATT -> MAIN_PWR (stops at MAIN_PWR)
   const handleForwardCycle = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!allowSwitchClick) return;
+    if (!isSwitchAllowed('mainPwr')) return;
 
     if (skipBattOnForwardCycle) {
       if (activeSwitchPosition === 'OFF') {
@@ -121,7 +141,7 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
   // If skipBattOnForwardCycle is false: MAIN_PWR -> BATT -> OFF (stops at OFF)
   const handleBackwardCycle = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!allowSwitchClick) return;
+    if (!isSwitchAllowed('mainPwr')) return;
 
     if (skipBattOnForwardCycle) {
       if (activeSwitchPosition === 'MAIN_PWR') {
@@ -135,6 +155,22 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
       }
       // If already at OFF, stop and do not loop back to MAIN_PWR
     }
+  };
+
+  // Caution Reset Handlers (Momentary Press)
+  const handleCautionResetMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isSwitchAllowed('cautionReset')) return;
+    if ('button' in e && e.button !== 0) return;
+    e.preventDefault();
+    Sound.playClick();
+    setCautionResetPressed(true);
+    if (onCautionResetClick) onCautionResetClick();
+  };
+
+  const handleCautionResetMouseUp = (e?: React.MouseEvent | React.TouchEvent) => {
+    if (!isSwitchAllowed('cautionReset')) return;
+    if (e && 'button' in e && e.button !== 0) return;
+    setCautionResetPressed(false);
   };
 
   // Handle Light Click
@@ -199,10 +235,16 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
                   {/* MAIN PWR Label (Top) */}
                   <button
                     type="button"
-                    onClick={() => setSwitchPosition('MAIN_PWR')}
-                    disabled={!allowSwitchClick}
+                    onMouseDown={(e) => {
+                      if (e.button === 0) {
+                        e.preventDefault();
+                        setSwitchPosition('MAIN_PWR');
+                      }
+                    }}
+                    onContextMenu={(e) => e.preventDefault()}
+                    disabled={!isSwitchAllowed('mainPwr')}
                     className={`text-[11px] font-black tracking-wider uppercase transition-colors text-center whitespace-nowrap ${
-                      allowSwitchClick ? 'cursor-pointer' : 'cursor-default'
+                      isSwitchAllowed('mainPwr') ? 'cursor-pointer' : 'cursor-default'
                     } ${
                       activeSwitchPosition === 'MAIN_PWR'
                         ? 'text-amber-400 font-extrabold'
@@ -216,14 +258,17 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
                   <div className="relative flex items-center justify-center w-full my-0.5">
                     {/* Lever Switch with Left Click (forward) and Right Click (backward) */}
                     <div
-                      onClick={handleForwardCycle}
-                      onContextMenu={handleBackwardCycle}
+                      onMouseDown={(e) => {
+                        if (e.button === 0) handleForwardCycle(e);
+                        else if (e.button === 2) handleBackwardCycle(e);
+                      }}
+                      onContextMenu={(e) => e.preventDefault()}
                       title={
-                        allowSwitchClick
+                        isSwitchAllowed('mainPwr')
                           ? `MAIN PWR Switch: ${activeSwitchPosition}. Left-click to step forward, Right-click to step back.`
                           : `MAIN PWR Switch: ${activeSwitchPosition}`
                       }
-                      className={allowSwitchClick ? 'cursor-pointer select-none' : 'cursor-default select-none'}
+                      className={isSwitchAllowed('mainPwr') ? 'cursor-pointer select-none active:scale-95' : 'cursor-default select-none'}
                     >
                       <ThreeWayMpoLever position={activeSwitchPosition} />
                     </div>
@@ -232,10 +277,16 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
                     <div className="absolute -right-7 flex items-center space-x-1">
                       <button
                         type="button"
-                        onClick={() => setSwitchPosition('BATT')}
-                        disabled={!allowSwitchClick}
+                        onMouseDown={(e) => {
+                          if (e.button === 0) {
+                            e.preventDefault();
+                            setSwitchPosition('BATT');
+                          }
+                        }}
+                        onContextMenu={(e) => e.preventDefault()}
+                        disabled={!isSwitchAllowed('mainPwr')}
                         className={`text-[11px] font-black tracking-wider uppercase transition-colors ${
-                          allowSwitchClick ? 'cursor-pointer' : 'cursor-default'
+                          isSwitchAllowed('mainPwr') ? 'cursor-pointer' : 'cursor-default'
                         } ${
                           activeSwitchPosition === 'BATT'
                             ? 'text-amber-400 font-extrabold'
@@ -254,10 +305,16 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
                   {/* OFF Label (Bottom) */}
                   <button
                     type="button"
-                    onClick={() => setSwitchPosition('OFF')}
-                    disabled={!allowSwitchClick}
+                    onMouseDown={(e) => {
+                      if (e.button === 0) {
+                        e.preventDefault();
+                        setSwitchPosition('OFF');
+                      }
+                    }}
+                    onContextMenu={(e) => e.preventDefault()}
+                    disabled={!isSwitchAllowed('mainPwr')}
                     className={`text-[11px] font-black tracking-wider uppercase transition-colors text-center ${
-                      allowSwitchClick ? 'cursor-pointer' : 'cursor-default'
+                      isSwitchAllowed('mainPwr') ? 'cursor-pointer' : 'cursor-default'
                     } ${
                       activeSwitchPosition === 'OFF'
                         ? 'text-amber-400 font-extrabold'
@@ -298,12 +355,25 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
                     </span>
                   </div>
 
-                  {/* Plain, Clean White Circle Button */}
-                  <div
-                    className="w-8 h-8 rounded-full bg-[#E5E7EB] border border-zinc-400 shadow-md flex items-center justify-center pointer-events-none select-none"
-                    style={{
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,255,255,0.9)',
-                    }}
+                  {/* White Circle Button with Tactile Press Mechanics */}
+                  <button
+                    type="button"
+                    onMouseDown={handleCautionResetMouseDown}
+                    onMouseUp={handleCautionResetMouseUp}
+                    onMouseLeave={handleCautionResetMouseUp}
+                    onTouchStart={handleCautionResetMouseDown}
+                    onTouchEnd={handleCautionResetMouseUp}
+                    onTouchCancel={handleCautionResetMouseUp}
+                    onContextMenu={(e) => e.preventDefault()}
+                    disabled={!isSwitchAllowed('cautionReset')}
+                    title="CAUTION RESET: Press to reset cockpit caution indicators"
+                    className={`w-8 h-8 rounded-full border border-zinc-400 select-none flex items-center justify-center transition-transform duration-75 ${
+                      isSwitchAllowed('cautionReset') ? 'cursor-pointer' : 'cursor-default'
+                    } ${
+                      cautionResetPressed
+                        ? 'bg-[#c8cacf] shadow-[inset_0_2px_4px_rgba(0,0,0,0.8)] scale-95'
+                        : 'bg-[#E5E7EB] shadow-[0_2px_4px_rgba(0,0,0,0.6),inset_0_1px_2px_rgba(255,255,255,0.9)] hover:brightness-105 active:scale-95'
+                    }`}
                   />
                 </div>
               </div>
@@ -368,10 +438,13 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
                   allowInteractivity={allowLightInteractivity}
                 />
 
-                {/* Square 5: FAIL (Singular, centered in the square) */}
-                <StrictSquareSingleFail
-                  isOn={!!activeLights.fail}
-                  onClick={() => handleLightUnitClick('fail')}
+                {/* Square 5: FAIL (top) / Empty (bottom) */}
+                <StrictSquareDualLight
+                  topLabel="FAIL"
+                  topIsOn={!!activeLights.fail}
+                  onTopClick={() => handleLightUnitClick('fail')}
+                  bottomLabel=""
+                  bottomIsOn={false}
                   allowInteractivity={allowLightInteractivity}
                 />
               </div>
@@ -384,7 +457,7 @@ export const ElecPowerPanel: React.FC<ElecPowerPanelProps> = ({
 };
 
 /* -------------------------------------------------------------------------- */
-/* Specialized 3-Position MPO LeverSwitch (Vertical Movement)                 */
+/* Standard 3-Position Vertical Lever Switch Component (MAIN PWR)            */
 /* -------------------------------------------------------------------------- */
 
 interface ThreeWayMpoLeverProps {
@@ -394,9 +467,9 @@ interface ThreeWayMpoLeverProps {
 const ThreeWayMpoLever: React.FC<ThreeWayMpoLeverProps> = ({ position }) => {
   const shaftTransform =
     position === 'MAIN_PWR'
-      ? 'translate(-50%, -46px) scaleY(1.1)'
+      ? 'translate(-50%, -46px) scaleY(1.05)'
       : position === 'OFF'
-      ? 'translate(-50%, 4px) scaleY(1.1)'
+      ? 'translate(-50%, 4px) scaleY(1.05)'
       : 'translate(-50%, -24px) scaleY(0.7)';
 
   const ballTransform =
@@ -426,8 +499,8 @@ const ThreeWayMpoLever: React.FC<ThreeWayMpoLeverProps> = ({ position }) => {
             radial-gradient(0.5em 0.4em at 43% 56%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0)),
             radial-gradient(0.5em 0.4em at 55% 57%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0)),
             radial-gradient(0.5em 0.4em at 50% 60%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0)),
-            radial-gradient(100% 100% at 50% 50%, rgb(238, 238, 238), rgb(170, 170, 170) 10%, rgb(0, 0, 0) 18%, rgb(0, 0, 0) 21%, rgb(153, 153, 153) 21.5%, rgb(153, 153, 153) 24%, rgba(153, 153, 153, 0) 24.5%, rgba(221, 221, 221) 30%, rgb(221, 221, 221) 30.5%, rgb(221, 221, 221) 33%, rgb(68, 68, 68) 33.5%, rgb(68, 68, 68) 35%, rgba(68, 68, 68) 0 35.5%, rgba(221, 221, 221) 0 41%, rgb(221, 221, 221) 41.5%, rgb(238, 238, 238) 45%, rgb(68, 68, 85) 45.5%, rgb(68, 68, 85) 49%, rgba(68, 68, 85, 0) 50%),
-            radial-gradient(100% 100% at center, rgb(170, 170, 170) 49%, rgba(170, 170, 170, 0) 50%)
+            radial-gradient(100% 100% at 50% 50%, rgb(238, 238, 238), rgb(170, 170, 170) 10%, rgb(0, 0, 0) 18%, rgb(0, 0, 0) 21%, rgb(153, 153, 153) 21.5%, rgb(153, 153, 153) 24%, rgba(153, 153, 153, 0) 24.5%, rgb(221, 221, 221) 30%, rgb(221, 221, 221) 30.5%, rgb(221, 221, 221) 33%, rgb(68, 68, 68) 33.5%, rgb(68, 68, 68) 35%, rgba(68, 68, 68) 0 35.5%, rgb(221, 221, 221) 0 41%, rgb(221, 221, 221) 41.5%, rgb(238, 238, 238) 45%, rgb(68, 68, 85) 45.5%, rgb(68, 68, 85) 49%, rgba(68, 68, 85) 0 50%),
+            radial-gradient(100% 100% at center, rgb(170, 170, 170) 49%, rgba(170, 170, 170) 0 50%)
           `,
           boxShadow: '0 4px 8px rgba(0,0,0,0.7)',
         }}
@@ -492,7 +565,7 @@ const StrictSquareDualLight: React.FC<StrictSquareDualLightProps> = ({
     <div className="w-[58px] h-[58px] min-w-[58px] min-h-[58px] max-w-[58px] max-h-[58px] bg-[#0c0d10] border border-[#262830] rounded flex flex-col shadow-inner overflow-hidden select-none">
       {/* Top Half */}
       <div
-        onClick={allowInteractivity && topLabel ? onTopClick : undefined}
+        onMouseDown={allowInteractivity && topLabel ? onTopClick : undefined}
         title={topLabel ? `${topLabel}: ${topIsOn ? 'ON' : 'OFF'}` : undefined}
         className={`flex-1 flex items-center justify-center border-b border-[#1c1d22] bg-[#0c0d10] select-none ${
           allowInteractivity && topLabel ? 'cursor-pointer hover:bg-white/[0.04]' : 'cursor-default'
@@ -516,7 +589,7 @@ const StrictSquareDualLight: React.FC<StrictSquareDualLightProps> = ({
 
       {/* Bottom Half */}
       <div
-        onClick={allowInteractivity && bottomLabel ? onBottomClick : undefined}
+        onMouseDown={allowInteractivity && bottomLabel ? onBottomClick : undefined}
         title={bottomLabel ? `${bottomLabel}: ${bottomIsOn ? 'ON' : 'OFF'}` : undefined}
         className={`flex-1 flex items-center justify-center bg-[#0c0d10] select-none ${
           allowInteractivity && bottomLabel ? 'cursor-pointer hover:bg-white/[0.04]' : 'cursor-default'
@@ -537,45 +610,6 @@ const StrictSquareDualLight: React.FC<StrictSquareDualLightProps> = ({
           </span>
         )}
       </div>
-    </div>
-  );
-};
-
-/* -------------------------------------------------------------------------- */
-/* Strictly Square Single Fail Light (58px x 58px, Black Background)          */
-/* -------------------------------------------------------------------------- */
-
-interface StrictSquareSingleFailProps {
-  isOn: boolean;
-  onClick?: () => void;
-  allowInteractivity?: boolean;
-}
-
-const StrictSquareSingleFail: React.FC<StrictSquareSingleFailProps> = ({
-  isOn,
-  onClick,
-  allowInteractivity = false,
-}) => {
-  return (
-    <div
-      onClick={allowInteractivity ? onClick : undefined}
-      title={`FAIL: ${isOn ? 'ON' : 'OFF'}`}
-      className={`w-[58px] h-[58px] min-w-[58px] min-h-[58px] max-w-[58px] max-h-[58px] bg-[#0c0d10] border border-[#262830] rounded flex items-center justify-center shadow-inner select-none ${
-        allowInteractivity ? 'cursor-pointer hover:bg-white/[0.04]' : 'cursor-default'
-      }`}
-    >
-      <span
-        className={`text-[10px] font-black font-mono tracking-wider leading-none uppercase transition-[color,text-shadow] duration-100 ${
-          isOn ? 'text-[#FFB347]' : 'text-[#352a1a]'
-        }`}
-        style={{
-          textShadow: isOn
-            ? '0 0 3px #FFA726, 0 0 8px rgba(255, 150, 0, 0.9), 0 0 16px rgba(255, 120, 0, 0.6)'
-            : 'none',
-        }}
-      >
-        FAIL
-      </span>
     </div>
   );
 };
