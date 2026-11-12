@@ -17,7 +17,8 @@ export interface EpuPanelProps {
   lights?: EpuPanelLights;
   onLightClick?: (lightKey: keyof EpuPanelLights) => void;
   allowLightInteractivity?: boolean; // Hover and click on lights (default: false)
-  allowSwitchClick?: boolean; // Allow or disallow EPU switch to be clickable (default: true)
+  allowSwitchClick?: boolean | { epuSwitch?: boolean }; // Global or per-switch toggle interactivity
+  enabledSwitches?: { epuSwitch?: boolean }; // Per-switch enabled overrides
   className?: string;
 }
 
@@ -28,9 +29,22 @@ export const EpuPanel: React.FC<EpuPanelProps> = ({
   onLightClick,
   allowLightInteractivity = false,
   allowSwitchClick = true,
+  enabledSwitches,
   className = '',
 }) => {
   const panelId = useId();
+
+  // Helper to determine if the EPU switch is allowed to be clicked
+  const isSwitchAllowed = (key: 'epuSwitch' = 'epuSwitch'): boolean => {
+    if (typeof allowSwitchClick === 'boolean' && !allowSwitchClick) return false;
+    if (typeof allowSwitchClick === 'object' && allowSwitchClick[key] !== undefined) {
+      return !!allowSwitchClick[key];
+    }
+    if (enabledSwitches && enabledSwitches[key] !== undefined) {
+      return !!enabledSwitches[key];
+    }
+    return true;
+  };
 
   // Internal switch position if uncontrolled (default: NORM)
   const [internalSwitchPosition, setInternalSwitchPosition] = useState<EpuSwitchPosition>('NORM');
@@ -56,7 +70,8 @@ export const EpuPanel: React.FC<EpuPanelProps> = ({
 
   // Switch Position Setter
   const setSwitchPosition = (newPos: EpuSwitchPosition) => {
-    if (!allowSwitchClick) return;
+    if (!isSwitchAllowed('epuSwitch')) return;
+    if (activeSwitchPosition === newPos) return;
     Sound.playSwitch();
     if (onSwitchChange) {
       onSwitchChange(newPos);
@@ -66,9 +81,9 @@ export const EpuPanel: React.FC<EpuPanelProps> = ({
   };
 
   // Forward cycle (Left click): OFF -> NORM -> ON (clamped, no loop)
-  const handleForwardCycle = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (!allowSwitchClick) return;
+  const handleForwardCycle = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    if (!isSwitchAllowed('epuSwitch')) return;
 
     if (activeSwitchPosition === 'OFF') {
       setSwitchPosition('NORM');
@@ -78,9 +93,9 @@ export const EpuPanel: React.FC<EpuPanelProps> = ({
   };
 
   // Backward cycle (Right click): ON -> NORM -> OFF (clamped, no loop)
-  const handleBackwardCycle = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (!allowSwitchClick) return;
+  const handleBackwardCycle = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    if (!isSwitchAllowed('epuSwitch')) return;
 
     if (activeSwitchPosition === 'ON') {
       setSwitchPosition('NORM');
@@ -205,10 +220,16 @@ export const EpuPanel: React.FC<EpuPanelProps> = ({
               {/* ON Label (Top) */}
               <button
                 type="button"
-                onClick={() => setSwitchPosition('ON')}
-                disabled={!allowSwitchClick}
+                onMouseDown={(e) => {
+                  if (e.button === 0) {
+                    e.preventDefault();
+                    setSwitchPosition('ON');
+                  }
+                }}
+                onContextMenu={(e) => e.preventDefault()}
+                disabled={!isSwitchAllowed('epuSwitch')}
                 className={`text-[10px] font-black tracking-wider uppercase transition-colors text-center whitespace-nowrap ${
-                  allowSwitchClick ? 'cursor-pointer' : 'cursor-default'
+                  isSwitchAllowed('epuSwitch') ? 'cursor-pointer' : 'cursor-default'
                 } ${
                   activeSwitchPosition === 'ON'
                     ? 'text-amber-400 font-extrabold'
@@ -222,14 +243,22 @@ export const EpuPanel: React.FC<EpuPanelProps> = ({
               <div className="relative flex items-center justify-center w-full my-0.5">
                 {/* Switch with Custom Center-Flush Left-Hinged Red Flap Guards */}
                 <div
-                  onClick={handleForwardCycle}
-                  onContextMenu={handleBackwardCycle}
+                  onMouseDown={(e) => {
+                    if (e.button === 0) {
+                      e.preventDefault();
+                      handleForwardCycle(e);
+                    } else if (e.button === 2) {
+                      e.preventDefault();
+                      handleBackwardCycle(e);
+                    }
+                  }}
+                  onContextMenu={(e) => e.preventDefault()}
                   title={
-                    allowSwitchClick
-                      ? `EPU Switch: ${activeSwitchPosition}. Left-click forward, Right-click backward.`
+                    isSwitchAllowed('epuSwitch')
+                      ? `EPU Switch: ${activeSwitchPosition}. Left-click forward (UP), Right-click backward (DOWN).`
                       : `EPU Switch: ${activeSwitchPosition}`
                   }
-                  className={allowSwitchClick ? 'cursor-pointer select-none' : 'cursor-default select-none'}
+                  className={isSwitchAllowed('epuSwitch') ? 'cursor-pointer select-none active:scale-95' : 'cursor-default select-none'}
                 >
                   <CenterFlushGuardedSwitch position={activeSwitchPosition} />
                 </div>
@@ -238,10 +267,16 @@ export const EpuPanel: React.FC<EpuPanelProps> = ({
                 <div className="absolute -right-5 flex items-center">
                   <button
                     type="button"
-                    onClick={() => setSwitchPosition('NORM')}
-                    disabled={!allowSwitchClick}
+                    onMouseDown={(e) => {
+                      if (e.button === 0) {
+                        e.preventDefault();
+                        setSwitchPosition('NORM');
+                      }
+                    }}
+                    onContextMenu={(e) => e.preventDefault()}
+                    disabled={!isSwitchAllowed('epuSwitch')}
                     className={`text-[10px] font-black tracking-wider uppercase transition-colors ${
-                      allowSwitchClick ? 'cursor-pointer' : 'cursor-default'
+                      isSwitchAllowed('epuSwitch') ? 'cursor-pointer' : 'cursor-default'
                     } ${
                       activeSwitchPosition === 'NORM'
                         ? 'text-amber-400 font-extrabold'
@@ -256,10 +291,16 @@ export const EpuPanel: React.FC<EpuPanelProps> = ({
               {/* OFF Label (Bottom) */}
               <button
                 type="button"
-                onClick={() => setSwitchPosition('OFF')}
-                disabled={!allowSwitchClick}
+                onMouseDown={(e) => {
+                  if (e.button === 0) {
+                    e.preventDefault();
+                    setSwitchPosition('OFF');
+                  }
+                }}
+                onContextMenu={(e) => e.preventDefault()}
+                disabled={!isSwitchAllowed('epuSwitch')}
                 className={`text-[10px] font-black tracking-wider uppercase transition-colors text-center ${
-                  allowSwitchClick ? 'cursor-pointer' : 'cursor-default'
+                  isSwitchAllowed('epuSwitch') ? 'cursor-pointer' : 'cursor-default'
                 } ${
                   activeSwitchPosition === 'OFF'
                     ? 'text-amber-400 font-extrabold'
