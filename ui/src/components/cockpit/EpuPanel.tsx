@@ -217,27 +217,16 @@ export const EpuPanel: React.FC<EpuPanelProps> = ({
           <div className="flex items-center justify-start pl-0.5 mt-1 mb-1">
             {/* Switch Column */}
             <div className="flex flex-col items-center w-[74px]">
-              {/* ON Label (Top) */}
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  if (e.button === 0) {
-                    e.preventDefault();
-                    setSwitchPosition('ON');
-                  }
-                }}
-                onContextMenu={(e) => e.preventDefault()}
-                disabled={!isSwitchAllowed('epuSwitch')}
-                className={`text-[10px] font-black tracking-wider uppercase transition-colors text-center whitespace-nowrap ${
-                  isSwitchAllowed('epuSwitch') ? 'cursor-pointer' : 'cursor-default'
-                } ${
+              {/* ON Label (Top) - Non-clickable */}
+              <span
+                className={`text-[10px] font-black tracking-wider uppercase transition-colors text-center whitespace-nowrap select-none pointer-events-none ${
                   activeSwitchPosition === 'ON'
                     ? 'text-amber-400 font-extrabold'
-                    : 'text-zinc-200 hover:text-white'
+                    : 'text-zinc-200'
                 }`}
               >
                 ON
-              </button>
+              </span>
 
               {/* Guarded Switch & Closer NORM Tag */}
               <div className="relative flex items-center justify-center w-full my-0.5">
@@ -264,51 +253,29 @@ export const EpuPanel: React.FC<EpuPanelProps> = ({
                 </div>
 
                 {/* NORM Tag positioned directly adjacent to the switch */}
-                <div className="absolute -right-5 flex items-center">
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      if (e.button === 0) {
-                        e.preventDefault();
-                        setSwitchPosition('NORM');
-                      }
-                    }}
-                    onContextMenu={(e) => e.preventDefault()}
-                    disabled={!isSwitchAllowed('epuSwitch')}
+                <div className="absolute -right-5 flex items-center pointer-events-none select-none">
+                  <span
                     className={`text-[10px] font-black tracking-wider uppercase transition-colors ${
-                      isSwitchAllowed('epuSwitch') ? 'cursor-pointer' : 'cursor-default'
-                    } ${
                       activeSwitchPosition === 'NORM'
                         ? 'text-amber-400 font-extrabold'
-                        : 'text-zinc-200 hover:text-white'
+                        : 'text-zinc-200'
                     }`}
                   >
                     NORM
-                  </button>
+                  </span>
                 </div>
               </div>
 
-              {/* OFF Label (Bottom) */}
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  if (e.button === 0) {
-                    e.preventDefault();
-                    setSwitchPosition('OFF');
-                  }
-                }}
-                onContextMenu={(e) => e.preventDefault()}
-                disabled={!isSwitchAllowed('epuSwitch')}
-                className={`text-[10px] font-black tracking-wider uppercase transition-colors text-center ${
-                  isSwitchAllowed('epuSwitch') ? 'cursor-pointer' : 'cursor-default'
-                } ${
+              {/* OFF Label (Bottom) - Non-clickable */}
+              <span
+                className={`text-[10px] font-black tracking-wider uppercase transition-colors text-center select-none pointer-events-none ${
                   activeSwitchPosition === 'OFF'
                     ? 'text-amber-400 font-extrabold'
-                    : 'text-zinc-200 hover:text-white'
+                    : 'text-zinc-200'
                 }`}
               >
                 OFF
-              </button>
+              </span>
             </div>
           </div>
         </div>
@@ -353,16 +320,15 @@ const CenterFlushGuardedSwitch: React.FC<CenterFlushGuardedSwitchProps> = ({ pos
 
   return (
     <div className="relative w-16 h-16 flex items-center justify-center select-none will-change-transform">
-      {/* Top Red Guard Flap:
-          Starts from far left base, touches centerline up to the notch (38%), giving room to see the button fully */}
+      {/* Top Red Guard Flap */}
       <div
-        className="absolute top-1 left-0 transition-all duration-200 ease-out z-20 pointer-events-none will-change-transform"
+        className="absolute top-[2px] left-0 transition-all duration-200 ease-out z-20 pointer-events-none will-change-transform"
         style={{
           width: '56px',
-          height: '24px',
+          height: '30px',
           transform: topFlapOpen
-            ? 'perspective(220px) rotateY(-72deg) skewY(-8deg) scaleX(0.7) translateY(-6px)'
-            : 'perspective(220px) rotateY(0deg) translateY(0)',
+            ? 'perspective(260px) rotateY(-74deg) skewY(-6deg) scaleX(0.72) translateY(-4px)'
+            : 'perspective(260px) rotateY(0deg) translateY(0)',
           transformOrigin: 'left center',
           opacity: topFlapOpen ? 0.85 : 1,
         }}
@@ -370,20 +336,21 @@ const CenterFlushGuardedSwitch: React.FC<CenterFlushGuardedSwitchProps> = ({ pos
         <div
           className="w-full h-full relative"
           style={{
-            // Polygon defining the exact shape with generous center socket clearance:
-            // Centerline contact stops at 38% width, notch steps back to 60% height for full collar & button visibility
             clipPath: 'polygon(0% 0%, 100% 0%, 100% 60%, 38% 60%, 38% 100%, 0% 100%)',
             background: topFlapOpen
               ? 'linear-gradient(to right, #7f1d1d, #991b1b 60%, rgba(185, 28, 28, 0.4))'
-              : 'linear-gradient(to bottom, #b91c1c, #7f1d1d)',
+              : 'linear-gradient(to right, #4c0d0d, #701414 15%, #991b1b 55%, #7a1515 85%, #520f0f)',
             boxShadow: topFlapOpen
-              ? '-2px -6px 12px rgba(185, 28, 28, 0.5), inset 0 1px 2px rgba(255,255,255,0.4)'
-              : '0 2px 4px rgba(0,0,0,0.7), inset 0 1px 2px rgba(255,255,255,0.3)',
-            border: '1px solid #4a0e0e',
+              ? '-4px -6px 14px rgba(0,0,0,0.8), inset 0 1px 2px rgba(255,255,255,0.4)'
+              : '0 3px 6px rgba(0,0,0,0.65), inset 0 1px 2px rgba(255,255,255,0.3)',
+            border: '1px solid #3b0808',
           }}
         >
-          {/* Left Hinge Line */}
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#450a0a]" />
+          <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-red-400/80" />
+          <div className="absolute bottom-0 left-0 w-[38%] h-[1px] bg-black/70 shadow-[0_-1px_0_rgba(255,255,255,0.08)]" />
+          <div className="absolute left-0 top-0 bottom-0 w-[4px] bg-[#2d0707] border-r border-[#4c0d0d] flex flex-col justify-center items-center py-1">
+            <div className="w-1.5 h-1.5 rounded-full bg-zinc-400 border border-black/80" />
+          </div>
         </div>
       </div>
 
@@ -434,16 +401,15 @@ const CenterFlushGuardedSwitch: React.FC<CenterFlushGuardedSwitchProps> = ({ pos
         />
       </div>
 
-      {/* Bottom Red Guard Flap:
-          Starts from far left base, touches centerline up to the notch (38%), giving room to see the button fully */}
+      {/* Bottom Red Guard Flap */}
       <div
-        className="absolute bottom-1 left-0 transition-all duration-200 ease-out z-20 pointer-events-none will-change-transform"
+        className="absolute top-[32px] left-0 transition-all duration-200 ease-out z-20 pointer-events-none will-change-transform"
         style={{
           width: '56px',
-          height: '24px',
+          height: '30px',
           transform: bottomFlapOpen
-            ? 'perspective(220px) rotateY(-72deg) skewY(8deg) scaleX(0.7) translateY(6px)'
-            : 'perspective(220px) rotateY(0deg) translateY(0)',
+            ? 'perspective(260px) rotateY(-74deg) skewY(6deg) scaleX(0.72) translateY(4px)'
+            : 'perspective(260px) rotateY(0deg) translateY(0)',
           transformOrigin: 'left center',
           opacity: bottomFlapOpen ? 0.85 : 1,
         }}
@@ -451,19 +417,21 @@ const CenterFlushGuardedSwitch: React.FC<CenterFlushGuardedSwitchProps> = ({ pos
         <div
           className="w-full h-full relative"
           style={{
-            // Polygon defining bottom flap shape with center socket clearance:
             clipPath: 'polygon(0% 0%, 38% 0%, 38% 40%, 100% 40%, 100% 100%, 0% 100%)',
             background: bottomFlapOpen
               ? 'linear-gradient(to right, #7f1d1d, #991b1b 60%, rgba(185, 28, 28, 0.4))'
-              : 'linear-gradient(to top, #b91c1c, #7f1d1d)',
+              : 'linear-gradient(to right, #4c0d0d, #701414 15%, #991b1b 55%, #7a1515 85%, #520f0f)',
             boxShadow: bottomFlapOpen
-              ? '-2px 6px 12px rgba(185, 28, 28, 0.5), inset 0 -1px 2px rgba(255,255,255,0.4)'
-              : '0 2px 4px rgba(0,0,0,0.7), inset 0 -1px 2px rgba(255,255,255,0.3)',
-            border: '1px solid #4a0e0e',
+              ? '-4px 6px 14px rgba(0,0,0,0.8), inset 0 -1px 2px rgba(255,255,255,0.4)'
+              : '0 3px 6px rgba(0,0,0,0.65), inset 0 -1px 2px rgba(255,255,255,0.3)',
+            border: '1px solid #3b0808',
           }}
         >
-          {/* Left Hinge Line */}
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#450a0a]" />
+          <div className="absolute top-0 left-0 w-[38%] h-[1px] bg-red-400/50 shadow-[0_1px_0_rgba(0,0,0,0.8)]" />
+          <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-[#2d0707]" />
+          <div className="absolute left-0 top-0 bottom-0 w-[4px] bg-[#2d0707] border-r border-[#4c0d0d] flex flex-col justify-center items-center py-1">
+            <div className="w-1.5 h-1.5 rounded-full bg-zinc-400 border border-black/80" />
+          </div>
         </div>
       </div>
     </div>
