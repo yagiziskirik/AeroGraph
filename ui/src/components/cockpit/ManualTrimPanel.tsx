@@ -305,17 +305,16 @@ export const ManualTrimPanel: React.FC<ManualTrimPanelProps> = ({
               {/* Top-Right: TRIM / AP DISC Switch (Close Stacking, Standard TwoWayToggle) */}
               <div className="flex flex-col items-center justify-center pl-1">
                 {/* Header and NORM stacked tightly together on two lines */}
-                <div className="flex flex-col items-center justify-center mb-0.5 select-none">
+                <div className="flex flex-col items-center justify-center mb-0.5 select-none pointer-events-none">
                   <span className="text-[8px] font-black tracking-tight uppercase text-zinc-300 whitespace-nowrap">
                     TRIM / AP DISC
                   </span>
                   <span
-                    onClick={() => isControlAllowed('trimDisc') && setTrimDisc(true)}
                     className={`text-[9.5px] font-black tracking-wider uppercase text-center mt-0.5 select-none transition-colors ${
                       activeValues.trimDisc
                         ? 'text-amber-400 font-extrabold'
                         : 'text-zinc-200'
-                    } ${isControlAllowed('trimDisc') ? 'cursor-pointer hover:text-white' : 'pointer-events-none'}`}
+                    }`}
                   >
                     NORM
                   </span>
@@ -332,12 +331,11 @@ export const ManualTrimPanel: React.FC<ManualTrimPanelProps> = ({
                 </div>
 
                 <span
-                  onClick={() => isControlAllowed('trimDisc') && setTrimDisc(false)}
-                  className={`text-[9.5px] font-black tracking-wider uppercase text-center mt-0.5 select-none transition-colors ${
+                  className={`text-[9.5px] font-black tracking-wider uppercase text-center mt-0.5 select-none pointer-events-none transition-colors ${
                     !activeValues.trimDisc
                       ? 'text-amber-400 font-extrabold'
                       : 'text-zinc-200'
-                  } ${isControlAllowed('trimDisc') ? 'cursor-pointer hover:text-white' : 'pointer-events-none'}`}
+                  }`}
                 >
                   DISC
                 </span>

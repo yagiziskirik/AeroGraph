@@ -87,8 +87,8 @@ export const FuelPanel: React.FC<FuelPanelProps> = ({
       : internalSwitches.airRefuel;
 
   const isSwitchAllowed = (key: keyof FuelPanelSwitches): boolean => {
-    if (typeof allowSwitchClick === 'boolean' && !allowSwitchClick) return false;
-    if (typeof allowSwitchClick === 'object' && allowSwitchClick[key] !== undefined) {
+    if (typeof allowSwitchClick === 'boolean') return allowSwitchClick;
+    if (typeof allowSwitchClick === 'object' && allowSwitchClick !== null) {
       return !!allowSwitchClick[key];
     }
     if (enabledSwitches && enabledSwitches[key] !== undefined) {
@@ -227,12 +227,11 @@ export const FuelPanel: React.FC<FuelPanelProps> = ({
             {/* MASTER Guarded Lever Unit */}
             <div className="flex flex-col items-center w-[54px]">
               <span
-                onClick={() => isSwitchAllowed('master') && setSwitch('master', 'MASTER')}
-                className={`text-[9px] font-black tracking-wider uppercase transition-colors text-center select-none ${
+                className={`text-[9px] font-black tracking-wider uppercase transition-colors text-center select-none pointer-events-none ${
                   activeMaster === 'MASTER'
                     ? 'text-amber-400 font-extrabold'
                     : 'text-zinc-300'
-                } ${isSwitchAllowed('master') ? 'cursor-pointer hover:text-white' : 'pointer-events-none'}`}
+                }`}
               >
                 MASTER
               </span>
@@ -247,7 +246,7 @@ export const FuelPanel: React.FC<FuelPanelProps> = ({
                   className={`relative z-10 ${
                     isSwitchAllowed('master')
                       ? 'cursor-pointer select-none active:scale-95'
-                      : 'cursor-default select-none'
+                      : 'cursor-not-allowed pointer-events-none select-none opacity-80'
                   }`}
                 >
                   <CockpitLeverSwitch position={activeMaster} />
@@ -297,12 +296,11 @@ export const FuelPanel: React.FC<FuelPanelProps> = ({
               </div>
 
               <span
-                onClick={() => isSwitchAllowed('master') && setSwitch('master', 'OFF')}
-                className={`text-[9px] font-black tracking-wider uppercase transition-colors text-center select-none ${
+                className={`text-[9px] font-black tracking-wider uppercase transition-colors text-center select-none pointer-events-none ${
                   activeMaster === 'OFF'
                     ? 'text-amber-400 font-extrabold'
                     : 'text-zinc-300'
-                } ${isSwitchAllowed('master') ? 'cursor-pointer hover:text-white' : 'pointer-events-none'}`}
+                }`}
               >
                 OFF
               </span>
@@ -311,12 +309,7 @@ export const FuelPanel: React.FC<FuelPanelProps> = ({
 
           {/* COLUMN 2: TANK INERTING Switch */}
           <div className="flex flex-col items-center justify-center w-full">
-            <div
-              onClick={() => isSwitchAllowed('tankInerting') && setSwitch('tankInerting', 'TANK_INERTING')}
-              className={`flex flex-col items-center text-center select-none ${
-                isSwitchAllowed('tankInerting') ? 'cursor-pointer hover:text-white' : 'pointer-events-none'
-              }`}
-            >
+            <div className="flex flex-col items-center text-center select-none pointer-events-none">
               <span
                 className={`text-[8.5px] font-black tracking-tight uppercase leading-tight ${
                   activeTankInerting === 'TANK_INERTING'
@@ -344,19 +337,18 @@ export const FuelPanel: React.FC<FuelPanelProps> = ({
               className={`my-1 select-none ${
                 isSwitchAllowed('tankInerting')
                   ? 'cursor-pointer active:scale-95'
-                  : 'cursor-default'
+                  : 'cursor-not-allowed pointer-events-none opacity-80'
               }`}
             >
               <VerticalLeverToggle isUp={activeTankInerting === 'TANK_INERTING'} />
             </div>
 
             <span
-              onClick={() => isSwitchAllowed('tankInerting') && setSwitch('tankInerting', 'OFF')}
-              className={`text-[9px] font-black tracking-wider uppercase text-center select-none ${
+              className={`text-[9px] font-black tracking-wider uppercase text-center select-none pointer-events-none ${
                 activeTankInerting === 'OFF'
                   ? 'text-amber-400 font-extrabold'
                   : 'text-zinc-300'
-              } ${isSwitchAllowed('tankInerting') ? 'cursor-pointer hover:text-white' : 'pointer-events-none'}`}
+              }`}
             >
               OFF
             </span>
@@ -379,25 +371,16 @@ export const FuelPanel: React.FC<FuelPanelProps> = ({
               className={`select-none ${
                 isSwitchAllowed('engFeed')
                   ? 'cursor-pointer'
-                  : 'cursor-default'
+                  : 'cursor-not-allowed pointer-events-none opacity-80'
               }`}
             >
-              <EngFeedDial
-                position={activeEngFeed}
-                onSelectPosition={(pos) => setSwitch('engFeed', pos)}
-                allowClick={isSwitchAllowed('engFeed')}
-              />
+              <EngFeedDial position={activeEngFeed} />
             </div>
           </div>
 
           {/* COLUMN 4: AIR REFUEL Switch */}
           <div className="flex flex-col items-center justify-center w-full pr-1">
-            <div
-              onClick={() => isSwitchAllowed('airRefuel') && setSwitch('airRefuel', 'OPEN')}
-              className={`flex flex-col items-center text-center select-none ${
-                isSwitchAllowed('airRefuel') ? 'cursor-pointer hover:text-white' : 'pointer-events-none'
-              }`}
-            >
+            <div className="flex flex-col items-center text-center select-none pointer-events-none">
               <span className="text-[8.5px] font-black tracking-tight uppercase leading-tight text-zinc-300">
                 AIR REFUEL
               </span>
@@ -419,19 +402,18 @@ export const FuelPanel: React.FC<FuelPanelProps> = ({
               className={`my-1 select-none ${
                 isSwitchAllowed('airRefuel')
                   ? 'cursor-pointer active:scale-95'
-                  : 'cursor-default'
+                  : 'cursor-not-allowed pointer-events-none opacity-80'
               }`}
             >
               <VerticalLeverToggle isUp={activeAirRefuel === 'OPEN'} />
             </div>
 
             <span
-              onClick={() => isSwitchAllowed('airRefuel') && setSwitch('airRefuel', 'CLOSE')}
-              className={`text-[9px] font-black tracking-wider uppercase text-center select-none ${
+              className={`text-[9px] font-black tracking-wider uppercase text-center select-none pointer-events-none ${
                 activeAirRefuel === 'CLOSE'
                   ? 'text-amber-400 font-extrabold'
                   : 'text-zinc-300'
-              } ${isSwitchAllowed('airRefuel') ? 'cursor-pointer hover:text-white' : 'pointer-events-none'}`}
+              }`}
             >
               CLOSE
             </span>
@@ -593,15 +575,9 @@ const VerticalLeverToggle: React.FC<VerticalLeverToggleProps> = ({ isUp }) => {
 
 interface EngFeedDialProps {
   position: EngFeedPosition;
-  onSelectPosition?: (pos: EngFeedPosition) => void;
-  allowClick?: boolean;
 }
 
-const EngFeedDial: React.FC<EngFeedDialProps> = ({
-  position,
-  onSelectPosition,
-  allowClick = true,
-}) => {
+const EngFeedDial: React.FC<EngFeedDialProps> = ({ position }) => {
   // Mapping positions to continuous angles:
   // OFF:  -180° (Horizontal left / 9 o'clock)
   // NORM: -135° (Top-left / 10:30)
@@ -662,14 +638,7 @@ const EngFeedDial: React.FC<EngFeedDialProps> = ({
       </text>
 
       {/* Position 1: OFF (180° Horizontal Left) */}
-      <g
-        onClick={(e) => {
-          if (!allowClick) return;
-          e.stopPropagation();
-          onSelectPosition?.('OFF');
-        }}
-        className={allowClick ? 'cursor-pointer' : 'cursor-default'}
-      >
+      <g className="select-none pointer-events-none">
         <line
           x1="26"
           y1={cy}
@@ -686,21 +655,13 @@ const EngFeedDial: React.FC<EngFeedDialProps> = ({
           fontWeight={position === 'OFF' ? '900' : '700'}
           fontFamily="monospace"
           textAnchor="end"
-          className="select-none"
         >
           OFF
         </text>
       </g>
 
       {/* Position 2: NORM (135° Top-Left) with '+' crosshair */}
-      <g
-        onClick={(e) => {
-          if (!allowClick) return;
-          e.stopPropagation();
-          onSelectPosition?.('NORM');
-        }}
-        className={allowClick ? 'cursor-pointer' : 'cursor-default'}
-      >
+      <g className="select-none pointer-events-none">
         {/* Tick Mark */}
         <line
           x1="32.5"
@@ -719,7 +680,6 @@ const EngFeedDial: React.FC<EngFeedDialProps> = ({
           fontWeight="bold"
           fontFamily="monospace"
           textAnchor="middle"
-          className="select-none pointer-events-none"
         >
           +
         </text>
@@ -732,21 +692,13 @@ const EngFeedDial: React.FC<EngFeedDialProps> = ({
           fontWeight={position === 'NORM' ? '900' : '700'}
           fontFamily="monospace"
           textAnchor="end"
-          className="select-none"
         >
           NORM
         </text>
       </g>
 
       {/* Position 3: AFT (90° Straight UP) */}
-      <g
-        onClick={(e) => {
-          if (!allowClick) return;
-          e.stopPropagation();
-          onSelectPosition?.('AFT');
-        }}
-        className={allowClick ? 'cursor-pointer' : 'cursor-default'}
-      >
+      <g className="select-none pointer-events-none">
         <line
           x1={cx}
           y1="34"
@@ -763,21 +715,13 @@ const EngFeedDial: React.FC<EngFeedDialProps> = ({
           fontWeight={position === 'AFT' ? '900' : '700'}
           fontFamily="monospace"
           textAnchor="middle"
-          className="select-none"
         >
           AFT
         </text>
       </g>
 
       {/* Position 4: FWD (45° Top-Right) */}
-      <g
-        onClick={(e) => {
-          if (!allowClick) return;
-          e.stopPropagation();
-          onSelectPosition?.('FWD');
-        }}
-        className={allowClick ? 'cursor-pointer' : 'cursor-default'}
-      >
+      <g className="select-none pointer-events-none">
         <line
           x1="67.5"
           y1={cy - 17.5}
@@ -794,7 +738,6 @@ const EngFeedDial: React.FC<EngFeedDialProps> = ({
           fontWeight={position === 'FWD' ? '900' : '700'}
           fontFamily="monospace"
           textAnchor="start"
-          className="select-none"
         >
           FWD
         </text>
