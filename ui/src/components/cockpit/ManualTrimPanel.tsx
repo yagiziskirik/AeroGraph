@@ -53,8 +53,8 @@ export const ManualTrimPanel: React.FC<ManualTrimPanelProps> = ({
   // Helper to determine if a specific control is allowed to be clicked
   const isControlAllowed = useCallback(
     (key: keyof ManualTrimValues): boolean => {
-      if (typeof allowSwitchClick === 'boolean' && !allowSwitchClick) return false;
-      if (typeof allowSwitchClick === 'object' && allowSwitchClick[key] !== undefined) {
+      if (typeof allowSwitchClick === 'boolean') return allowSwitchClick;
+      if (typeof allowSwitchClick === 'object' && allowSwitchClick !== null) {
         return !!allowSwitchClick[key];
       }
       if (enabledSwitches && enabledSwitches[key] !== undefined) {
@@ -87,6 +87,18 @@ export const ManualTrimPanel: React.FC<ManualTrimPanelProps> = ({
     if (activeValues.trimDisc === val) return;
     Sound.playSwitch();
     updateValue('trimDisc', val);
+  };
+
+  // TRIM / AP DISC Switch Handlers: Left-click = UP (NORM), Right-click = DOWN (DISC)
+  const handleTrimDiscMouseDown = (e: React.MouseEvent) => {
+    if (!isControlAllowed('trimDisc')) return;
+    if (e.button === 0) {
+      e.preventDefault();
+      setTrimDisc(true);
+    } else if (e.button === 2) {
+      e.preventDefault();
+      setTrimDisc(false);
+    }
   };
 
   // Continuous Hold-to-Slew Management for Linear Trims
@@ -256,7 +268,7 @@ export const ManualTrimPanel: React.FC<ManualTrimPanelProps> = ({
                       onContextMenu={(e) => e.preventDefault()}
                       title={`ROLL TRIM: ${activeValues.rollTrim.toFixed(1)} (Left-click & hold for L WING DN, Right-click & hold for R WING DN)`}
                       className={`relative w-5 h-11 rounded bg-gradient-to-b from-zinc-200 via-white to-zinc-300 border border-zinc-400 shadow-md flex flex-col justify-around py-1 px-0.5 my-0.5 select-none ${
-                        isControlAllowed('rollTrim') ? 'cursor-pointer active:scale-95' : 'cursor-default opacity-80'
+                        isControlAllowed('rollTrim') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none opacity-80'
                       }`}
                       style={{
                         boxShadow:
@@ -297,30 +309,36 @@ export const ManualTrimPanel: React.FC<ManualTrimPanelProps> = ({
                   <span className="text-[8px] font-black tracking-tight uppercase text-zinc-300 whitespace-nowrap">
                     TRIM / AP DISC
                   </span>
-                  <span className="text-[9.5px] font-black tracking-wider uppercase text-center text-zinc-200 mt-0.5">
+                  <span
+                    onClick={() => isControlAllowed('trimDisc') && setTrimDisc(true)}
+                    className={`text-[9.5px] font-black tracking-wider uppercase text-center mt-0.5 select-none transition-colors ${
+                      activeValues.trimDisc
+                        ? 'text-amber-400 font-extrabold'
+                        : 'text-zinc-200'
+                    } ${isControlAllowed('trimDisc') ? 'cursor-pointer hover:text-white' : 'pointer-events-none'}`}
+                  >
                     NORM
                   </span>
                 </div>
 
                 {/* Authentic VerticalLeverToggle Switch */}
                 <div
-                  onMouseDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault();
-                      setTrimDisc(true); // Left-click: NORM (up)
-                    } else if (e.button === 2) {
-                      e.preventDefault();
-                      setTrimDisc(false); // Right-click: DISC (down)
-                    }
-                  }}
+                  onMouseDown={handleTrimDiscMouseDown}
                   onContextMenu={(e) => e.preventDefault()}
                   title={`TRIM / AP DISC: ${activeValues.trimDisc ? 'NORM' : 'DISC'} (Left-click for NORM, Right-click for DISC)`}
-                  className={`my-0.5 ${isControlAllowed('trimDisc') ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
+                  className={`my-0.5 ${isControlAllowed('trimDisc') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                 >
                   <VerticalLeverToggle isUp={activeValues.trimDisc} />
                 </div>
 
-                <span className="text-[9.5px] font-black tracking-wider uppercase text-center text-zinc-200 mt-0.5 select-none">
+                <span
+                  onClick={() => isControlAllowed('trimDisc') && setTrimDisc(false)}
+                  className={`text-[9.5px] font-black tracking-wider uppercase text-center mt-0.5 select-none transition-colors ${
+                    !activeValues.trimDisc
+                      ? 'text-amber-400 font-extrabold'
+                      : 'text-zinc-200'
+                  } ${isControlAllowed('trimDisc') ? 'cursor-pointer hover:text-white' : 'pointer-events-none'}`}
+                >
                   DISC
                 </span>
               </div>
@@ -356,7 +374,7 @@ export const ManualTrimPanel: React.FC<ManualTrimPanelProps> = ({
                     onContextMenu={(e) => e.preventDefault()}
                     title={`YAW TRIM: ${activeValues.yawTrim.toFixed(1)} (Left-click & hold for L, Right-click & hold for R)`}
                     className={`relative w-28 h-20 flex items-center justify-center select-none ${
-                      isControlAllowed('yawTrim') ? 'cursor-pointer' : 'cursor-default'
+                      isControlAllowed('yawTrim') ? 'cursor-pointer' : 'cursor-not-allowed pointer-events-none opacity-80'
                     }`}
                   >
                     <YawTrimDial value={activeValues.yawTrim} />
@@ -420,7 +438,7 @@ export const ManualTrimPanel: React.FC<ManualTrimPanelProps> = ({
                     onContextMenu={(e) => e.preventDefault()}
                     title={`PITCH TRIM: ${activeValues.pitchTrim.toFixed(1)} (Left-click & hold for NOSE UP, Right-click & hold for NOSE DN)`}
                     className={`relative w-16 h-5 rounded bg-gradient-to-r from-zinc-200 via-white to-zinc-300 border border-zinc-400 shadow-md flex items-center justify-around px-1 py-0.5 select-none ${
-                      isControlAllowed('pitchTrim') ? 'cursor-pointer active:scale-95' : 'cursor-default opacity-80'
+                      isControlAllowed('pitchTrim') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none opacity-80'
                     }`}
                     style={{
                       boxShadow:
