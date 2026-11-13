@@ -4,6 +4,7 @@ export * from './EngJetStartPanel';
 export * from './EpuPanel';
 export * from './FltControlPanel';
 export * from './FtitIndicator';
+export * from './FuelPanel';
 export * from './HydPressPanel';
 export * from './ManualPitchPanel';
 export * from './ManualTrimPanel';
