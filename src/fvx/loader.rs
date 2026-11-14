@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use crate::fvx::models::FvxProfile;
 
+#[derive(Debug, Clone)]
 pub struct LoadedProfile {
     pub profile: FvxProfile,
     pub profile_path: PathBuf,
