@@ -57,8 +57,14 @@ export const THROTTLE_DETENTS: Record<ThrottleDetent, DetentInfo> = {
 
 export interface ThrottleQuadrantProps {
   position?: ThrottleDetent;
+  angle?: number;
   pointA?: ThrottleDetent; // Default start point for demonstration (CUTOFF)
   pointB?: ThrottleDetent; // Default end point for demonstration (IDLE)
+  allowContinuous?: boolean;
+  disableDrag?: boolean;
+  hideMilBadge?: boolean;
+  customBadgeLabel?: string;
+  customPointBLabel?: string;
   interactive?: boolean;
   onPositionChange?: (detent: ThrottleDetent, angle: number) => void;
   onClick?: (nextDetent: ThrottleDetent) => void;
@@ -67,8 +73,14 @@ export interface ThrottleQuadrantProps {
 
 export const ThrottleQuadrant: React.FC<ThrottleQuadrantProps> = ({
   position,
+  angle,
   pointA = 'CUTOFF',
   pointB = 'IDLE',
+  allowContinuous = false,
+  disableDrag = false,
+  hideMilBadge = false,
+  customBadgeLabel,
+  customPointBLabel,
   interactive = true,
   onPositionChange,
   onClick,
@@ -86,18 +98,20 @@ export const ThrottleQuadrant: React.FC<ThrottleQuadrantProps> = ({
     position ?? pointA
   );
   const [currentAngle, setCurrentAngle] = useState(
-    THROTTLE_DETENTS[position ?? pointA].angle
+    angle !== undefined ? angle : THROTTLE_DETENTS[position ?? pointA].angle
   );
   const [isDragging, setIsDragging] = useState(false);
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
 
-  // Sync with external controlled position if provided
+  // Sync with external controlled position or angle if provided
   useEffect(() => {
-    if (position && !isDragging) {
+    if (angle !== undefined && !isDragging) {
+      setCurrentAngle(angle);
+    } else if (position && !isDragging) {
       setCurrentDetent(position);
       setCurrentAngle(THROTTLE_DETENTS[position].angle);
     }
-  }, [position, isDragging]);
+  }, [position, angle, isDragging]);
 
   // Pivot coordinates inside the 360x280 chassis
   const pivotX = 180;
@@ -115,8 +129,10 @@ export const ThrottleQuadrant: React.FC<ThrottleQuadrantProps> = ({
   const handlePointerDown = (e: React.PointerEvent) => {
     if (!interactive) return;
     dragStartPos.current = { x: e.clientX, y: e.clientY };
-    setIsDragging(true);
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    if (!disableDrag) {
+      setIsDragging(true);
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    }
   };
 
   const calculateAngleFromPointer = useCallback(
@@ -138,12 +154,24 @@ export const ThrottleQuadrant: React.FC<ThrottleQuadrantProps> = ({
   );
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging || !interactive) return;
+    if (disableDrag || !isDragging || !interactive) return;
     const newAngle = calculateAngleFromPointer(e.clientX, e.clientY);
     setCurrentAngle(newAngle);
+
+    const diffA = Math.abs(newAngle - angleA);
+    const diffB = Math.abs(newAngle - angleB);
+    const chosenDetent = diffA <= diffB ? pointA : pointB;
+    setCurrentDetent(chosenDetent);
+    onPositionChange?.(chosenDetent, newAngle);
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
+    if (disableDrag) {
+      if (!interactive) return;
+      toggleBetweenPoints();
+      dragStartPos.current = null;
+      return;
+    }
     if (!isDragging) return;
     setIsDragging(false);
 
@@ -151,12 +179,20 @@ export const ThrottleQuadrant: React.FC<ThrottleQuadrantProps> = ({
       ? Math.hypot(e.clientX - dragStartPos.current.x, e.clientY - dragStartPos.current.y)
       : 0;
 
-    // Click without significant drag: toggle between Point A and Point B
+    const finalAngle = calculateAngleFromPointer(e.clientX, e.clientY);
+
     if (dist < 6) {
       toggleBetweenPoints();
+    } else if (allowContinuous) {
+      const diffA = Math.abs(finalAngle - angleA);
+      const diffB = Math.abs(finalAngle - angleB);
+      const chosenDetent = diffA <= diffB ? pointA : pointB;
+      setCurrentAngle(finalAngle);
+      setCurrentDetent(chosenDetent);
+      onPositionChange?.(chosenDetent, finalAngle);
+      onClick?.(chosenDetent);
     } else {
       // Determine nearest point (A or B)
-      const finalAngle = calculateAngleFromPointer(e.clientX, e.clientY);
       const diffA = Math.abs(finalAngle - angleA);
       const diffB = Math.abs(finalAngle - angleB);
       const chosenDetent = diffA <= diffB ? pointA : pointB;
@@ -165,6 +201,7 @@ export const ThrottleQuadrant: React.FC<ThrottleQuadrantProps> = ({
       setCurrentDetent(chosenDetent);
       setCurrentAngle(targetAngle);
       onPositionChange?.(chosenDetent, targetAngle);
+      onClick?.(chosenDetent);
     }
 
     dragStartPos.current = null;
@@ -214,16 +251,18 @@ export const ThrottleQuadrant: React.FC<ThrottleQuadrantProps> = ({
           </div>
 
           <div className="flex items-center space-x-2">
-            <span
-              className="text-[9.5px] font-bold px-2 py-0.5 rounded font-mono border tracking-wider"
-              style={{
-                color: detentInfo.badgeColor,
-                backgroundColor: detentInfo.badgeBg,
-                borderColor: detentInfo.badgeBorder,
-              }}
-            >
-              {detentInfo.label}
-            </span>
+            {!(hideMilBadge && detentInfo.id === 'MIL' && !customBadgeLabel) && (
+              <span
+                className="text-[9.5px] font-bold px-2 py-0.5 rounded font-mono border tracking-wider"
+                style={{
+                  color: detentInfo.badgeColor,
+                  backgroundColor: detentInfo.badgeBg,
+                  borderColor: detentInfo.badgeBorder,
+                }}
+              >
+                {customBadgeLabel && detentInfo.id === 'MIL' ? customBadgeLabel : detentInfo.label}
+              </span>
+            )}
             <span className="text-[9.5px] font-bold text-zinc-400 font-mono w-8 text-right">
               {currentAngle.toFixed(0)}°
             </span>
@@ -286,6 +325,8 @@ export const ThrottleQuadrant: React.FC<ThrottleQuadrantProps> = ({
             const ly = pivotY - rLabel * Math.cos(rad);
 
             const isCurrent = d.id === currentDetent;
+            const labelText =
+              hideMilBadge && detKey === 'MIL' ? customPointBLabel || '' : d.shortLabel;
 
             return (
               <g key={d.id}>
@@ -298,18 +339,20 @@ export const ThrottleQuadrant: React.FC<ThrottleQuadrantProps> = ({
                   strokeWidth={isCurrent ? 2.5 : 1.5}
                   strokeLinecap="round"
                 />
-                <text
-                  x={lx}
-                  y={ly}
-                  fill={isCurrent ? d.badgeColor : '#94a3b8'}
-                  fontSize="8.5"
-                  fontWeight="900"
-                  fontFamily="monospace"
-                  textAnchor="middle"
-                  alignmentBaseline="middle"
-                >
-                  {d.shortLabel}
-                </text>
+                {labelText && (
+                  <text
+                    x={lx}
+                    y={ly}
+                    fill={isCurrent ? d.badgeColor : '#94a3b8'}
+                    fontSize="8.5"
+                    fontWeight="900"
+                    fontFamily="monospace"
+                    textAnchor="middle"
+                    alignmentBaseline="middle"
+                  >
+                    {labelText}
+                  </text>
+                )}
               </g>
             );
           })}
@@ -412,7 +455,11 @@ export const ThrottleQuadrant: React.FC<ThrottleQuadrantProps> = ({
         {/* Centered Bottom Interaction Hint */}
         <div className="absolute bottom-2.5 inset-x-0 flex items-center justify-center z-20 pointer-events-none">
           <span className="text-[8.5px] font-mono tracking-wider text-zinc-500 uppercase">
-            {interactive ? 'CLICK TO STEP // DRAG TO SLIDE' : 'LOCKED'}
+            {interactive
+              ? disableDrag
+                ? 'CLICK TO STEP'
+                : 'CLICK TO STEP // DRAG TO SLIDE'
+              : 'LOCKED'}
           </span>
         </div>
       </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useId, useState, useEffect } from 'react';
+import React, { useId, useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -13,6 +13,8 @@ export interface TacticalFlirOverlayProps {
   zoom?: string;
   azimuth?: string;
   elevation?: string;
+  aspectRatio?: 'video' | 'square' | 'auto';
+  objectFit?: 'cover' | 'contain';
   showScanlines?: boolean;
   className?: string;
 }
@@ -26,23 +28,59 @@ export const TacticalFlirOverlay: React.FC<TacticalFlirOverlayProps> = ({
   zoom = '1.8x',
   azimuth = 'AZ: +002°',
   elevation = 'EL: -014°',
+  aspectRatio = 'video',
+  objectFit = 'cover',
   showScanlines = true,
   className = '',
 }) => {
   const overlayId = useId();
   const [glitchCycle, setGlitchCycle] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isMountedRef = useRef(false);
 
   // Trigger glitch pulse on mount and when image source swaps
   useEffect(() => {
     if (isOpen) {
       setGlitchCycle((prev) => prev + 1);
+      const t = setTimeout(() => {
+        isMountedRef.current = true;
+      }, 350);
+      return () => {
+        clearTimeout(t);
+        isMountedRef.current = false;
+      };
+    } else {
+      isMountedRef.current = false;
     }
   }, [isOpen, src]);
+
+  // Click-through hover opacity management
+  useEffect(() => {
+    if (!isOpen) {
+      setIsHovered(false);
+      return;
+    }
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const inBounds =
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom;
+      setIsHovered(inBounds);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, [isOpen]);
 
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
+          ref={containerRef}
           id={overlayId}
           initial={{
             opacity: 0,
@@ -50,21 +88,30 @@ export const TacticalFlirOverlay: React.FC<TacticalFlirOverlayProps> = ({
             filter: 'brightness(2.2) contrast(1.6)',
             clipPath: 'inset(42% 0% 42% 0%)',
           }}
-          animate={{
-            opacity: [0, 1, 0.35, 1, 0.85, 1],
-            scaleY: [0.85, 1.03, 0.98, 1],
-            filter: [
-              'brightness(2.4) contrast(1.8)',
-              'brightness(0.7) contrast(1.3)',
-              'brightness(1.3) contrast(1.1)',
-              'brightness(1) contrast(1)',
-            ],
-            clipPath: [
-              'inset(45% 0% 45% 0%)',
-              'inset(12% 0% 20% 0%)',
-              'inset(0% 0% 0% 0%)',
-            ],
-          }}
+          animate={
+            isMountedRef.current
+              ? {
+                  opacity: isHovered ? 0.2 : 1,
+                  scaleY: 1,
+                  filter: 'brightness(1) contrast(1)',
+                  clipPath: 'inset(0% 0% 0% 0%)',
+                }
+              : {
+                  opacity: [0, 1, 0.35, 1, 0.85, 1],
+                  scaleY: [0.85, 1.03, 0.98, 1],
+                  filter: [
+                    'brightness(2.4) contrast(1.8)',
+                    'brightness(0.7) contrast(1.3)',
+                    'brightness(1.3) contrast(1.1)',
+                    'brightness(1) contrast(1)',
+                  ],
+                  clipPath: [
+                    'inset(45% 0% 45% 0%)',
+                    'inset(12% 0% 20% 0%)',
+                    'inset(0% 0% 0% 0%)',
+                  ],
+                }
+          }
           exit={{
             opacity: [1, 0.9, 0],
             scaleY: [1, 1.02, 0.8],
@@ -76,13 +123,23 @@ export const TacticalFlirOverlay: React.FC<TacticalFlirOverlayProps> = ({
             ],
             transition: { duration: 0.18, ease: 'easeOut' },
           }}
-          transition={{ duration: 0.28, ease: 'easeOut' }}
+          transition={
+            isMountedRef.current
+              ? { duration: 0.16, ease: 'easeOut' }
+              : { duration: 0.28, ease: 'easeOut' }
+          }
           style={{ willChange: 'opacity, transform, filter, clip-path' }}
-          className={`fixed bottom-6 right-6 z-50 select-none ${className}`}
+          className={`fixed bottom-6 right-6 z-50 select-none pointer-events-none ${className}`}
         >
           {/* Frameless HUD Optical Viewport */}
           <div
-            className="relative w-[390px] aspect-video rounded-md border border-emerald-500/50 bg-[#06080a] overflow-hidden"
+            className={`relative rounded-md border border-emerald-500/50 bg-[#06080a] overflow-hidden ${
+              aspectRatio === 'square'
+                ? 'w-[360px] aspect-square'
+                : aspectRatio === 'auto'
+                ? 'w-[360px] max-h-[360px]'
+                : 'w-[390px] aspect-video'
+            }`}
             style={{
               boxShadow:
                 '0 24px 48px -12px rgba(0,0,0,0.95), 0 0 24px -2px rgba(16,185,129,0.22), inset 0 0 1px 1px rgba(52,211,153,0.3)',
@@ -99,15 +156,26 @@ export const TacticalFlirOverlay: React.FC<TacticalFlirOverlayProps> = ({
                 style={{ willChange: 'opacity, filter' }}
                 className="absolute inset-0 w-full h-full"
               >
-                <Image
-                  src={src}
-                  alt={alt}
-                  fill
-                  priority
-                  sizes="(max-width: 768px) 100vw, 390px"
-                  className="select-none pointer-events-none object-cover contrast-[1.08] brightness-[0.98] saturate-[0.88]"
-                  draggable={false}
-                />
+                {src.endsWith('.mp4') ? (
+                  <video
+                    src={src}
+                    autoPlay
+                    muted
+                    playsInline
+                    loop={false}
+                    className={`w-full h-full ${objectFit === 'contain' ? 'object-contain' : 'object-cover'} contrast-[1.08] brightness-[0.98] saturate-[0.88] select-none pointer-events-none`}
+                  />
+                ) : (
+                  <Image
+                    src={src}
+                    alt={alt}
+                    fill
+                    priority
+                    sizes="(max-width: 768px) 100vw, 390px"
+                    className={`select-none pointer-events-none ${objectFit === 'contain' ? 'object-contain' : 'object-cover'} contrast-[1.08] brightness-[0.98] saturate-[0.88]`}
+                    draggable={false}
+                  />
+                )}
               </motion.div>
             </AnimatePresence>
 

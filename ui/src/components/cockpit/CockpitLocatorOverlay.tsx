@@ -65,7 +65,7 @@ export const CockpitLocatorOverlay: React.FC<CockpitLocatorOverlayProps> = ({
   const tHeight = targetArea ? targetArea.height : 16;
   const targetAspect = (tWidth / Math.max(1, tHeight)) * imageAspect;
 
-  // Zoomed dimensions matching the target area's aspect ratio exactly
+  // Zoomed dimensions matching the target area's aspect ratio
   const zoomedWidth = 230;
   const zoomedHeight = Math.round(
     Math.max(160, Math.min(280, zoomedWidth / Math.max(0.4, targetAspect)))
@@ -120,7 +120,7 @@ export const CockpitLocatorOverlay: React.FC<CockpitLocatorOverlayProps> = ({
                 height: activeHeight,
               }}
               transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-              className="relative rounded-md border border-sky-500/50 bg-[#06080d] overflow-hidden cursor-pointer"
+              className="relative rounded-md border border-sky-500/50 bg-[#06080d] overflow-hidden"
               style={{
                 willChange: 'width, height',
                 boxShadow:

@@ -61,11 +61,11 @@ export const TestPanel: React.FC<TestPanelProps> = ({
 
   // Helper to determine if a specific switch is allowed to be clicked
   const isSwitchAllowed = (key: keyof TestPanelSwitches): boolean => {
-    if (typeof allowSwitchClick === 'boolean' && !allowSwitchClick) return false;
-    if (typeof allowSwitchClick === 'object' && allowSwitchClick[key] !== undefined) {
+    if (typeof allowSwitchClick === 'boolean') return allowSwitchClick;
+    if (typeof allowSwitchClick === 'object') {
       return !!allowSwitchClick[key];
     }
-    if (enabledSwitches && enabledSwitches[key] !== undefined) {
+    if (enabledSwitches) {
       return !!enabledSwitches[key];
     }
     return true;
@@ -90,8 +90,8 @@ export const TestPanel: React.FC<TestPanelProps> = ({
   };
 
   // Generic switch setter with sound
-  const setSwitch = (key: keyof TestPanelSwitches, value: any) => {
-    if (!isSwitchAllowed(key)) return;
+  const setSwitch = (key: keyof TestPanelSwitches, value: any, force = false) => {
+    if (!isSwitchAllowed(key) && !force) return;
     if (activeSwitches[key] === value) return; // Prevent sound if state unchanged
     Sound.playSwitch();
     if (onSwitchChange) {
@@ -136,11 +136,10 @@ export const TestPanel: React.FC<TestPanelProps> = ({
     setSwitch('epuGen', true);
   };
   const handleEpuGenMouseUp = (e?: React.MouseEvent | React.TouchEvent) => {
-    if (!isSwitchAllowed('epuGen')) return;
     if (e && 'button' in e && e.button !== 0) return;
     if (!epuGenPressRef.current) return;
     epuGenPressRef.current = false;
-    setSwitch('epuGen', false);
+    setSwitch('epuGen', false, true);
   };
 
   // FLCS PWR TEST Handlers (Strict Directional Clicks)
@@ -170,11 +169,10 @@ export const TestPanel: React.FC<TestPanelProps> = ({
   };
 
   const handleFlcsTestMouseUp = (e?: React.MouseEvent | React.TouchEvent) => {
-    if (!isSwitchAllowed('flcsPwrTest')) return;
     if (e && 'button' in e && e.button !== 0) return;
     if (!flcsTestPressRef.current) return;
     flcsTestPressRef.current = false;
-    setSwitch('flcsPwrTest', 'NORM');
+    setSwitch('flcsPwrTest', 'NORM', true);
   };
 
   const handleFlcsTestContextMenu = (e: React.MouseEvent) => {
@@ -313,7 +311,7 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                     disabled={!isSwitchAllowed('fireOheatDetect')}
                     title="FIRE & OHEAT DETECT (Momentary): Press and hold left-click to test overheat/fire detection"
                     className={`w-6 h-6 rounded-full border border-black/60 transition-transform duration-75 select-none flex items-center justify-center ${
-                      isSwitchAllowed('fireOheatDetect') ? 'cursor-pointer' : 'cursor-default'
+                      isSwitchAllowed('fireOheatDetect') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none opacity-90'
                     } ${
                       activeSwitches.fireOheatDetect
                         ? 'bg-[#b8b8b8] shadow-[inset_0_2px_4px_rgba(0,0,0,0.8)] scale-95'
@@ -350,7 +348,7 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                     setSwitch('obogsBit', false);
                   }}
                   title="OBOGS BIT (Momentary): Hold left-click up to test OBOGS"
-                  className={`my-1 select-none ${isSwitchAllowed('obogsBit') ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
+                  className={`my-1 select-none ${isSwitchAllowed('obogsBit') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                 >
                   <VerticalLeverToggle isUp={!!activeSwitches.obogsBit} />
                 </div>
@@ -387,7 +385,7 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                     disabled={!isSwitchAllowed('malIndLts')}
                     title="MAL & IND LTS (Momentary): Press and hold left-click to test malfunction and indicator lights"
                     className={`w-6 h-6 rounded-full border border-black/60 transition-transform duration-75 select-none flex items-center justify-center ${
-                      isSwitchAllowed('malIndLts') ? 'cursor-pointer' : 'cursor-default'
+                      isSwitchAllowed('malIndLts') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none opacity-90'
                     } ${
                       activeSwitches.malIndLts
                         ? 'bg-[#b8b8b8] shadow-[inset_0_2px_4px_rgba(0,0,0,0.8)] scale-95'
@@ -428,7 +426,7 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                     }}
                     onContextMenu={(e) => e.preventDefault()}
                     title={`PROBE HEAT: ${activeSwitches.probeHeat} (Left-click to step up, Right-click to step down)`}
-                    className={isSwitchAllowed('probeHeat') ? 'cursor-pointer active:scale-95' : 'cursor-default'}
+                    className={isSwitchAllowed('probeHeat') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}
                   >
                     <ThreeWayLeverToggle
                       position={
@@ -489,7 +487,7 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                     setSwitch('epuGen', false);
                   }}
                   title="EPU/GEN (Momentary): Hold left-click up to test EPU/GEN"
-                  className={`my-1 select-none ${isSwitchAllowed('epuGen') ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
+                  className={`my-1 select-none ${isSwitchAllowed('epuGen') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                 >
                   <VerticalLeverToggle isUp={!!activeSwitches.epuGen} />
                 </div>
@@ -648,7 +646,7 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                   }}
                   onContextMenu={(e) => e.preventDefault()}
                   title={`STICK CONTROL: ${activeSwitches.stickControl} (Left-click for FWD, Right-click for AFT)`}
-                  className={`my-1 ${isSwitchAllowed('stickControl') ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
+                  className={`my-1 ${isSwitchAllowed('stickControl') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                 >
                   <HorizontalLeverToggle position={activeSwitches.stickControl || 'FWD'} />
                 </div>
@@ -706,7 +704,7 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                     onTouchCancel={handleFlcsTestMouseUp}
                     onContextMenu={handleFlcsTestContextMenu}
                     title={`FLCS PWR TEST: ${activeSwitches.flcsPwrTest} (Left-click & hold for TEST, Right-click for MAINT)`}
-                    className={`select-none ${isSwitchAllowed('flcsPwrTest') ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
+                    className={`select-none ${isSwitchAllowed('flcsPwrTest') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                   >
                     <ThreeWayLeverToggle
                       position={

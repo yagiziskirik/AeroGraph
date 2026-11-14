@@ -80,7 +80,7 @@ export const EpuPanel: React.FC<EpuPanelProps> = ({
     }
   };
 
-  // Forward cycle (Left click): OFF -> NORM -> ON (clamped, no loop)
+  // Forward cycle (Left click): OFF -> NORM -> ON
   const handleForwardCycle = (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
     if (!isSwitchAllowed('epuSwitch')) return;
@@ -92,7 +92,7 @@ export const EpuPanel: React.FC<EpuPanelProps> = ({
     }
   };
 
-  // Backward cycle (Right click): ON -> NORM -> OFF (clamped, no loop)
+  // Backward cycle (Right click): ON -> NORM -> OFF
   const handleBackwardCycle = (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
     if (!isSwitchAllowed('epuSwitch')) return;
@@ -170,7 +170,7 @@ export const EpuPanel: React.FC<EpuPanelProps> = ({
             />
           </div>
 
-          {/* Middle Section: Vertical EPU Text (Lowered closer to center, slightly above middle) + Green Run Light on Right */}
+          {/* Middle Section: Vertical EPU Text + Green Run Light on Right */}
           <div className="flex items-center justify-between px-1 my-2">
             {/* Vertical EPU Text & Floating (+) Symbol placed just above the middle level */}
             <div className="flex flex-col items-center justify-center pl-0.5 select-none w-4">
@@ -217,7 +217,7 @@ export const EpuPanel: React.FC<EpuPanelProps> = ({
           <div className="flex items-center justify-start pl-0.5 mt-1 mb-1">
             {/* Switch Column */}
             <div className="flex flex-col items-center w-[74px]">
-              {/* ON Label (Top) - Non-clickable */}
+              {/* ON Label (Top) */}
               <span
                 className={`text-[10px] font-black tracking-wider uppercase transition-colors text-center whitespace-nowrap select-none pointer-events-none ${
                   activeSwitchPosition === 'ON'
@@ -266,7 +266,7 @@ export const EpuPanel: React.FC<EpuPanelProps> = ({
                 </div>
               </div>
 
-              {/* OFF Label (Bottom) - Non-clickable */}
+              {/* OFF Label (Bottom) */}
               <span
                 className={`text-[10px] font-black tracking-wider uppercase transition-colors text-center select-none pointer-events-none ${
                   activeSwitchPosition === 'OFF'

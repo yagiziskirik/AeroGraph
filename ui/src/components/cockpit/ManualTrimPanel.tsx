@@ -234,7 +234,7 @@ export const ManualTrimPanel: React.FC<ManualTrimPanelProps> = ({
             </span>
           </div>
 
-          {/* Main Controls Matrix: Seamless Layout (No Grid Dividers) */}
+          {/* Main Controls Matrix: Seamless Layout */}
           <div className="flex-1 flex flex-col justify-between h-[280px]">
             {/* ROW 1: ROLL TRIM (Left) | TRIM / AP DISC Switch (Right) */}
             <div className="grid grid-cols-2 gap-2 h-[134px]">
@@ -390,7 +390,7 @@ export const ManualTrimPanel: React.FC<ManualTrimPanelProps> = ({
 
               {/* Bottom-Right: PITCH TRIM */}
               <div className="flex flex-col items-center justify-between pl-1">
-                {/* Header: — PITCH TRIM — (On ONE line with balanced lines) */}
+                {/* Header: — PITCH TRIM — */}
                 <div className="flex items-center justify-center space-x-1.5 w-full">
                   <div className="w-4 h-[1px] bg-zinc-600/70" />
                   <span className="text-[8.5px] font-black tracking-wider uppercase text-zinc-300 whitespace-nowrap">
@@ -473,7 +473,6 @@ const RollTrimGauge: React.FC<{ value: number }> = ({ value }) => {
   // Needle starts pointing directly Left (along negative X).
   // In SVG, clockwise rotation (+deg) rotates towards negative Y (UP)!
   // Counter-clockwise (-deg) rotates towards positive Y (DOWN)!
-  // True 180° semi-circle: spans from +75° (UP) to -75° (DOWN)
   const needleRotation = -clamped * (75 / 3);
 
   const cx = 38;
@@ -533,7 +532,6 @@ const PitchTrimGauge: React.FC<{ value: number }> = ({ value }) => {
   // Needle starts pointing straight DOWN (along positive Y).
   // Left click (NOSE UP) rotates needle to the LEFT (-deg)!
   // Right click (NOSE DN) rotates needle to the RIGHT (+deg)!
-  // Reversed direction indication
   const needleRotation = -clamped * (75 / 3);
 
   const cx = 50;

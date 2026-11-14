@@ -117,9 +117,9 @@ export const ManualPitchPanel: React.FC<ManualPitchPanelProps> = ({
               onTouchEnd={handleMouseUp}
               onTouchCancel={handleMouseUp}
               onContextMenu={(e) => e.preventDefault()}
-              title={`MANUAL PITCH: ${activeIsOvrd ? 'OVRD' : 'NORM'} (Press and hold left-click for OVRD)`}
+              title={`MANUAL PITCH: ${activeIsOvrd ? 'OVRD' : 'NORM'} ${allowSwitchClick ? '(Press and hold left-click for OVRD)' : '(Hardware Indicator)'}`}
               className={`mx-1 select-none ${
-                allowSwitchClick ? 'cursor-pointer active:scale-95' : 'cursor-default'
+                allowSwitchClick ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'
               }`}
             >
               <HorizontalMpoToggle isOvrd={activeIsOvrd} />

@@ -57,11 +57,11 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
 
   // Helper to determine if a specific switch is allowed to be clicked
   const isSwitchAllowed = (key: keyof FltControlSwitches): boolean => {
-    if (typeof allowSwitchClick === 'boolean' && !allowSwitchClick) return false;
-    if (typeof allowSwitchClick === 'object' && allowSwitchClick[key] !== undefined) {
+    if (typeof allowSwitchClick === 'boolean') return allowSwitchClick;
+    if (typeof allowSwitchClick === 'object') {
       return !!allowSwitchClick[key];
     }
-    if (enabledSwitches && enabledSwitches[key] !== undefined) {
+    if (enabledSwitches) {
       return !!enabledSwitches[key];
     }
     return true;
@@ -232,7 +232,7 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                   }}
                   onContextMenu={(e) => e.preventDefault()}
                   title={`DIGITAL BACKUP: ${activeSwitches.digitalBackup ? 'BACKUP' : 'OFF'} (Left-click for BACKUP, Right-click for OFF)`}
-                  className={`my-1 ${isSwitchAllowed('digitalBackup') ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
+                  className={`my-1 ${isSwitchAllowed('digitalBackup') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                 >
                   <TwoWayToggle isUp={!!activeSwitches.digitalBackup} />
                 </div>
@@ -282,7 +282,7 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                   }}
                   onContextMenu={(e) => e.preventDefault()}
                   title={`ALT FLAPS: ${activeSwitches.altFlaps ? 'EXTEND' : 'NORM'} (Left-click for EXTEND, Right-click for NORM)`}
-                  className={`my-1 ${isSwitchAllowed('altFlaps') ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
+                  className={`my-1 ${isSwitchAllowed('altFlaps') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                 >
                   <TwoWayToggle isUp={!!activeSwitches.altFlaps} />
                 </div>
@@ -336,7 +336,7 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                   }}
                   onContextMenu={(e) => e.preventDefault()}
                   title={`MANUAL TF FLYUP: ${activeSwitches.manualTfFlyup ? 'DISABLE' : 'ENABLE'} (Left-click for DISABLE, Right-click for ENABLE)`}
-                  className={`my-0.5 ${isSwitchAllowed('manualTfFlyup') ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
+                  className={`my-0.5 ${isSwitchAllowed('manualTfFlyup') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                 >
                   <TwoWayToggle isUp={!!activeSwitches.manualTfFlyup} />
                 </div>
@@ -431,7 +431,7 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                   }}
                   onContextMenu={(e) => e.preventDefault()}
                   title={`LE FLAPS: ${activeSwitches.leFlaps ? 'LOCK' : 'AUTO'} (Left-click for LOCK, Right-click for AUTO)`}
-                  className={`my-1 ${isSwitchAllowed('leFlaps') ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
+                  className={`my-1 ${isSwitchAllowed('leFlaps') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                 >
                   <TwoWayToggle isUp={!!activeSwitches.leFlaps} />
                 </div>
@@ -481,7 +481,7 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                     onTouchCancel={handleFlcsResetMouseUp}
                     onContextMenu={(e) => e.preventDefault()}
                     title="FLCS RESET (Momentary): Press and hold left-click to reset FLCS faults"
-                    className={isSwitchAllowed('flcsReset') ? 'cursor-pointer select-none active:scale-95' : 'cursor-default select-none'}
+                    className={isSwitchAllowed('flcsReset') ? 'cursor-pointer select-none active:scale-95' : 'cursor-not-allowed pointer-events-none select-none'}
                   >
                     <TwoWayToggle isUp={!!activeSwitches.flcsReset} isRedCollar={true} />
                   </div>
@@ -541,7 +541,7 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                     }}
                     onContextMenu={(e) => e.preventDefault()}
                     title={`BIT: ${activeSwitches.bit ? 'BIT' : 'OFF'} (Left-click for BIT, Right-click for OFF)`}
-                    className={`my-1 ${isSwitchAllowed('bit') ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
+                    className={`my-1 ${isSwitchAllowed('bit') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                   >
                     <TwoWayToggle isUp={!!activeSwitches.bit} />
                   </div>
