@@ -1040,7 +1040,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
     title: 'Trim Connected & Needle Movement Check',
     phase: 'FLIGHT_CONTROLS',
     whatHappenedLast: 'Trim disconnect verified. Hat produced zero needle motion.',
-    whatToPerformNow: 'Return TRIM/AP switch to NORM, transmit "Connected", listen to Chief call out 6 axis deflections (1.5s each), then manually re-center all trims to zero.',
+    whatToPerformNow: 'Return TRIM/AP switch to NORM, transmit "Connected", listen to Chief call out 6 axis deflections, then manually re-center all trims to zero.',
     whatToExpectNext: 'Chief calls: "Copy." Chief calls out deflections: Nose Up, Nose Down, Roll Left, Roll Right, Yaw Left, Yaw Right (1.5s intervals). Pilot manually re-centers trims.',
     cockpitVisual: {
       panelName: 'MISC PANEL & MANUAL TRIM PANEL',
@@ -1101,7 +1101,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         order: 3,
         label: 'Axis Deflection Sequence with Chief Callouts',
         phaseType: 'EXPECT',
-        description: 'Listen to the Chief call out deflections with 1.5s intervals: "Nose Up", "Nose Down", "Roll Left", "Roll Right", "Yaw Left", "Yaw Right". Observe dials deflect.',
+        description: 'Listen to the Chief call out deflections when you move them (simulated here): "Nose Up", "Nose Down", "Roll Left", "Roll Right", "Yaw Left", "Yaw Right". Observe dials deflect.',
         cockpitPanel: 'Left Console / MANUAL TRIM',
         visualCue: 'Trim pointers deflect clockwise and counter-clockwise matching Chief callouts.',
         interactiveControl: {
