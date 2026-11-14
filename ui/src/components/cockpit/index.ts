@@ -17,4 +17,5 @@ export * from './TacticalDisplayCard';
 export * from './TacticalFlirOverlay';
 export * from './TestPanel';
 export * from './ThrottleQuadrant';
+export * from './TacticalControlInputCard';
 
