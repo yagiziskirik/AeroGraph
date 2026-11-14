@@ -457,6 +457,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         mic_peak_level.clone(),
     );
 
+    // 3c. Dedicated DirectInput Axis Sampler thread (adaptive rate: 60Hz UI active, configured rate tray/background)
+    AxisSampler::spawn_sampling_thread(
+        running.clone(),
+        ui_visible.clone(),
+        shared_config.clone(),
+        shared_profile.clone(),
+        shared_input_snapshot.clone(),
+        mpo_binding_active.clone(),
+        reload_trigger.clone(),
+    );
+
     // 4. Spawn background voice engine thread
     let v_profile = shared_profile.clone();
     let v_config = shared_config.clone();
@@ -2378,13 +2389,8 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
         cfg.pilot_female
     };
     let mut state_engine = StateEngine::new(initial_gender);
-    let mut axis_sampler: Option<AxisSampler> = None;
     let bms_dir = BmsConfig::find_bms_directory();
     log::info!("Falcon BMS directory: {:?}", bms_dir);
-    let cached_bms_cfg = bms_dir
-        .as_ref()
-        .and_then(|d| BmsConfig::load_from_bms(d, None).ok())
-        .unwrap_or_default();
     let mut active_profile_name: Option<String> = None;
     let mut last_compiled_config: Option<Option<String>> = None;
     let mut last_compiled_strings: Option<crate::bms::shared_memory::BmsStringInfo> = None;
@@ -2399,7 +2405,6 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
     let mut last_init_silence: u32 = 0;
     let mut last_chief_engaged = false;
     let mut last_bms_connect_attempt = std::time::Instant::now();
-    let mut last_sampler_attempt = std::time::Instant::now();
     let mut initial_chirp_played = false;
     let mut last_bms_connected = false;
     let mut last_sent_step = String::new();
@@ -2459,10 +2464,6 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
         }
 
         if !controllers_needed {
-            if axis_sampler.is_some() {
-                log::info!("Controllers not required: releasing DirectInput axis sampler");
-                axis_sampler = None;
-            }
             active_profile_name = None;
             last_compiled_config = None;
             thread::sleep(Duration::from_millis(100));
@@ -2514,9 +2515,12 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
 
         let engage = engage_trigger.swap(false, Ordering::SeqCst);
 
-        // Process profile
-        let profile_opt = profile_lock.lock().unwrap();
-        if let Some(loaded) = profile_opt.as_ref() {
+        // Process profile (drop lock immediately so axis sampler and UI IPC are never blocked during speech)
+        let loaded_opt = {
+            let profile_opt = profile_lock.lock().unwrap();
+            profile_opt.as_ref().cloned()
+        };
+        if let Some(loaded) = loaded_opt.as_ref() {
             if engage {
                 log::info!(
                     "🎙️ Manual Crew Chief engagement requested: executing Engage Crew Chief"
@@ -2543,51 +2547,10 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                 active_profile_name = Some(profile_name.clone());
                 log::info!("Loaded profile: {}", profile_name);
                 state_engine.compile_profile_subscriptions(loaded);
-
-                let bms_cfg = if let Some(ref _dir) = bms_dir {
-                    cached_bms_cfg.clone()
-                } else {
-                    BmsConfig::default()
-                };
-                let req_axes = loaded.extract_required_axes();
-                log::info!("Required axes for this profile: {:?}", req_axes);
-                match AxisSampler::new(bms_cfg, &req_axes) {
-                    Ok(mut sampler) => {
-                        sampler.set_mpo_binding(loaded.get_mpo_binding());
-                        log::info!("DirectInput axis sampler initialized successfully");
-                        axis_sampler = Some(sampler);
-                    }
-                    Err(e) => {
-                        log::error!("Failed to initialize DirectInput axis sampler: {:?}", e);
-                        axis_sampler = None;
-                    }
-                }
             }
 
             // Demand-driven sampling: reads ONLY variables subscribed by the profile + mandatory internal variables
             let (_in_3d, _bms_conn, strings) = state_engine.sample_bms(&mut bms_client);
-
-            // Retry initializing DirectInput sampler if disconnected
-            if axis_sampler.is_none() && last_sampler_attempt.elapsed() >= Duration::from_secs(3) {
-                last_sampler_attempt = Instant::now();
-                let bms_cfg = if let Some(ref dir) = bms_dir {
-                    BmsConfig::load_from_bms(dir, None).unwrap_or_default()
-                } else {
-                    BmsConfig::default()
-                };
-                let req_axes = loaded.extract_required_axes();
-                if let Ok(mut sampler) = AxisSampler::new(bms_cfg, &req_axes) {
-                    sampler.set_mpo_binding(loaded.get_mpo_binding());
-                    log::info!("DirectInput axis sampler re-connected successfully");
-                    axis_sampler = Some(sampler);
-                }
-            }
-
-            if profile_changed {
-                if let Some(ref mut sampler) = axis_sampler {
-                    sampler.set_mpo_binding(loaded.get_mpo_binding());
-                }
-            }
 
             let chief_engaged = state_engine.is_chief_engaged();
             let strings_changed = last_compiled_strings.as_ref() != Some(&strings);
@@ -2653,17 +2616,10 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                 last_compiled_strings = Some(strings.clone());
             }
 
-            let mut ptt_com1 = false;
-            let mut ptt_com2 = false;
-            let mut input_vars = std::collections::HashMap::new();
-
-            if let Some(ref mut sampler) = axis_sampler {
-                let snapshot = sampler.sample();
-                *input_lock.lock().unwrap() = snapshot.clone();
-                ptt_com1 = snapshot.ptt_com1_pressed;
-                ptt_com2 = snapshot.ptt_com2_pressed;
-                input_vars = snapshot.active_variables;
-            }
+            let snapshot = input_lock.lock().unwrap().clone();
+            let ptt_com1 = snapshot.ptt_com1_pressed;
+            let ptt_com2 = snapshot.ptt_com2_pressed;
+            let input_vars = snapshot.active_variables;
 
             let (
                 listening_enabled,
@@ -3028,7 +2984,6 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
             }
         }
 
-        drop(profile_opt);
         thread::sleep(poll_interval);
     }
 
