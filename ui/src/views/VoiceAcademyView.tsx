@@ -14,6 +14,8 @@ import {
   SkipForward,
   AlertTriangle,
   ShieldAlert,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Sound } from '../services/sound';
 import { Ipc } from '../services/ipc';
@@ -31,6 +33,64 @@ interface VoiceAcademyViewProps {
   telemetry: TelemetryData;
   initialMode?: 'practice' | 'brevity' | 'manual';
 }
+
+// Deterministic spoken phrase required for each verbal phase in Cockpit Drill
+const getRequiredSpokenPhrase = (
+  stepId: number,
+  substepOrder: number,
+  substepIndex: number,
+  phaseType?: string,
+  primaryCall?: string
+): string | null => {
+  if (stepId === 1 && substepIndex === 3) {
+    return 'LOUD AND CLEAR';
+  }
+  if (phaseType !== 'VERBAL') {
+    return null;
+  }
+  switch (stepId) {
+    case 0:
+      return 'ENGAGE CHIEF';
+    case 1:
+      return substepOrder === 3 ? 'COMMS CHECK' : null;
+    case 2:
+      return substepOrder === 1 ? 'START TWO' : null;
+    case 3:
+      return substepOrder === 2 ? 'CLEAR SEC' : null;
+    case 4:
+      return substepOrder === 1 ? 'SEC GOOD' : null;
+    case 5:
+      return substepOrder === 3 ? 'PULL EPU PIN' : null;
+    case 6:
+      return substepOrder === 1 ? 'CHECK FLOW' : null;
+    case 7:
+      return substepOrder === 2 ? 'FLIGHT CONTROLS CLEAR' : null;
+    case 8:
+      return substepOrder === 1 ? 'CLEAR BIT' : null;
+    case 9:
+      return substepOrder === 2 ? 'READY TRIM' : null;
+    case 10:
+      return substepOrder === 2 ? 'TRIM DISCONNECTED' : null;
+    case 11:
+      return substepOrder === 2 ? 'TRIM CONNECTED' : null;
+    case 12:
+      return substepOrder === 1 ? 'CLEAR BIG MOVEMENTS' : null;
+    case 13:
+      return substepOrder === 1 ? 'DBU STILL CLEAR' : null;
+    case 14:
+      return substepOrder === 1 ? 'READY LEFT BRAKE' : null;
+    case 15:
+      return substepOrder === 1 ? 'READY RIGHT BRAKE' : null;
+    case 16:
+      return substepOrder === 1 ? 'READY AAR DOOR' : null;
+    case 17:
+      return substepOrder === 2 ? 'REMOVE CHOCKS' : null;
+    case 18:
+      return substepOrder === 1 ? 'CLEARED OFF' : null;
+    default:
+      return primaryCall ? primaryCall.toUpperCase() : null;
+  }
+};
 
 export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
   onBack,
@@ -300,7 +360,7 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
     };
   }, [activeMode, activeStep.id, findMatchingBrevityCommand, selectedCategoryName]);
 
-  // Step Navigation in Manual View
+  // Step Navigation in Practice & Manual Views
   const handlePrevStep = () => {
     if (currentStepIndex > 0) {
       Sound.playClick();
@@ -312,9 +372,56 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
   const handleNextStep = () => {
     if (currentStepIndex < RAMP_START_STEPS.length - 1) {
       Sound.playClick();
-      setCurrentStepIndex(currentStepIndex + 1);
+      const nextIdx = currentStepIndex + 1;
+      setCurrentStepIndex(nextIdx);
       setCurrentSubstepIndex(0);
+      if (activeMode === 'practice' && nextIdx > 0) {
+        setChiefEngaged(true);
+      }
     }
+  };
+
+  // Simulated Voice Callout Execution
+  const [isSimulatingSpeech, setIsSimulatingSpeech] = useState(false);
+
+  const requiredSpokenPhrase = useMemo(() => {
+    if (activeMode !== 'practice') return null;
+    return getRequiredSpokenPhrase(
+      activeStep.id,
+      activeSubstep?.order || 1,
+      currentSubstepIndex,
+      activeSubstep?.phaseType,
+      activeStep.pilotSpokenCalls?.primary
+    );
+  }, [
+    activeMode,
+    activeStep.id,
+    activeStep.pilotSpokenCalls?.primary,
+    activeSubstep?.order,
+    activeSubstep?.phaseType,
+    currentSubstepIndex,
+  ]);
+
+  const handleSimulateSpeech = (phraseToSpeak: string) => {
+    if (isSimulatingSpeech) return;
+    setIsSimulatingSpeech(true);
+    Sound.playSwitch();
+    speechCounterRef.current += 1;
+    const clean = phraseToSpeak.trim().toUpperCase();
+    setLastSpeech({
+      id: speechCounterRef.current,
+      phrase: clean,
+      confidence: 99,
+      status: 'VERIFIED',
+      command: clean,
+      group: 'CREW CHIEF',
+    });
+    if (activeStep.id === 0) {
+      setChiefEngaged(true);
+    }
+    setTimeout(() => {
+      setIsSimulatingSpeech(false);
+    }, 1400);
   };
 
   const handleResetChief = () => {
@@ -354,7 +461,13 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-[#0A0A0C] text-zinc-100 select-none overflow-hidden font-sans">
+    <div
+      className={`w-full h-full flex flex-col bg-[#0A0A0C] text-zinc-100 select-none overflow-hidden font-sans ${
+        activeMode === 'practice'
+          ? 'fixed top-11 inset-x-0 bottom-0 z-40'
+          : 'relative'
+      }`}
+    >
       {/* ============================================================== */}
       {/* TACTICAL CONFIRMATION MODAL ON EXIT DURING ACTIVE DRILL        */}
       {/* ============================================================== */}
@@ -417,7 +530,7 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
             )}
             <h1 className="font-mono font-black text-sm text-zinc-100 tracking-wider uppercase">
               {activeMode === 'practice'
-                ? 'COCKPIT VOICE PRACTICE DRILL'
+                ? `STEP ${activeStep.code} • ${activeStep.title.toUpperCase()}`
                 : activeMode === 'brevity'
                 ? 'TACTICAL BREVITY & AGENCIES DIRECTORY'
                 : 'DASH-1 PROCEDURAL CHECKLIST MANUAL'}
@@ -427,12 +540,25 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
 
         {/* Right Status Actions */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-2.5 py-1 bg-zinc-950 border border-zinc-800 rounded font-mono text-xs">
-            <span className="text-zinc-500">PROFILE:</span>
-            <span className="font-bold truncate max-w-[160px] text-zinc-300">
-              {profileName}
-            </span>
-          </div>
+          {activeMode === 'practice' ? (
+            <div className="flex items-center gap-2 px-2.5 py-1 bg-zinc-950 border border-zinc-800 rounded font-mono text-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-zinc-400 font-bold uppercase tracking-wider">
+                PHASE: <span className="text-zinc-100">{activeSubstep?.phaseType || 'DIRECTIVE'}</span>
+              </span>
+              <span className="text-zinc-600">•</span>
+              <span className="text-cyan-400 font-bold">
+                SUBSTEP {currentSubstepIndex + 1}/{activeStep.substeps.length}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-2.5 py-1 bg-zinc-950 border border-zinc-800 rounded font-mono text-xs">
+              <span className="text-zinc-500">PROFILE:</span>
+              <span className="font-bold truncate max-w-[160px] text-zinc-300">
+                {profileName}
+              </span>
+            </div>
+          )}
 
           {activeMode === 'practice' && (
             <button
@@ -486,17 +612,15 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
                   return (
                     <button
                       key={step.id}
-                      disabled={activeMode === 'practice'}
                       onClick={() => {
-                        if (activeMode !== 'practice') {
-                          Sound.playClick();
-                          setCurrentStepIndex(idx);
-                          setCurrentSubstepIndex(0);
+                        Sound.playClick();
+                        setCurrentStepIndex(idx);
+                        setCurrentSubstepIndex(0);
+                        if (activeMode === 'practice' && idx > 0) {
+                          setChiefEngaged(true);
                         }
                       }}
-                      className={`w-full text-left p-2.5 rounded border transition-[background-color,border-color] flex items-center gap-2.5 font-mono text-xs ${
-                        activeMode === 'practice' ? 'cursor-default' : 'cursor-pointer'
-                      } ${
+                      className={`w-full text-left p-2.5 rounded border transition-[background-color,border-color] flex items-center gap-2.5 font-mono text-xs cursor-pointer ${
                         isCurrent
                           ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-bold shadow-sm'
                           : isCompleted
@@ -616,7 +740,7 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
         {/* ============================================================== */}
         {activeMode !== 'manual' && (
           <div
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 pointer-events-auto w-[92%] max-w-5xl"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 pointer-events-auto w-[90%] max-w-3xl xl:max-w-4xl"
             style={{ willChange: 'transform' }}
           >
             <div className="flex items-center justify-between px-6 py-3 rounded-full bg-zinc-900/95 border border-zinc-700/90 shadow-2xl backdrop-blur-md font-mono text-xs">
@@ -651,7 +775,7 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
 
                 <div className="truncate flex items-center gap-2">
                   {lastSpeech.phrase ? (
-                    <>
+                    <div key="speech-active" className="flex items-center gap-2 truncate">
                       <span className="text-zinc-100 font-bold truncate">
                         {`"${lastSpeech.phrase}"`}
                       </span>
@@ -670,17 +794,19 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
                           ? 'GATE LOCKED'
                           : 'PTT REQUIRED'}
                       </span>
-                    </>
+                    </div>
                   ) : (
-                    <span className="text-zinc-500 italic">
-                      {activeMode === 'brevity'
-                        ? 'Hot-mic active • Speak any tactical brevity phrase or callsign...'
-                        : activeStep.id === 1 && currentSubstepIndex === 2
-                        ? 'Speak "Loud and clear" or click Continue to Step 02...'
-                        : chiefEngaged
-                        ? 'Interphone active • Awaiting directive...'
-                        : 'Speak "Engage Chief" to connect intercom...'}
-                    </span>
+                    <div key="speech-idle" className="truncate">
+                      <span className="text-zinc-500 italic">
+                        {activeMode === 'brevity'
+                          ? 'Hot-mic active • Speak any tactical brevity phrase or callsign...'
+                          : activeStep.id === 1 && currentSubstepIndex === 2
+                          ? 'Speak "Loud and clear" or click Continue to Step 02...'
+                          : chiefEngaged
+                          ? 'Interphone active • Awaiting directive...'
+                          : 'Speak "Engage Chief" to connect intercom...'}
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>
@@ -697,6 +823,80 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
               )}
             </div>
           </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TEMPORARY FLOATING STEP NAVIGATION ARROWS & SPEECH BUTTON       */}
+        {/* Rapidly step through Cockpit Drill steps during development   */}
+        {/* ============================================================== */}
+        {(activeMode === 'practice' || activeMode === 'manual') && (
+          <aside
+            aria-label="Temporary Step Navigation"
+            className="fixed bottom-6 left-6 z-50 flex items-center gap-1.5 p-1.5 rounded-full bg-zinc-900/95 border border-cyan-500/40 shadow-2xl backdrop-blur-md font-mono select-none"
+            style={{ willChange: 'transform' }}
+          >
+            <button
+              type="button"
+              onClick={handlePrevStep}
+              disabled={currentStepIndex === 0}
+              aria-label="Previous step"
+              title={
+                currentStepIndex > 0
+                  ? `Previous: [${RAMP_START_STEPS[currentStepIndex - 1]?.code}] ${RAMP_START_STEPS[currentStepIndex - 1]?.title}`
+                  : 'At first step'
+              }
+              className="w-9 h-9 rounded-full bg-zinc-800/90 hover:bg-zinc-700 active:bg-zinc-600 disabled:opacity-30 disabled:hover:bg-zinc-800/90 text-cyan-400 hover:text-cyan-300 disabled:text-zinc-600 flex items-center justify-center transition-[background-color,color] cursor-pointer disabled:cursor-not-allowed border border-zinc-700/80 shrink-0"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            <div className="flex flex-col items-center justify-center px-2 min-w-[76px] leading-tight">
+              <span className="text-[10px] text-zinc-400 font-bold tracking-wider uppercase">
+                STEP {RAMP_START_STEPS[currentStepIndex]?.code || String(currentStepIndex).padStart(2, '0')}
+              </span>
+              <span className="text-[9px] text-cyan-400/80 font-semibold">
+                {activeMode === 'practice'
+                  ? `${currentSubstepIndex + 1}/${activeStep.substeps.length} • ${currentStepIndex + 1}/${RAMP_START_STEPS.length}`
+                  : `${currentStepIndex + 1} / ${RAMP_START_STEPS.length}`}
+              </span>
+            </div>
+
+            {/* Simulated Voice Callout Button (Visible whenever a spoken phrase is required) */}
+            {activeMode === 'practice' && requiredSpokenPhrase && (
+              <button
+                type="button"
+                onClick={() => handleSimulateSpeech(requiredSpokenPhrase)}
+                disabled={isSimulatingSpeech}
+                aria-label={`Say ${requiredSpokenPhrase}`}
+                title={`Transmit simulated voice callout: "${requiredSpokenPhrase}"`}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/25 hover:bg-emerald-500/35 active:bg-emerald-500/45 disabled:opacity-50 border border-emerald-400/60 text-emerald-300 hover:text-emerald-200 font-mono text-xs font-bold tracking-wide transition-[background-color,border-color,color] cursor-pointer disabled:cursor-wait shadow-lg shadow-emerald-950/40"
+              >
+                <Mic
+                  className={`w-3.5 h-3.5 text-emerald-400 shrink-0 ${
+                    isSimulatingSpeech ? 'animate-bounce' : 'animate-pulse'
+                  }`}
+                />
+                <span className="whitespace-nowrap">
+                  {isSimulatingSpeech ? 'TRANSMITTING...' : `SAY "${requiredSpokenPhrase}"`}
+                </span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleNextStep}
+              disabled={currentStepIndex === RAMP_START_STEPS.length - 1}
+              aria-label="Next step"
+              title={
+                currentStepIndex < RAMP_START_STEPS.length - 1
+                  ? `Next: [${RAMP_START_STEPS[currentStepIndex + 1]?.code}] ${RAMP_START_STEPS[currentStepIndex + 1]?.title}`
+                  : 'At last step'
+              }
+              className="w-9 h-9 rounded-full bg-zinc-800/90 hover:bg-zinc-700 active:bg-zinc-600 disabled:opacity-30 disabled:hover:bg-zinc-800/90 text-cyan-400 hover:text-cyan-300 disabled:text-zinc-600 flex items-center justify-center transition-[background-color,color] cursor-pointer disabled:cursor-not-allowed border border-zinc-700/80 shrink-0"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </aside>
         )}
       </div>
     </div>
