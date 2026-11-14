@@ -33,64 +33,6 @@ interface VoiceAcademyViewProps {
   initialMode?: 'practice' | 'brevity' | 'manual';
 }
 
-// Deterministic spoken phrase required for each verbal phase in Cockpit Drill
-const getRequiredSpokenPhrase = (
-  stepId: number,
-  substepOrder: number,
-  substepIndex: number,
-  phaseType?: string,
-  primaryCall?: string
-): string | null => {
-  if (stepId === 1 && substepIndex === 3) {
-    return 'LOUD AND CLEAR';
-  }
-  if (phaseType !== 'VERBAL') {
-    return null;
-  }
-  switch (stepId) {
-    case 0:
-      return 'ENGAGE CHIEF';
-    case 1:
-      return substepOrder === 3 ? 'COMMS CHECK' : null;
-    case 2:
-      return substepOrder === 1 ? 'START TWO' : null;
-    case 3:
-      return substepOrder === 2 ? 'CLEAR SEC' : null;
-    case 4:
-      return substepOrder === 1 ? 'SEC GOOD' : null;
-    case 5:
-      return substepOrder === 3 ? 'PULL EPU PIN' : null;
-    case 6:
-      return substepOrder === 1 ? 'CHECK FLOW' : null;
-    case 7:
-      return substepOrder === 2 ? 'FLIGHT CONTROLS CLEAR' : null;
-    case 8:
-      return substepOrder === 1 ? 'CLEAR BIT' : null;
-    case 9:
-      return substepOrder === 2 ? 'READY TRIM' : null;
-    case 10:
-      return substepOrder === 2 ? 'TRIM DISCONNECTED' : null;
-    case 11:
-      return substepOrder === 2 ? 'TRIM CONNECTED' : null;
-    case 12:
-      return substepOrder === 1 ? 'CLEAR BIG MOVEMENTS' : null;
-    case 13:
-      return substepOrder === 1 ? 'DBU STILL CLEAR' : null;
-    case 14:
-      return substepOrder === 1 ? 'READY LEFT BRAKE' : null;
-    case 15:
-      return substepOrder === 1 ? 'READY RIGHT BRAKE' : null;
-    case 16:
-      return substepOrder === 1 ? 'READY AAR DOOR' : null;
-    case 17:
-      return substepOrder === 2 ? 'REMOVE CHOCKS' : null;
-    case 18:
-      return substepOrder === 1 ? 'CLEARED OFF' : null;
-    default:
-      return primaryCall ? primaryCall.toUpperCase() : null;
-  }
-};
-
 export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
   onBack,
   profileName,
@@ -335,10 +277,15 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
                 setSelectedCategoryName(match.categoryName);
               }
               setTimeout(() => {
-                const safeId = `brevity-cmd-${match.categoryName.replace(/[^a-zA-Z0-9_-]/g, '_')}--${match.commandName.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-                const el = document.getElementById(safeId);
-                if (el) {
-                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const highlightedEl = document.querySelector('[data-brevity-highlight="true"]');
+                if (highlightedEl) {
+                  highlightedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else {
+                  const safeId = `brevity-cmd-${match.categoryName.replace(/[^a-zA-Z0-9_-]/g, '_')}--${match.commandName.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+                  const el = document.getElementById(safeId);
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
                 }
               }, 120);
             }
@@ -378,49 +325,6 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
         setChiefEngaged(true);
       }
     }
-  };
-
-  // Simulated Voice Callout Execution
-  const [isSimulatingSpeech, setIsSimulatingSpeech] = useState(false);
-
-  const requiredSpokenPhrase = useMemo(() => {
-    if (activeMode !== 'practice') return null;
-    return getRequiredSpokenPhrase(
-      activeStep.id,
-      activeSubstep?.order || 1,
-      currentSubstepIndex,
-      activeSubstep?.phaseType,
-      activeStep.pilotSpokenCalls?.primary
-    );
-  }, [
-    activeMode,
-    activeStep.id,
-    activeStep.pilotSpokenCalls?.primary,
-    activeSubstep?.order,
-    activeSubstep?.phaseType,
-    currentSubstepIndex,
-  ]);
-
-  const handleSimulateSpeech = (phraseToSpeak: string) => {
-    if (isSimulatingSpeech) return;
-    setIsSimulatingSpeech(true);
-    Sound.playSwitch();
-    speechCounterRef.current += 1;
-    const clean = phraseToSpeak.trim().toUpperCase();
-    setLastSpeech({
-      id: speechCounterRef.current,
-      phrase: clean,
-      confidence: 99,
-      status: 'VERIFIED',
-      command: clean,
-      group: 'CREW CHIEF',
-    });
-    if (activeStep.id === 0) {
-      setChiefEngaged(true);
-    }
-    setTimeout(() => {
-      setIsSimulatingSpeech(false);
-    }, 1400);
   };
 
   const handleAdvanceStep = useCallback((nextStepIdx: number) => {
@@ -618,15 +522,19 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
                   return (
                     <button
                       key={step.id}
-                      onClick={() => {
-                        Sound.playClick();
-                        setCurrentStepIndex(idx);
-                        setCurrentSubstepIndex(0);
-                        if (activeMode === 'practice' && idx > 0) {
-                          setChiefEngaged(true);
-                        }
-                      }}
-                      className={`w-full text-left p-2.5 rounded border transition-[background-color,border-color] flex items-center gap-2.5 font-mono text-xs cursor-pointer ${
+                      disabled={activeMode !== 'manual'}
+                      onClick={
+                        activeMode === 'manual'
+                          ? () => {
+                              Sound.playClick();
+                              setCurrentStepIndex(idx);
+                              setCurrentSubstepIndex(0);
+                            }
+                          : undefined
+                      }
+                      className={`w-full text-left p-2.5 rounded border transition-[background-color,border-color] flex items-center gap-2.5 font-mono text-xs ${
+                        activeMode === 'manual' ? 'cursor-pointer hover:border-zinc-700' : 'cursor-default'
+                      } ${
                         isCurrent
                           ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-bold shadow-sm'
                           : isCompleted
@@ -829,78 +737,6 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
         )}
 
         {/* ============================================================== */}
-        {/* TEMPORARY FLOATING STEP NAVIGATION ARROWS & SPEECH BUTTON       */}
-        {/* Rapidly step through Cockpit Drill steps during development   */}
-        {/* ============================================================== */}
-        {(activeMode === 'practice' || activeMode === 'manual') && (
-          <aside
-            aria-label="Temporary Step Navigation"
-            className="fixed bottom-6 left-6 z-50 flex items-center gap-1.5 p-1.5 rounded-full bg-zinc-900/95 border border-cyan-500/40 shadow-2xl backdrop-blur-md font-mono select-none"
-            style={{ willChange: 'transform' }}
-          >
-            <button
-              type="button"
-              onClick={handlePrevStep}
-              disabled={currentStepIndex === 0}
-              aria-label="Previous step"
-              title={
-                currentStepIndex > 0
-                  ? `Previous: [${RAMP_START_STEPS[currentStepIndex - 1]?.code}] ${RAMP_START_STEPS[currentStepIndex - 1]?.title}`
-                  : 'At first step'
-              }
-              className="w-9 h-9 rounded-full bg-zinc-800/90 hover:bg-zinc-700 active:bg-zinc-600 disabled:opacity-30 disabled:hover:bg-zinc-800/90 text-cyan-400 hover:text-cyan-300 disabled:text-zinc-600 flex items-center justify-center transition-[background-color,color] cursor-pointer disabled:cursor-not-allowed border border-zinc-700/80 shrink-0"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-
-            <div className="flex flex-col items-center justify-center px-2 min-w-[76px] leading-tight">
-              <span className="text-[10px] text-zinc-400 font-bold tracking-wider uppercase">
-                STEP {RAMP_START_STEPS[currentStepIndex]?.code || String(currentStepIndex).padStart(2, '0')}
-              </span>
-              <span className="text-[9px] text-cyan-400/80 font-semibold">
-                {activeMode === 'practice'
-                  ? `${currentSubstepIndex + 1}/${activeStep.substeps.length} • ${currentStepIndex + 1}/${RAMP_START_STEPS.length}`
-                  : `${currentStepIndex + 1} / ${RAMP_START_STEPS.length}`}
-              </span>
-            </div>
-
-            {/* Simulated Voice Callout Button (Visible whenever a spoken phrase is required) */}
-            {activeMode === 'practice' && requiredSpokenPhrase && (
-              <button
-                type="button"
-                onClick={() => handleSimulateSpeech(requiredSpokenPhrase)}
-                disabled={isSimulatingSpeech}
-                aria-label={`Say ${requiredSpokenPhrase}`}
-                title={`Transmit simulated voice callout: "${requiredSpokenPhrase}"`}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/25 hover:bg-emerald-500/35 active:bg-emerald-500/45 disabled:opacity-50 border border-emerald-400/60 text-emerald-300 hover:text-emerald-200 font-mono text-xs font-bold tracking-wide transition-[background-color,border-color,color] cursor-pointer disabled:cursor-wait shadow-lg shadow-emerald-950/40"
-              >
-                <Mic
-                  className={`w-3.5 h-3.5 text-emerald-400 shrink-0 ${
-                    isSimulatingSpeech ? 'animate-bounce' : 'animate-pulse'
-                  }`}
-                />
-                <span className="whitespace-nowrap">
-                  {isSimulatingSpeech ? 'TRANSMITTING...' : `SAY "${requiredSpokenPhrase}"`}
-                </span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={handleNextStep}
-              disabled={currentStepIndex === RAMP_START_STEPS.length - 1}
-              aria-label="Next step"
-              title={
-                currentStepIndex < RAMP_START_STEPS.length - 1
-                  ? `Next: [${RAMP_START_STEPS[currentStepIndex + 1]?.code}] ${RAMP_START_STEPS[currentStepIndex + 1]?.title}`
-                  : 'At last step'
-              }
-              className="w-9 h-9 rounded-full bg-zinc-800/90 hover:bg-zinc-700 active:bg-zinc-600 disabled:opacity-30 disabled:hover:bg-zinc-800/90 text-cyan-400 hover:text-cyan-300 disabled:text-zinc-600 flex items-center justify-center transition-[background-color,color] cursor-pointer disabled:cursor-not-allowed border border-zinc-700/80 shrink-0"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </aside>
-        )}
       </div>
     </div>
   );
