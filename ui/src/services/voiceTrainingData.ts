@@ -68,8 +68,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
     whatToExpectNext: 'Headset chime sounds; Chief confirms interphone hot-mic circuit is established.',
     cockpitVisual: {
       panelName: 'LEFT FORWARD FUSELAGE / CANOPY SILL',
-      subSystem: 'Ground Communications Interphone Receptacle',
-      focalControls: ['Interphone Receptacle Door', 'Ground Headset Cord', 'Canopy Sill']
+      subSystem: 'External Ground Interphone Receptacle',
+      focalControls: ['Interphone Receptacle Door', 'Ground Headset Cord', 'Canopy Left Sill']
     },
     pilotSpokenCalls: {
       primary: 'Engage Chief',
@@ -84,8 +84,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Ground Interphone Hot-Mic Keying',
         phaseType: 'VERBAL',
         description: 'Initiate communication with the crew chief. Speak the voice trigger into the microphone.',
-        cockpitPanel: 'Left Sill / Audio 1',
-        visualCue: 'Speech waveform active; audio visualizer responds to voice.',
+        cockpitPanel: 'External Fuselage / Canopy Left Sill',
+        visualCue: 'External interphone circuit closed; hot-mic intercom link verified with ground personnel.',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'TRANSMIT TRIGGER',
@@ -109,7 +109,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
     whatToPerformNow: 'Set MAIN PWR switch to MAIN PWR, verify generator and FLCS caution lamps, then transmit Comms Check.',
     whatToExpectNext: 'You will contact with the Crew Chief after energising the aircraft.',
     cockpitVisual: {
-      panelName: 'RIGHT REAR CONSOLE / ELEC PANEL',
+      panelName: 'RIGHT FORWARD CONSOLE / ELEC PANEL',
       subSystem: 'Electrical Power Distribution & Audio 1',
       focalControls: ['MAIN PWR Switch', 'MAIN PWR Guard', 'MAIN GEN Lamp', 'STBY GEN Lamp']
     },
@@ -126,7 +126,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'MAIN PWR Switch to MAIN PWR',
         phaseType: 'ACTION',
         description: 'Set MAIN PWR switch to MAIN PWR on the Electrical Power Panel.',
-        cockpitPanel: 'Right Rear Console / ELEC Panel',
+        cockpitPanel: 'Right Forward Console / ELEC Panel',
         visualCue: 'MAIN GEN, STBY GEN, and FLCS RLY lamps illuminate.',
         interactiveControl: {
           type: 'MOCK_SWITCH',
@@ -161,7 +161,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         phaseType: 'VERBAL',
         description: 'Verify audio transmission clarity with the Crew Chief over the ground interphone line.',
         cockpitPanel: 'Left Console / AUDIO 1 Panel',
-        visualCue: 'Intercom VU meter reads active audio signal.',
+        visualCue: 'Ground intercom voice transmission received 5x5 loud and clear.',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'TRANSMIT COMMS CHECK',
@@ -177,7 +177,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         phaseType: 'ACTION',
         description: 'Chief confirmed loud and clear. Speak "Loud and clear" into microphone to acknowledge, or click Continue to proceed to How\'s Chief.',
         cockpitPanel: 'Left Console / AUDIO 1 Panel',
-        visualCue: 'Chief online on ground headset. Interphone comms established 5x5.',
+        visualCue: 'Ground interphone comms positive; Chief standing by for JFS start callout.',
         interactiveControl: {
           type: 'MOCK_BUTTON',
           label: 'CONTINUE TO HOW\'S CHIEF',
@@ -193,7 +193,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         phaseType: 'ACTION',
         description: "Inquire after the Crew Chief over the ground interphone line to verify conversational fidelity before turbine start.",
         cockpitPanel: 'Left Console / AUDIO 1 Panel',
-        visualCue: 'Crew Chief Solotürk visual display card active on tactical monitor.',
+        visualCue: 'Interphone conversational fidelity confirmed with Crew Chief.',
         interactiveControl: {
           type: 'MOCK_BUTTON',
           label: 'CONTINUE TO STEP 02',
@@ -244,8 +244,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Turbine Hazard Briefing & Start Authorization',
         phaseType: 'VERBAL',
         description: 'Speak "Ready Start Two" to request JFS start clearance from the Chief.',
-        cockpitPanel: 'Left Aux Console / Warning Placards',
-        visualCue: 'Hazard chevrons active; Chief confirms "Clear for Start Two" after 4.0s delay.',
+        cockpitPanel: 'Left Aux Console / ENG & JET START',
+        visualCue: 'Engine intake and exhaust danger zones clear of ground personnel; Chief confirms "Clear for Start Two."',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'START TWO CALLOUT',
@@ -336,9 +336,9 @@ export const RAMP_START_STEPS: RampStartStep[] = [
     whatToPerformNow: 'Wait 30s in idle, hold toe brakes, request SEC check ("Clear SEC"), set ENG CONT to SEC, confirm nozzle closes, and spool to 73% RPM.',
     whatToExpectNext: 'Chief calls: "Ready for SEC check." Nozzle closes < 5%. Engine accelerates linearly to 73% RPM minimum in SEC mode.',
     cockpitVisual: {
-      panelName: 'LEFT EYEBROW & RUDDER TOE BRAKES',
-      subSystem: 'Digital Engine Control / Backup Hydromechanical Unit',
-      focalControls: ['ENG CONT Switch (SEC)', 'ENG CONT Guard', 'SEC Caution Lamp', 'NOZZLE Position Gauge', 'Toe Brakes']
+      panelName: 'LEFT CONSOLE (ENG & JET START) & PEDESTAL',
+      subSystem: 'Digital Engine Electronic Control / Backup Hydromechanical Unit',
+      focalControls: ['ENG CONT Switch (SEC)', 'ENG CONT Guard', 'SEC Caution Lamp (Left Eyebrow)', 'NOZZLE Position Indicator', 'Toe Brakes']
     },
     pilotSpokenCalls: {
       primary: 'Clear SEC',
@@ -363,8 +363,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: '30-Second IDLE Stabilization Requirement',
         phaseType: 'VERIFY',
         description: 'Dash-1 mandates engine must remain in IDLE for at least 30 seconds before selecting SEC to allow hydraulic and oil pressures to equilibrate.',
-        cockpitPanel: 'Center Pedestal / Chronometer',
-        visualCue: '30-second countdown timer active.',
+        cockpitPanel: 'Center Pedestal / Engine Instruments',
+        visualCue: 'Engine stabilized at idle for 30 seconds; bearing temperatures and oil pressure equilibrated.',
         interactiveControl: {
           type: 'TIMER_COUNTDOWN',
           durationSeconds: 30,
@@ -380,8 +380,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Toe Brake Hold & SEC Authorization Callout',
         phaseType: 'VERBAL',
         description: 'Depress toe brakes firmly to hold aircraft. Speak "Clear SEC" to coordinate the check with the Chief.',
-        cockpitPanel: 'Rudder Footwell / Left Sill',
-        visualCue: 'Brake deflection meter registers firm application (inverted axis aligned with HardwareView).',
+        cockpitPanel: 'Rudder Footwell & Intercom',
+        visualCue: 'Differential toe brake pedals depressed firmly; aircraft held stationary against idle thrust.',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'CLEAR SEC CALLOUT',
@@ -396,9 +396,9 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         order: 3,
         label: 'ENG CONT Switch to SEC & Nozzle Closure',
         phaseType: 'ACTION',
-        description: 'Lift the red safety guard on the Left Eyebrow and flip the ENG CONT switch from PRI to SEC.',
-        cockpitPanel: 'Left Eyebrow Panel',
-        visualCue: 'Amber SEC caution lamp illuminates; NOZZLE % needle drops from 100% to < 5%.',
+        description: 'Lift the red safety guard on the Left Console Engine Panel and flip the ENG CONT switch from PRI to SEC.',
+        cockpitPanel: 'Left Console / ENG & JET START Panel',
+        visualCue: 'Amber SEC caution lamp illuminates on Left Eyebrow; NOZZLE % pointer drops from 100% to < 5%.',
         interactiveControl: {
           type: 'MOCK_SWITCH',
           switchPositions: ['PRI', 'SEC'],
@@ -414,8 +414,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Mandatory Toe Brakes Hold',
         phaseType: 'ACTION',
         description: 'Depress both toe brake pedals firmly to ensure aircraft remains stationary prior to advancing throttle to 73% RPM.',
-        cockpitPanel: 'Rudder Footwell / Left Eyebrow',
-        visualCue: 'Toe brake deflection bars register firm application.',
+        cockpitPanel: 'Rudder Footwell (Toe Brakes)',
+        visualCue: 'Both toe brake pedals held firmly depressed to prevent aircraft forward creep.',
         interactiveControl: {
           type: 'VERIFICATION',
           label: 'BRAKES HELD',
@@ -429,7 +429,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Hydromechanical Fuel Spool to 73% RPM Minimum',
         phaseType: 'ACTION',
         description: 'Hold toe brakes firmly. Advance throttle forward until Tachometer reaches ≥ 73% RPM to verify hydromechanical fuel control.',
-        cockpitPanel: 'Throttle Quadrant & Center Pedestal',
+        cockpitPanel: 'Left Console (Throttle) & Center Pedestal',
         visualCue: 'Tachometer sweeps past 73% RPM target arc without hesitation or surging.',
         interactiveControl: {
           type: 'MOCK_BUTTON',
@@ -444,7 +444,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Retard to IDLE & Closed Nozzle Verification',
         phaseType: 'VERIFY',
         description: 'Retard throttle back to IDLE. Verify engine returns smoothly to idle speed and NOZZLE needle remains tightly closed at < 5%.',
-        cockpitPanel: 'Throttle Quadrant & Center Pedestal',
+        cockpitPanel: 'Left Console (Throttle) & Center Pedestal',
         visualCue: 'RPM settles back to 65%; NOZZLE needle rests at < 5%.',
         interactiveControl: {
           type: 'VERIFICATION',
@@ -468,9 +468,9 @@ export const RAMP_START_STEPS: RampStartStep[] = [
     whatToPerformNow: 'Transmit "SEC Good", switch ENG CONT back to PRI, close guard, and confirm nozzle opens to 100%.',
     whatToExpectNext: 'Chief acknowledges: "Copy." SEC lamp turns off. Nozzle blooms wide open to 100% with air motor sound.',
     cockpitVisual: {
-      panelName: 'LEFT EYEBROW & CENTER PEDESTAL',
+      panelName: 'LEFT CONSOLE (ENG & JET START) & PEDESTAL',
       subSystem: 'Engine Digital Electronic Control (DEC/EEC)',
-      focalControls: ['ENG CONT Switch (PRI)', 'ENG CONT Guard (Down)', 'SEC Caution Lamp (Extinguished)', 'NOZZLE Position Gauge (100%)']
+      focalControls: ['ENG CONT Switch (PRI)', 'ENG CONT Guard (Down)', 'SEC Caution Lamp (Extinguished)', 'NOZZLE Position Indicator (100%)']
     },
     pilotSpokenCalls: {
       primary: 'SEC Good',
@@ -490,8 +490,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Verbal Transmission "SEC Good"',
         phaseType: 'VERBAL',
         description: 'Inform the crew chief that the SEC check is good while still in SEC mode. Speak "SEC Good".',
-        cockpitPanel: 'Left Console / HOTAS Mic',
-        visualCue: 'Speech recognized; Chief acknowledges "Copy" after 2.0s delay.',
+        cockpitPanel: 'Left Console / Intercom',
+        visualCue: 'Pilot transmits SEC Good; Chief acknowledges "Copy."',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'TRANSMIT SEC GOOD',
@@ -506,9 +506,9 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         order: 2,
         label: 'Revert ENG CONT to PRI & Lower Guard',
         phaseType: 'ACTION',
-        description: 'Snap the ENG CONT toggle switch back to PRI and seat the red mechanical safety guard flush DOWN.',
-        cockpitPanel: 'Left Eyebrow Panel',
-        visualCue: 'Amber SEC caution lamp extinguishes completely.',
+        description: 'Snap the ENG CONT toggle switch back to PRI on the Left Console and seat the red mechanical safety guard flush DOWN.',
+        cockpitPanel: 'Left Console / ENG & JET START Panel',
+        visualCue: 'ENG CONT switch seated in PRI and guard lowered flush; amber SEC caution lamp extinguishes on Left Eyebrow.',
         interactiveControl: {
           type: 'MOCK_SWITCH',
           switchPositions: ['PRI', 'SEC'],
@@ -526,7 +526,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         phaseType: 'EXPECT',
         description: 'Observe the Convergent Exhaust Nozzle Control (CENC) motor driving the exhaust petals open from < 5% to 100%.',
         cockpitPanel: 'Center Pedestal / NOZZLE Indicator',
-        visualCue: 'NOZZLE pointer swings rapidly from 0% past 80% to 100%.',
+        visualCue: 'Convergent exhaust nozzle petals drive open; NOZZLE pointer swings open to 100%.',
         interactiveControl: {
           type: 'VERIFICATION',
           label: 'NOZZLE OPEN',
@@ -542,7 +542,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         phaseType: 'ACTION',
         description: 'Release toe brake pedal pressure. Aircraft rests securely on wheel chocks in PRI idle.',
         cockpitPanel: 'Rudder Footwell',
-        visualCue: 'Toe brake deflection returns to zero.',
+        visualCue: 'Toe brake pressure released; aircraft secure on wheel chocks in PRI idle.',
         interactiveControl: {
           type: 'VERIFICATION',
           label: 'BRAKES RELEASED',
@@ -566,7 +566,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
     whatToPerformNow: 'Confirm EPU lamps are dark, set EPU switch to OFF, request pin removal ("Pull EPU Pin"), then arm EPU to NORM.',
     whatToExpectNext: 'Chief calls: "Copy." Chief pulls the EPU ground safety pin with red streamer from the right forward strake.',
     cockpitVisual: {
-      panelName: 'LEFT CONSOLE & RIGHT FORWARD STRAKE',
+      panelName: 'LEFT CONSOLE (EPU PANEL) & RIGHT FORWARD STRAKE',
       subSystem: 'Emergency Power Unit (EPU) Hydrazine Turbine',
       focalControls: ['EPU Switch (OFF / NORM / ON)', 'EPU GEN Lamp', 'EPU PMG Lamp', 'Ground Safety Lock Pin']
     },
@@ -590,7 +590,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         phaseType: 'VERIFY',
         description: 'Verify both EPU GEN and EPU PMG rectangular annunciator lights are completely dark before ground crew approaches the strake.',
         cockpitPanel: 'Left Console / EPU Panel',
-        visualCue: 'Lamps completely unlit.',
+        visualCue: 'EPU GEN and EPU PMG annunciators verified dark (unlit).',
         interactiveControl: {
           type: 'VERIFICATION',
           label: 'LAMPS DARK',
@@ -606,7 +606,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         phaseType: 'ACTION',
         description: 'Flip the EPU switch to OFF. This electrically isolates the hydrazine catalytic starter valve while ground crew pulls the pin.',
         cockpitPanel: 'Left Console / EPU Panel',
-        visualCue: 'Switch toggle seated in down OFF position.',
+        visualCue: 'EPU toggle switch seated in down OFF position.',
         interactiveControl: {
           type: 'MOCK_SWITCH',
           switchPositions: ['OFF', 'NORM', 'ON'],
@@ -623,8 +623,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Verbal Callout "Pull EPU Pin" & Ground Action',
         phaseType: 'VERBAL',
         description: 'Authorize the crew chief to pull the physical ground safety pin. Speak "Pull EPU Pin" into the microphone.',
-        cockpitPanel: 'Left Console / HOTAS Mic',
-        visualCue: 'Chief acknowledges "Copy"; ground pin with red "REMOVE BEFORE FLIGHT" streamer removed.',
+        cockpitPanel: 'Left Console / Intercom',
+        visualCue: 'Chief acknowledges "Copy"; ground pin with red "REMOVE BEFORE FLIGHT" streamer removed from right strake.',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'PULL PIN CALLOUT',
@@ -641,7 +641,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         phaseType: 'ACTION',
         description: 'Move the EPU switch up to NORM and seat the toggle guard. EPU is now armed for automated actuation in flight.',
         cockpitPanel: 'Left Console / EPU Panel',
-        visualCue: 'Switch locked in center NORM position.',
+        visualCue: 'EPU switch locked in center NORM position under safety guard.',
         interactiveControl: {
           type: 'MOCK_SWITCH',
           switchPositions: ['OFF', 'NORM', 'ON'],
@@ -667,7 +667,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
     whatToPerformNow: 'Check flow ("Check Flow"), depress toe brakes firmly, spool engine to 80-85% RPM, hold EPU/GEN TEST switch for 5s, verify EPU RUN light, and retard throttle.',
     whatToExpectNext: 'Chief calls: "No flow" (1.5s delay). Green EPU RUN light illuminates during 5s test. Retard throttle to idle.',
     cockpitVisual: {
-      panelName: 'LEFT AUX CONSOLE & TEST PANEL',
+      panelName: 'LEFT CONSOLE (TEST & EPU PANELS) & THROTTLE',
       subSystem: 'EPU Bleed Air Turbine & TEST Panel',
       focalControls: ['EPU/GEN TEST Switch', 'EPU RUN Light (Green)', 'AIR Light (Amber)', 'Throttle (80-85% RPM)', 'Toe Brakes']
     },
@@ -693,7 +693,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Pre-Avionics Caution & Flow Clearance Callout',
         phaseType: 'VERBAL',
         description: 'Warn chief before spooling engine. Speak "Check Flow" into microphone.',
-        cockpitPanel: 'Left Console / HOTAS Mic',
+        cockpitPanel: 'Left Console / Intercom',
         visualCue: 'Chief replies "No flow" after 1.5s delay (confirming no uncommanded hydrazine leaks).',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
@@ -709,8 +709,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Mandatory Toe Brakes Hold',
         phaseType: 'ACTION',
         description: 'Depress both toe brake pedals firmly to ensure aircraft remains stationary prior to high engine run-up (80-85% RPM).',
-        cockpitPanel: 'Rudder Footwell & Throttle Quadrant',
-        visualCue: 'Toe brake deflection bars register firm application.',
+        cockpitPanel: 'Rudder Footwell',
+        visualCue: 'Both toe brake pedals held firmly depressed prior to engine spool.',
         interactiveControl: {
           type: 'VERIFICATION',
           label: 'BRAKES HELD',
@@ -724,8 +724,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Spool to 80-85% RPM',
         phaseType: 'ACTION',
         description: 'Advance throttle forward to 80–85% RPM to generate bleed air pressure for the EPU turbine.',
-        cockpitPanel: 'Throttle Quadrant & Center Pedestal',
-        visualCue: 'Tachometer needle stabilizes between 80% and 85% RPM.',
+        cockpitPanel: 'Left Console (Throttle) & Center Pedestal',
+        visualCue: 'Tachometer advances to 80-85% RPM to supply 13th-stage bleed air pressure.',
         interactiveControl: {
           type: 'MOCK_BUTTON',
           label: 'SPOOL TO ~82% RPM',
@@ -739,8 +739,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'EPU/GEN TEST Switch Actuation (5s Countdown)',
         phaseType: 'ACTION',
         description: 'Click and hold the spring-loaded EPU/GEN TEST switch in the TEST position for 5 seconds.',
-        cockpitPanel: 'Left Aux Console / TEST Panel',
-        visualCue: '5-second countdown fills; green EPU RUN lamp illuminates solid; amber AIR lamp illuminates.',
+        cockpitPanel: 'Left Console / TEST Panel',
+        visualCue: 'EPU/GEN TEST switch held in TEST for 5 seconds; green EPU RUN and amber AIR lamps illuminate.',
         interactiveControl: {
           type: 'TIMER_COUNTDOWN',
           durationSeconds: 5,
@@ -755,8 +755,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Throttle Retard to IDLE & Lamp Extinguishment',
         phaseType: 'VERIFY',
         description: 'Release test switch. Retard throttle back to IDLE (~65% RPM). Release toe brakes. Verify green EPU RUN light extinguishes.',
-        cockpitPanel: 'Throttle Quadrant & TEST Panel',
-        visualCue: 'RPM settles to 65%; EPU RUN and AIR lamps turn dark.',
+        cockpitPanel: 'Left Console (Throttle) & TEST Panel',
+        visualCue: 'RPM settles to 65%; EPU RUN and AIR lamps extinguish.',
         interactiveControl: {
           type: 'VERIFICATION',
           label: 'RETARD TO IDLE',
@@ -796,8 +796,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Authentic Canopy Perimeter Clearance Scan',
         phaseType: 'VERIFY',
         description: 'Visually scan out canopy left and right. Confirm all ground personnel have stepped back beyond the 6-foot wingtip clearance perimeter.',
-        cockpitPanel: 'Canopy Field of View',
-        visualCue: 'Chief outside port wingtip giving thumbs-up; safety boundary clear.',
+        cockpitPanel: 'Cockpit Canopy / Left & Right Wings',
+        visualCue: 'Ground personnel standing clear outside 6-foot wingtip and tail perimeter; Chief confirms clear.',
         interactiveControl: {
           type: 'VERIFICATION',
           label: 'PERIMETER CLEAR',
@@ -813,8 +813,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Verbal Transmission "Flight Controls Clear"',
         phaseType: 'VERBAL',
         description: 'Transmit flight controls clearance to the Chief over the ground interphone line. Speak "Flight Controls Clear".',
-        cockpitPanel: 'Left Console / HOTAS Mic',
-        visualCue: 'Chief acknowledges "Flight controls clear."',
+        cockpitPanel: 'Left Console / Intercom',
+        visualCue: 'Chief confirms: "Speedbrakes, flight controls clear."',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'CONTROLS CLEAR CALLOUT',
@@ -827,8 +827,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Pre-BIT Controls Exercise & Warm-Up (15–20s)',
         phaseType: 'ACTION',
         description: 'Wiggle flight controls freely for 15–20 seconds. This warms up hydraulic fluid and exercises all FLCS servoactuators before running the Built-In Test.',
-        cockpitPanel: 'Cockpit Flight Controls / Stick & Pedals',
-        visualCue: 'Stick and rudder deflect smoothly; hydraulic fluid circulation warms servo valves.',
+        cockpitPanel: 'Flight Stick & Rudder Pedals',
+        visualCue: 'Flight stick and pedals cycled freely for 15-20 seconds to warm hydraulic fluid and FLCS servoactuators.',
         interactiveControl: {
           type: 'MOCK_BUTTON',
           label: 'COMPLETE 15-20S WARM-UP',
@@ -850,9 +850,9 @@ export const RAMP_START_STEPS: RampStartStep[] = [
     whatToPerformNow: 'Authorize BIT ("Clear BIT"), click FLCS BIT switch to BIT, keep hands and feet off controls (Simulator: 45s; condensed to 15s in trainer), verify green RUN light, and check FAIL light dark.',
     whatToExpectNext: 'Chief calls: "Cleared for BIT." Switch magnetically latches in BIT. Surfaces animate automated sweep. Switch returns to OFF after 45s.',
     cockpitVisual: {
-      panelName: 'LEFT AUX CONSOLE / TEST PANEL',
+      panelName: 'LEFT CONSOLE (FLT CONTROL PANEL)',
       subSystem: 'Quadruplex Digital Flight Control System (FLCS)',
-      focalControls: ['FLCS BIT Switch (Magnetic Latch)', 'FLCS RUN Light (Green)', 'FLCS FAIL Light (Amber)', 'Flaperons', 'Stabilators', 'Rudder']
+      focalControls: ['FLCS BIT Switch (Magnetic Latch)', 'FLCS RUN Light (Green)', 'FLCS FAIL Light (Amber)', 'FLCS Power Panel']
     },
     pilotSpokenCalls: {
       primary: 'Clear BIT',
@@ -873,8 +873,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Verbal Authorization "Clear BIT"',
         phaseType: 'VERBAL',
         description: 'Coordinate the automated BIT cycle with the Chief. Speak "Clear BIT" into the microphone.',
-        cockpitPanel: 'Left Console / HOTAS Mic',
-        visualCue: 'Chief acknowledges "Cleared for BIT."',
+        cockpitPanel: 'Left Console / Intercom',
+        visualCue: 'Chief acknowledges: "Cleared for BIT."',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'CLEAR BIT CALLOUT',
@@ -890,8 +890,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'FLCS BIT Switch Magnetic Latch',
         phaseType: 'ACTION',
         description: 'Click the FLCS BIT switch to snap to BIT. The switch magnetically latches in position and the green RUN light illuminates. (Note: FLCS BIT runs 45 seconds in the simulator/aircraft; condensed to 15 seconds in this trainer).',
-        cockpitPanel: 'Left Aux Console / TEST Panel',
-        visualCue: 'Switch holds magnetically; circular green RUN lamp illuminates solid.',
+        cockpitPanel: 'Left Console / FLT CONTROL Panel',
+        visualCue: 'FLCS BIT switch magnetically latches in BIT position; green RUN light illuminates solid.',
         interactiveControl: {
           type: 'MOCK_BUTTON',
           label: 'TRIGGER FLCS BIT',
@@ -906,8 +906,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Hands-Off 45-Second Surface Sweep Cycle',
         phaseType: 'EXPECT',
         description: 'Keep hands and feet completely off controls for 45 seconds while the FLCS runs sequential deflections: Flaperons (0-15s), Stabilators (15-30s), Rudder & LEFs (30-45s).',
-        cockpitPanel: 'External Aircraft Flight Surfaces',
-        visualCue: '45-second circular progress ring fills as surfaces cycle through automated patterns.',
+        cockpitPanel: 'Flight Controls / External Control Surfaces',
+        visualCue: 'Hands and feet off controls; FLCS executes automated surface sweep (flaperons, stabilators, rudder, LEFs).',
         interactiveControl: {
           type: 'TIMER_COUNTDOWN',
           durationSeconds: 45,
@@ -923,8 +923,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Test Pass Lamp Verification',
         phaseType: 'VERIFY',
         description: 'Verify FLCS BIT switch snaps magnetically back to OFF. Green RUN lamp extinguishes. Verify amber FAIL lamp remains unlit.',
-        cockpitPanel: 'Left Aux Console / TEST Panel',
-        visualCue: 'Switch returns to OFF; green RUN lamp dark; amber FAIL lamp dark.',
+        cockpitPanel: 'Left Console / FLT CONTROL Panel',
+        visualCue: 'FLCS BIT switch releases magnetically to OFF; green RUN light extinguishes; amber FAIL light remains dark.',
         interactiveControl: {
           type: 'VERIFICATION',
           label: 'BIT PASSED',
@@ -963,8 +963,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Baseline Trim Gauge Neutral Verification',
         phaseType: 'VERIFY',
         description: 'Verify the three circular indicator dials on the Manual Trim panel (Roll, Pitch, Yaw) align with the white zero centerlines.',
-        cockpitPanel: 'Left Console / MANUAL TRIM',
-        visualCue: 'All three indicator needles read zero neutral.',
+        cockpitPanel: 'Left Console / MANUAL TRIM Panel',
+        visualCue: 'Roll, Pitch, and Yaw trim indicator dial needles aligned with white center zero indices.',
         interactiveControl: {
           type: 'VERIFICATION',
           label: 'TRIMS AT ZERO',
@@ -980,8 +980,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Verbal Callout "Ready Trim"',
         phaseType: 'VERBAL',
         description: 'Request trim check initiation from the Chief. Speak "Ready Trim" into the microphone.',
-        cockpitPanel: 'Left Console / HOTAS Mic',
-        visualCue: 'Chief acknowledges "Ready for trim check."',
+        cockpitPanel: 'Left Console / Intercom',
+        visualCue: 'Chief confirms: "Ready for trim."',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'READY TRIM CALLOUT',
@@ -1023,7 +1023,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         phaseType: 'ACTION',
         description: 'Push the two-position TRIM/AP DISC switch forward into the DISC position on the MISC panel.',
         cockpitPanel: 'MISC Panel (Left Quarter)',
-        visualCue: 'Toggle switch seated in forward DISC position.',
+        visualCue: 'TRIM/AP DISC switch seated in forward DISC position.',
         interactiveControl: {
           type: 'MOCK_SWITCH',
           switchPositions: ['DISC', 'NORM'],
@@ -1040,7 +1040,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Verbal Transmission "Trim Disconnected"',
         phaseType: 'VERBAL',
         description: 'Inform the Chief that trim is disconnected. Speak "Disconnected" into the microphone.',
-        cockpitPanel: 'Left Console / HOTAS Mic',
+        cockpitPanel: 'Left Console / Intercom',
         visualCue: 'Chief acknowledges "Copy."',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
@@ -1056,12 +1056,12 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Actuate 4-Way Stick Trim Hat',
         phaseType: 'ACTION',
         description: 'Push the 4-way castle trim hat on the flight stick UP, DOWN, LEFT, RIGHT. Verify trim indicator needles remain completely frozen at zero.',
-        cockpitPanel: 'Right Side Console / Flight Stick Grip',
-        visualCue: 'Trim indicator needles show zero deflection.',
+        cockpitPanel: 'Right Console / Flight Stick Grip',
+        visualCue: 'Trim indicator needles remain frozen at zero index; emergency disconnect verified.',
         interactiveControl: {
           type: 'MOCK_BUTTON',
           label: 'TEST 4-WAY TRIM HAT',
-          actionPrompt: 'Click D-pad to test trim hat disconnect'
+          actionPrompt: 'Actuate 4-way castle trim hat on flight stick in all 4 directions'
         }
       ,
         expectedChiefResponse: "Copy.",
@@ -1106,7 +1106,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         phaseType: 'ACTION',
         description: 'Return the TRIM/AP DISC toggle switch aft to the center NORM position.',
         cockpitPanel: 'MISC Panel (Left Quarter)',
-        visualCue: 'Switch seated in center NORM position.',
+        visualCue: 'TRIM/AP DISC switch seated in center NORM position.',
         interactiveControl: {
           type: 'MOCK_SWITCH',
           switchPositions: ['DISC', 'NORM'],
@@ -1124,7 +1124,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Verbal Transmission "Trim Connected"',
         phaseType: 'VERBAL',
         description: 'Inform the Chief that trim is connected. Speak "Connected" into the microphone.',
-        cockpitPanel: 'Left Console / HOTAS Mic',
+        cockpitPanel: 'Left Console / Intercom',
         visualCue: 'Chief acknowledges "Copy."',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
@@ -1141,8 +1141,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Axis Deflection Sequence with Chief Callouts',
         phaseType: 'EXPECT',
         description: 'Listen to the Chief call out deflections when you move them (simulated here): "Nose Up", "Nose Down", "Roll Left", "Roll Right", "Yaw Left", "Yaw Right". Observe dials deflect.',
-        cockpitPanel: 'Left Console / MANUAL TRIM',
-        visualCue: 'Trim pointers deflect clockwise and counter-clockwise matching Chief callouts.',
+        cockpitPanel: 'Left Console / MANUAL TRIM Panel',
+        visualCue: 'Trim pointers deflect clockwise and counter-clockwise matching Chief callouts: Nose Up, Down, Roll Left, Right, Yaw Left, Right.',
         interactiveControl: {
           type: 'TIMER_COUNTDOWN',
           durationSeconds: 9,
@@ -1159,7 +1159,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Manual Trim Centering to Neutral Zero Index',
         phaseType: 'ACTION',
         description: 'Manually center all three trim wheels until the Roll, Pitch, and Yaw pointers align precisely with the white zero centerlines.',
-        cockpitPanel: 'Left Console / MANUAL TRIM',
+        cockpitPanel: 'Left Console / MANUAL TRIM Panel',
         visualCue: 'All three pointers aligned vertically with the zero index marks.',
         interactiveControl: {
           type: 'VERIFICATION',
@@ -1201,8 +1201,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Verbal Callout "Clear Big Movements"',
         phaseType: 'VERBAL',
         description: 'Request clearance for full control surface sweeps. Speak "Clear Big Movements" into the microphone.',
-        cockpitPanel: 'Left Console / HOTAS Mic',
-        visualCue: 'Chief acknowledges "Flight controls still clear."',
+        cockpitPanel: 'Left Console / Intercom',
+        visualCue: 'Chief confirms: "Flight controls still clear."',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'BIG MOVEMENTS CALLOUT',
@@ -1218,8 +1218,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Roll Axis Deflection (Left then Right)',
         phaseType: 'ACTION',
         description: 'Move the flight stick full left, then full right. Observe flaperons deflect differentially (+/-20°).',
-        cockpitPanel: 'Flight Stick / Wings',
-        visualCue: 'Roll axis meter registers full deflection; flaperons sweep full travel.',
+        cockpitPanel: 'Flight Stick / Flaperons',
+        visualCue: 'Stick full left then full right; flaperons deflect differentially (+/-20°).',
         interactiveControl: {
           type: 'AXIS_MONITOR',
           axisChannel: 'roll',
@@ -1236,8 +1236,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Pitch Axis Deflection (Nose Up then Nose Down)',
         phaseType: 'ACTION',
         description: 'Pull the flight stick full aft (Nose Up, stabilators +25° TEU), then push full forward (Nose Down, stabilators -15° TED). Hold stick full forward for MPO test.',
-        cockpitPanel: 'Flight Stick / Horizontal Stabilators',
-        visualCue: 'Pitch axis meter registers full travel; stabilators sweep symmetric pitch.',
+        cockpitPanel: 'Flight Stick / Stabilators',
+        visualCue: 'Stick full aft (+25° TEU) then full forward (-15° TED); stabilators sweep symmetric pitch.',
         interactiveControl: {
           type: 'AXIS_MONITOR',
           axisChannel: 'pitch',
@@ -1253,9 +1253,9 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         order: 4,
         label: 'MPO Switch Actuation ("MPO Kick" Test during Nose Down)',
         phaseType: 'ACTION',
-        description: 'While holding flight stick forward in Nose Down, actuate the physical MPO switch to OVRD on your hardware throttle. Observe stabilators kick downward an additional 5° to 8°. Release switch to NORM and release stick.',
+        description: 'While holding flight stick forward in Nose Down, actuate the MPO switch to OVRD (on MISC Panel or mapped throttle control). Observe stabilators kick downward an additional 5° to 8°. Release switch to NORM and release stick.',
         cockpitPanel: 'MISC Panel (Left Quarter)',
-        visualCue: 'Stabilators kick downward past mechanical stop; MPO returns to NORM.',
+        visualCue: 'Stabilators kick downward an additional 5° to 8° past mechanical stop; MPO switch returns to NORM.',
         interactiveControl: {
           type: 'AXIS_MONITOR',
           axisChannel: 'pitch',
@@ -1273,7 +1273,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         phaseType: 'ACTION',
         description: 'Push left rudder pedal full travel, then right rudder pedal full travel. Observe vertical fin rudder deflects +/-30°.',
         cockpitPanel: 'Rudder Footwell / Vertical Fin',
-        visualCue: 'Yaw axis meter registers full deflection; rudder sweeps left and right.',
+        visualCue: 'Rudder pedals full left then full right; vertical fin rudder sweeps +/-30°.',
         interactiveControl: {
           type: 'AXIS_MONITOR',
           axisChannel: 'yaw',
@@ -1318,7 +1318,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
     whatToPerformNow: 'Transmit "DBU Still Clear", lift guard and flip DBU switch to ON, verify yellow DBU ON lamp, cycle controls (Chief acknowledges deflections), then return switch to OFF and lower guard.',
     whatToExpectNext: 'Chief calls: "Flight controls still clear." Surfaces respond under backup software law with Chief acknowledgments.',
     cockpitVisual: {
-      panelName: 'FLCS PANEL & LEFT EYEBROW',
+      panelName: 'LEFT CONSOLE (FLT CONTROL PANEL) & LEFT EYEBROW',
       subSystem: 'Digital Backup Software Flight Law (DBU)',
       focalControls: ['DIGITAL BACKUP Switch (ON)', 'DBU Switch Guard', 'DBU ON Caution Lamp (Yellow)']
     },
@@ -1335,8 +1335,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Verbal Transmission "DBU Still Clear"',
         phaseType: 'VERBAL',
         description: 'Inform the Chief that DBU check is starting. Speak "DBU Still Clear" into the microphone.',
-        cockpitPanel: 'Left Console / HOTAS Mic',
-        visualCue: 'Chief acknowledges "Flight controls still clear."',
+        cockpitPanel: 'Left Console / Intercom',
+        visualCue: 'Chief confirms: "Flight controls still clear."',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'DBU CLEAR CALLOUT',
@@ -1351,9 +1351,9 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         order: 2,
         label: 'DBU Switch to ON',
         phaseType: 'ACTION',
-        description: 'Lift the red safety guard on the FLCS panel and flip the DIGITAL BACKUP switch to ON.',
-        cockpitPanel: 'Left Console / FLCS Panel',
-        visualCue: 'Yellow DBU ON caution lamp illuminates solid on left eyebrow.',
+        description: 'Lift the red safety guard on the FLT CONTROL panel and flip the DIGITAL BACKUP switch to ON.',
+        cockpitPanel: 'Left Console / FLT CONTROL Panel',
+        visualCue: 'DIGITAL BACKUP switch placed to ON; yellow DBU ON caution lamp illuminates solid on Left Eyebrow.',
         interactiveControl: {
           type: 'MOCK_SWITCH',
           switchPositions: ['OFF', 'ON'],
@@ -1371,7 +1371,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         phaseType: 'ACTION',
         description: 'Deflect stick and rudder slightly. Observe surfaces respond under analog backup software law with Chief visual confirmation.',
         cockpitPanel: 'Flight Stick / Rudder',
-        visualCue: 'Surfaces deflect smoothly; Chief acknowledges deflection.',
+        visualCue: 'Stick and pedals deflected; control surfaces respond smoothly under backup software flight law.',
         interactiveControl: {
           type: 'MOCK_BUTTON',
           label: 'DEFLECT CONTROLS IN DBU',
@@ -1387,8 +1387,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'DBU Switch to OFF & Guard Down',
         phaseType: 'ACTION',
         description: 'Flip the DIGITAL BACKUP switch back to OFF and seat the red safety guard flush DOWN.',
-        cockpitPanel: 'Left Console / FLCS Panel',
-        visualCue: 'Yellow DBU ON caution lamp extinguishes.',
+        cockpitPanel: 'Left Console / FLT CONTROL Panel',
+        visualCue: 'DIGITAL BACKUP switch set to OFF and guard lowered flush; yellow DBU ON caution lamp extinguishes.',
         interactiveControl: {
           type: 'MOCK_SWITCH',
           switchPositions: ['OFF', 'ON'],
@@ -1423,7 +1423,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
       prefixVariants: ['Chief Ready Left Brake', 'Left Brake', 'Ready on the Left Brake'],
       synonyms: ['Left Brake']
     },
-    expectedChiefResponse: 'Copy. (2.5s delay) -> Ready left brake. (Depress left brake for 3s).',
+    expectedChiefResponse: 'Copy. (2.5s delay) -> Ready left brake. (Press and release toe brake pedal).',
     substeps: [
       {
         id: '14-1',
@@ -1431,8 +1431,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Verbal Callout "Ready Left Brake"',
         phaseType: 'VERBAL',
         description: 'Inform the Chief that left brake check is beginning. Speak "Ready Left Brake" into the microphone.',
-        cockpitPanel: 'Left Console / HOTAS Mic',
-        visualCue: 'Chief acknowledges "Copy", waits 2.5s, then calls "Ready left brake."',
+        cockpitPanel: 'Left Console / Intercom',
+        visualCue: 'Chief acknowledges "Copy", pauses 2.5s, then calls "Ready left brake."',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'READY LEFT BRAKE CALLOUT',
@@ -1448,8 +1448,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Left Toe Brake Press and Release',
         phaseType: 'ACTION',
         description: 'Depress left toe brake pedal past 20% to announce movement, then release back to idle to verify caliper release.',
-        cockpitPanel: 'Rudder Footwell (Left Pedal)',
-        visualCue: 'Left brake progress bar responds dynamically to pedal deflection.',
+        cockpitPanel: 'Rudder Footwell (Left Brake Pedal)',
+        visualCue: 'Left toe brake pedal depressed and released; hydraulic pressure transfers to left brake caliper.',
         interactiveControl: {
           type: 'AXIS_MONITOR',
           axisChannel: 'left_brake',
@@ -1466,8 +1466,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Left Brake Inspection Complete',
         phaseType: 'VERIFY',
         description: 'Chief confirms solid caliper clamping and zero hydraulic line leaks on left main landing gear.',
-        cockpitPanel: 'Left Main Gear Caliper',
-        visualCue: 'Zero fluid leaks; caliper clamps tight.',
+        cockpitPanel: 'Left Main Landing Gear Caliper',
+        visualCue: 'Left main gear brake caliper pistons clamp firmly; zero hydraulic fluid seepage.',
         interactiveControl: {
           type: 'VERIFICATION',
           label: 'LEFT BRAKE GOOD',
@@ -1501,7 +1501,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
       prefixVariants: ['Chief Ready Right Brake', 'Right Brake', 'Ready on the Right Brake'],
       synonyms: ['Right Brake']
     },
-    expectedChiefResponse: 'Copy. (2.5s delay) -> Ready right brake. (Depress right brake for 3s).',
+    expectedChiefResponse: 'Copy. (2.5s delay) -> Ready right brake. (Press and release toe brake pedal).',
     substeps: [
       {
         id: '15-1',
@@ -1509,8 +1509,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Verbal Callout "Ready Right Brake"',
         phaseType: 'VERBAL',
         description: 'Inform the Chief that right brake check is beginning. Speak "Ready Right Brake" into the microphone.',
-        cockpitPanel: 'Left Console / HOTAS Mic',
-        visualCue: 'Chief acknowledges "Copy", waits 2.5s, then calls "Ready right brake."',
+        cockpitPanel: 'Left Console / Intercom',
+        visualCue: 'Chief acknowledges "Copy", pauses 2.5s, then calls "Ready right brake."',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'READY RIGHT BRAKE CALLOUT',
@@ -1526,8 +1526,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Right Toe Brake Press and Release',
         phaseType: 'ACTION',
         description: 'Depress right toe brake pedal past 20% to announce movement, then release back to idle to verify caliper release.',
-        cockpitPanel: 'Rudder Footwell (Right Pedal)',
-        visualCue: 'Right brake progress bar responds dynamically to pedal deflection.',
+        cockpitPanel: 'Rudder Footwell (Right Brake Pedal)',
+        visualCue: 'Right toe brake pedal depressed and released; hydraulic pressure transfers to right brake caliper.',
         interactiveControl: {
           type: 'AXIS_MONITOR',
           axisChannel: 'right_brake',
@@ -1544,8 +1544,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Right Brake Inspection Complete',
         phaseType: 'VERIFY',
         description: 'Chief confirms solid caliper clamping and zero hydraulic line leaks on right main landing gear.',
-        cockpitPanel: 'Right Main Gear Caliper',
-        visualCue: 'Zero fluid leaks; caliper clamps tight.',
+        cockpitPanel: 'Right Main Landing Gear Caliper',
+        visualCue: 'Right main gear brake caliper pistons clamp firmly; zero hydraulic fluid seepage.',
         interactiveControl: {
           type: 'VERIFICATION',
           label: 'RIGHT BRAKE GOOD',
@@ -1587,8 +1587,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Verbal Callout "Ready AAR Door"',
         phaseType: 'VERBAL',
         description: 'Inform the Chief that AAR door check is starting. Speak "Ready AAR Door" into the microphone.',
-        cockpitPanel: 'Left Console / HOTAS Mic',
-        visualCue: 'Chief acknowledges "Copy standby", waits 4.0s, then calls "Ready for door check."',
+        cockpitPanel: 'Left Console / Intercom',
+        visualCue: 'Chief calls: "Copy standby... Ready for refuel door check."',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'READY AAR DOOR CALLOUT',
@@ -1605,7 +1605,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         phaseType: 'ACTION',
         description: 'Move the AIR REFUEL toggle switch forward to OPEN on the FUEL panel.',
         cockpitPanel: 'Left Console / FUEL Panel',
-        visualCue: 'Blue AR / NWS RDY lamp illuminates on right eyebrow; dorsal door slides open. Chief calls "Door open."',
+        visualCue: 'AIR REFUEL switch set to OPEN; blue AR / NWS RDY lamp illuminates on Right Eyebrow; dorsal door slides open.',
         interactiveControl: {
           type: 'MOCK_SWITCH',
           switchPositions: ['CLOSE', 'OPEN'],
@@ -1624,7 +1624,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         phaseType: 'ACTION',
         description: 'Move the AIR REFUEL toggle switch aft to CLOSE. Verify blue RDY lamp extinguishes and door latches flush.',
         cockpitPanel: 'Left Console / FUEL Panel',
-        visualCue: 'Blue RDY lamp extinguishes; dorsal door slides closed. Chief calls "Door closed."',
+        visualCue: 'AIR REFUEL switch set to CLOSE; blue RDY lamp extinguishes; dorsal slipway door latches flush.',
         interactiveControl: {
           type: 'MOCK_SWITCH',
           switchPositions: ['CLOSE', 'OPEN'],
@@ -1674,8 +1674,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Hold Toe Brakes Firmly',
         phaseType: 'ACTION',
         description: 'Depress both toe brake pedals firmly to ensure aircraft will not roll when chocks are removed.',
-        cockpitPanel: 'Rudder Footwell',
-        visualCue: 'Toe brake progress bars register firm depression.',
+        cockpitPanel: 'Rudder Footwell (Toe Brakes)',
+        visualCue: 'Both toe brake pedals held firmly depressed to ensure aircraft remains stationary.',
         interactiveControl: {
           type: 'VERIFICATION',
           label: 'BRAKES HELD',
@@ -1690,8 +1690,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Verbal Transmission "Remove Chocks"',
         phaseType: 'VERBAL',
         description: 'Instruct the ground crew to pull wheel chocks. Speak "Remove Chocks" or "Wheel Chocks" into the microphone.',
-        cockpitPanel: 'Left Console / HOTAS Mic',
-        visualCue: 'Ground crew pulls heavy chocks away from main gear tires.',
+        cockpitPanel: 'Left Console / Intercom',
+        visualCue: 'Ground crew extracts wheel chocks away from main gear tires while pilot holds brakes.',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'REMOVE CHOCKS CALLOUT',
@@ -1733,8 +1733,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Verbal Transmission "Cleared Off"',
         phaseType: 'VERBAL',
         description: 'Clear the crew chief off the interphone loop. Speak "Cleared Off" into the microphone.',
-        cockpitPanel: 'Left Console / HOTAS Mic',
-        visualCue: 'Chief replies: "Copy that, bring her back Code 1, sir/ma\'am."',
+        cockpitPanel: 'Left Console / Intercom',
+        visualCue: 'Chief acknowledges: "Copy that, bring her back Code 1, sir/ma\'am."',
         interactiveControl: {
           type: 'VOICE_CALLOUT',
           label: 'CLEARED OFF CALLOUT',
@@ -1750,8 +1750,8 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         label: 'Final 10 O\'Clock Marshal Salute',
         phaseType: 'VERIFY',
         description: 'Chief unplugs ground headset cord, snaps receptacle door closed, walks to 10 o\'clock position in high-visibility vest and renders a sharp hand salute.',
-        cockpitPanel: 'Canopy Front-Left Field of View',
-        visualCue: 'Chief saluting outside taxi line. F-16C ramp start 100% complete — cleared for taxi.',
+        cockpitPanel: 'Canopy Left Field of View (10 O\'Clock)',
+        visualCue: 'Chief unplugs headset, secures sill door, walks to 10 o\'clock position and renders a crisp hand salute.',
         interactiveControl: {
           type: 'VERIFICATION',
           label: 'RETURN SALUTE & TAXI',
