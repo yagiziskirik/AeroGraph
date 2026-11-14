@@ -50,32 +50,43 @@ export const TacticalBrevityView: React.FC<TacticalBrevityViewProps> = ({
   React.useEffect(() => {
     if (lastSpeech.status !== 'VERIFIED' || !lastSpeech.phrase) return;
 
-    // Disambiguate by group: if lastSpeech.group is specified, ensure it belongs to this category
-    if (lastSpeech.group && lastSpeech.group !== 'System' && lastSpeech.group !== 'Command') {
-      const gUpper = lastSpeech.group.trim().toUpperCase();
-      const catUpper = activeCategory?.name ? activeCategory.name.trim().toUpperCase() : '';
-      if (!catUpper) return;
-      const isGroupMatch = catUpper === gUpper || catUpper.includes(gUpper) || gUpper.includes(catUpper);
-      if (!isGroupMatch) return;
-    }
-
-    const normPhrase = lastSpeech.phrase.toUpperCase();
-    const normCmd = lastSpeech.command?.toLowerCase();
-
-    const matched = filteredCommands.find(
-      (c) =>
-        (normCmd && c.name.toLowerCase() === normCmd) ||
-        c.name.toUpperCase() === normPhrase ||
-        c.spoken_phrases.some((p) => p.toUpperCase() === normPhrase)
-    );
-
-    if (matched && activeCategory?.name) {
-      const safeId = `brevity-cmd-${activeCategory.name.replace(/[^a-zA-Z0-9_-]/g, '_')}--${matched.name.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-      const el = document.getElementById(safeId);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const timer = setTimeout(() => {
+      // 1. Direct query for the active highlighted card
+      const highlightedEl = document.querySelector('[data-brevity-highlight="true"]');
+      if (highlightedEl) {
+        highlightedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
       }
-    }
+
+      // 2. Disambiguate by group: if lastSpeech.group is specified, ensure it belongs to this category
+      if (lastSpeech.group && lastSpeech.group !== 'System' && lastSpeech.group !== 'Command') {
+        const gUpper = lastSpeech.group.trim().toUpperCase();
+        const catUpper = activeCategory?.name ? activeCategory.name.trim().toUpperCase() : '';
+        if (!catUpper) return;
+        const isGroupMatch = catUpper === gUpper || catUpper.includes(gUpper) || gUpper.includes(catUpper);
+        if (!isGroupMatch) return;
+      }
+
+      const normPhrase = lastSpeech.phrase.toUpperCase();
+      const normCmd = lastSpeech.command?.toLowerCase();
+
+      const matched = filteredCommands.find(
+        (c) =>
+          (normCmd && c.name.toLowerCase() === normCmd) ||
+          c.name.toUpperCase() === normPhrase ||
+          c.spoken_phrases.some((p) => p.toUpperCase() === normPhrase)
+      );
+
+      if (matched && activeCategory?.name) {
+        const safeId = `brevity-cmd-${activeCategory.name.replace(/[^a-zA-Z0-9_-]/g, '_')}--${matched.name.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+        const el = document.getElementById(safeId);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, [lastSpeech, filteredCommands, activeCategory?.name]);
 
   return (
@@ -198,12 +209,13 @@ export const TacticalBrevityView: React.FC<TacticalBrevityViewProps> = ({
               lastSpeech.phrase === cmd.name.toUpperCase() ||
               cmd.spoken_phrases.some((p) => p.toUpperCase() === lastSpeech.phrase));
 
-          const safeId = `brevity-cmd-${catName.replace(/[^a-zA-Z0-9_-]/g, '_')}--${cmd.name.replace(/[^a-zA-Z0-9_-]/g, '_')}--${idx}`;
+          const safeId = `brevity-cmd-${catName.replace(/[^a-zA-Z0-9_-]/g, '_')}--${cmd.name.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
           return (
             <div
               key={`${cmd.name}-${cmd.key_combination || ''}-${idx}`}
               id={safeId}
+              data-brevity-highlight={isMatchingVoice ? 'true' : undefined}
               className={`p-3.5 rounded border transition-[border-color,background-color] flex flex-col justify-between gap-3 shadow-sm ${
                 isMatchingVoice
                   ? 'bg-emerald-500/25 border-emerald-400 ring-2 ring-emerald-400/50 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
