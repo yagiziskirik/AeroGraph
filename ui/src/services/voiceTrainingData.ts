@@ -389,13 +389,27 @@ export const RAMP_START_STEPS: RampStartStep[] = [
           targetPosition: 'SEC',
           label: 'ENG CONT SWITCH',
           actionPrompt: 'Lift guard and flip ENG CONT switch to SEC'
-        }
-      ,
+        },
         rationale: "Transfers fuel metering from Digital Electronic Engine Control (DEEC) to hydromechanical backup governor."
       },
       {
         id: '3-4',
         order: 4,
+        label: 'Mandatory Toe Brakes Hold',
+        phaseType: 'ACTION',
+        description: 'Depress both toe brake pedals firmly to ensure aircraft remains stationary prior to advancing throttle to 73% RPM.',
+        cockpitPanel: 'Rudder Footwell / Left Eyebrow',
+        visualCue: 'Toe brake deflection bars register firm application.',
+        interactiveControl: {
+          type: 'VERIFICATION',
+          label: 'BRAKES HELD',
+          actionPrompt: 'Hold toe brakes firmly'
+        },
+        rationale: "Holding toe brakes prevents aircraft rolling forward when advancing engine throttle above idle."
+      },
+      {
+        id: '3-5',
+        order: 5,
         label: 'Hydromechanical Fuel Spool to 73% RPM Minimum',
         phaseType: 'ACTION',
         description: 'Hold toe brakes firmly. Advance throttle forward until Tachometer reaches ≥ 73% RPM to verify hydromechanical fuel control.',
@@ -405,13 +419,12 @@ export const RAMP_START_STEPS: RampStartStep[] = [
           type: 'MOCK_BUTTON',
           label: 'ADVANCE THROTTLE TO 73%',
           actionPrompt: 'Advance throttle to verify 73% RPM spool'
-        }
-      ,
+        },
         rationale: "Verifies hydromechanical governor accelerates the core linearly and maintains flameout margin."
       },
       {
-        id: '3-5',
-        order: 5,
+        id: '3-6',
+        order: 6,
         label: 'Retard to IDLE & Closed Nozzle Verification',
         phaseType: 'VERIFY',
         description: 'Retard throttle back to IDLE. Verify engine returns smoothly to idle speed and NOZZLE needle remains tightly closed at < 5%.',
@@ -421,8 +434,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
           type: 'VERIFICATION',
           label: 'SEC IDLE CONFIRMED',
           actionPrompt: 'Retard throttle to IDLE and verify nozzle closed'
-        }
-      ,
+        },
         rationale: "Confirms engine retards cleanly back to idle and nozzle stays closed (< 5%) under hydromechanical scheduling."
       }
     ]
@@ -671,30 +683,43 @@ export const RAMP_START_STEPS: RampStartStep[] = [
           type: 'VOICE_CALLOUT',
           label: 'CHECK FLOW CALLOUT',
           actionPrompt: 'Speak "Check Flow" into your microphone'
-        }
-      ,
+        },
         expectedChiefResponse: "No flow.",
         rationale: "Crew Chief inspects the underside strake exhaust port to verify zero toxic hydrazine leakage or odor."
       },
       {
         id: '6-2',
         order: 2,
-        label: 'Mandatory Toe Brakes Hold & Spool to 80-85% RPM',
+        label: 'Mandatory Toe Brakes Hold',
         phaseType: 'ACTION',
-        description: 'Depress toe brakes firmly. Advance throttle forward to 80–85% RPM to generate bleed air pressure for the EPU turbine.',
+        description: 'Depress both toe brake pedals firmly to ensure aircraft remains stationary prior to high engine run-up (80-85% RPM).',
         cockpitPanel: 'Rudder Footwell & Throttle Quadrant',
-        visualCue: 'Brakes held firm; Tachometer needle stabilizes between 80% and 85% RPM.',
+        visualCue: 'Toe brake deflection bars register firm application.',
         interactiveControl: {
-          type: 'MOCK_BUTTON',
-          label: 'HOLD BRAKES & SPOOL 82%',
-          actionPrompt: 'Hold toe brakes and advance throttle to ~82% RPM'
-        }
-      ,
-        rationale: "Engine must be at 80-85% RPM to generate sufficient 13th-stage bleed air pressure to motor the EPU turbine."
+          type: 'VERIFICATION',
+          label: 'BRAKES HELD',
+          actionPrompt: 'Hold toe brakes firmly'
+        },
+        rationale: "Neither parking brake nor chocks can hold high engine thrust at 80-85% RPM. Toe brakes must be held firmly."
       },
       {
         id: '6-3',
         order: 3,
+        label: 'Spool to 80-85% RPM',
+        phaseType: 'ACTION',
+        description: 'Advance throttle forward to 80–85% RPM to generate bleed air pressure for the EPU turbine.',
+        cockpitPanel: 'Throttle Quadrant & Center Pedestal',
+        visualCue: 'Tachometer needle stabilizes between 80% and 85% RPM.',
+        interactiveControl: {
+          type: 'MOCK_BUTTON',
+          label: 'SPOOL TO ~82% RPM',
+          actionPrompt: 'Advance throttle to ~82% RPM'
+        },
+        rationale: "Engine must be at 80-85% RPM to generate sufficient 13th-stage bleed air pressure to motor the EPU turbine."
+      },
+      {
+        id: '6-4',
+        order: 4,
         label: 'EPU/GEN TEST Switch Actuation (5s Countdown)',
         phaseType: 'ACTION',
         description: 'Click and hold the spring-loaded EPU/GEN TEST switch in the TEST position for 5 seconds.',
@@ -705,13 +730,12 @@ export const RAMP_START_STEPS: RampStartStep[] = [
           durationSeconds: 5,
           label: 'HOLD TEST SWITCH (5S)',
           actionPrompt: 'Hold EPU/GEN TEST switch for 5 seconds'
-        }
-      ,
+        },
         rationale: "Holding TEST checks automatic EPU generator and PMG emergency transfer under bleed air power."
       },
       {
-        id: '6-4',
-        order: 4,
+        id: '6-5',
+        order: 5,
         label: 'Throttle Retard to IDLE & Lamp Extinguishment',
         phaseType: 'VERIFY',
         description: 'Release test switch. Retard throttle back to IDLE (~65% RPM). Release toe brakes. Verify green EPU RUN light extinguishes.',
@@ -721,8 +745,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
           type: 'VERIFICATION',
           label: 'RETARD TO IDLE',
           actionPrompt: 'Retard throttle to IDLE and verify lamps dark'
-        }
-      ,
+        },
         rationale: "Confirms EPU disengages cleanly and green RUN light extinguishes once test switch is released."
       }
     ]
