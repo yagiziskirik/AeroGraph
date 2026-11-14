@@ -346,6 +346,7 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
   const handleResetChief = () => {
     Sound.playSwitch();
     Ipc.resetCrewChief();
+    Ipc.setCockpitDrillActive(false);
     setChiefEngaged(false);
     setCurrentStepIndex(0);
     setCurrentSubstepIndex(0);

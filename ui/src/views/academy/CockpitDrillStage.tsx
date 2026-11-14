@@ -11,6 +11,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { Sound } from '../../services/sound';
+import { Ipc } from '../../services/ipc';
 import { TelemetryData } from '../../types/ipc';
 import { RampStartStep, StepSubstep } from '../../services/voiceTrainingData';
 import { getCockpitLocatorConfig } from './cockpitLocatorConfig';
@@ -266,6 +267,21 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     setIsChiefResponding(false);
   }, [activeStep.id, currentSubstepIndex]);
 
+  // Manage Cockpit Drill Mode: Step 0 begins in default profile with Chief disengaged so "Engage Chief" is detectable.
+  // Silent drill mode and Chief mode are engaged upon speaking "Engage Chief" or when entering Step >= 1.
+  useEffect(() => {
+    if (activeStep.id === 0) {
+      Ipc.setCockpitDrillActive(false);
+      Ipc.resetCrewChief();
+    } else {
+      Ipc.engageCrewChief();
+      Ipc.setCockpitDrillActive(true);
+    }
+    return () => {
+      Ipc.setCockpitDrillActive(false);
+    };
+  }, [activeStep.id]);
+
   // Step 01: ELEC Panel & TEST Panel
   const [elecSwitchPos, setElecSwitchPos] = useState<MainPwrPosition>('OFF');
   const [flcsPwrTestPos, setFlcsPwrTestPos] = useState<'MAINT' | 'NORM' | 'TEST'>('NORM');
@@ -382,6 +398,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   useEffect(() => {
     if (activeStep.id !== 2 || currentSubstepIndex === 0) {
       setJfsPosition('OFF');
+      engineSpoolingRef.current = false;
     }
   }, [activeStep.id, currentSubstepIndex]);
 
@@ -467,6 +484,18 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   // SPEECH PROCESSING & AUTOMATIC DRILL ADVANCE
   // =========================================================================
   const lastProcessedSpeechIdRef = useRef<number>(0);
+  const engineSpoolingRef = useRef<boolean>(false);
+
+  // Step 13 DBU flight control surface audio tracking
+  const dbuRollAnnouncedRef = useRef<'left' | 'right' | null>(null);
+  const dbuPitchAnnouncedRef = useRef<'up' | 'down' | null>(null);
+  const dbuYawAnnouncedRef = useRef<'left' | 'right' | null>(null);
+
+  // Step 14 & 15 Brake pedal movement audio tracking
+  const leftBrakeMovedRef = useRef<boolean>(false);
+  const leftBrakeIdleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const rightBrakeMovedRef = useRef<boolean>(false);
+  const rightBrakeIdleTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const triggerVerbalAdvance = useCallback((expectedDialogue: string) => {
     Sound.playCommit();
@@ -475,6 +504,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     if (activeStep.id === 0) {
       onEngageChief();
       setInterphoneConnected(true);
+      Ipc.engageCrewChief();
+      Ipc.setCockpitDrillActive(true);
     }
 
     setIsChiefResponding(true);
@@ -490,6 +521,146 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       return;
     }
 
+    // Step 05: Pull EPU Pin (Multi-sound: "Copy" -> 4000ms delay -> "Clear for run up")
+    if (activeStep.id === 5) {
+      Ipc.playDrillSound('copy');
+      setTimeout(() => {
+        Ipc.playDrillSound('epu-runup');
+      }, 4000);
+      setTimeout(() => {
+        setIsChiefResponding(false);
+        if (currentSubstepIndex < activeStep.substeps.length - 1) {
+          onAdvanceSubstep(currentSubstepIndex + 1);
+        } else if (activeStep.id < 18) {
+          onAdvanceStep(activeStep.id + 1);
+        }
+      }, 5800);
+      return;
+    }
+
+    // Step 10: Trim Disconnected (Multi-sound: "Copy" -> 4000ms observation delay -> "Trim no movement")
+    if (activeStep.id === 10) {
+      Ipc.playDrillSound('copy');
+      setTimeout(() => {
+        Ipc.playDrillSound('trim-no-movement');
+      }, 4000);
+      setTimeout(() => {
+        setIsChiefResponding(false);
+        if (currentSubstepIndex < activeStep.substeps.length - 1) {
+          onAdvanceSubstep(currentSubstepIndex + 1);
+        } else if (activeStep.id < 18) {
+          onAdvanceStep(activeStep.id + 1);
+        }
+      }, 5800);
+      return;
+    }
+
+    // Step 14: Ready Left Brake (Multi-sound: "Copy" -> 2500ms walk delay -> "Ready left brake")
+    if (activeStep.id === 14) {
+      Ipc.playDrillSound('copy');
+      setTimeout(() => {
+        Ipc.playDrillSound('ready-left-brake');
+      }, 2500);
+      setTimeout(() => {
+        setIsChiefResponding(false);
+        if (currentSubstepIndex < activeStep.substeps.length - 1) {
+          onAdvanceSubstep(currentSubstepIndex + 1);
+        } else if (activeStep.id < 18) {
+          onAdvanceStep(activeStep.id + 1);
+        }
+      }, 4200);
+      return;
+    }
+
+    // Step 15: Ready Right Brake (Multi-sound: "Copy" -> 2500ms walk delay -> "Ready right brake")
+    if (activeStep.id === 15) {
+      Ipc.playDrillSound('copy');
+      setTimeout(() => {
+        Ipc.playDrillSound('ready-right-brake');
+      }, 2500);
+      setTimeout(() => {
+        setIsChiefResponding(false);
+        if (currentSubstepIndex < activeStep.substeps.length - 1) {
+          onAdvanceSubstep(currentSubstepIndex + 1);
+        } else if (activeStep.id < 18) {
+          onAdvanceStep(activeStep.id + 1);
+        }
+      }, 4200);
+      return;
+    }
+
+    // Step 16: Ready AAR Door (Multi-sound: "Copy standby" -> 4000ms walk delay -> "Refuel door check ready")
+    if (activeStep.id === 16) {
+      Ipc.playDrillSound('copy-standby');
+      setTimeout(() => {
+        Ipc.playDrillSound('refuel-door-ready');
+      }, 4000);
+      setTimeout(() => {
+        setIsChiefResponding(false);
+        if (currentSubstepIndex < activeStep.substeps.length - 1) {
+          onAdvanceSubstep(currentSubstepIndex + 1);
+        } else if (activeStep.id < 18) {
+          onAdvanceStep(activeStep.id + 1);
+        }
+      }, 5800);
+      return;
+    }
+
+    // Authentic FoxVox audio readback triggered in Rust for standard steps
+    let advanceDelay = 1800;
+    switch (activeStep.id) {
+      case 0:
+        // Native FoxVox profile execution plays start-beep.mp3 on "Engage Crew Chief" when transitioning
+        advanceDelay = 1200;
+        break;
+      case 1:
+        Ipc.playDrillSound('comms-check');
+        advanceDelay = 2000;
+        break;
+      case 2:
+        Ipc.playDrillSound('clear-start-two');
+        advanceDelay = 2000;
+        break;
+      case 3:
+        Ipc.playDrillSound('clear-sec');
+        advanceDelay = 2200;
+        break;
+      case 4:
+      case 11:
+        Ipc.playDrillSound('copy');
+        advanceDelay = 1800;
+        break;
+      case 6:
+        Ipc.playDrillSound('no-flow');
+        advanceDelay = 2000;
+        break;
+      case 7:
+        Ipc.playDrillSound('controls-clear');
+        advanceDelay = 2200;
+        break;
+      case 8:
+        Ipc.playDrillSound('cleared-for-bit');
+        advanceDelay = 2000;
+        break;
+      case 9:
+        Ipc.playDrillSound('ready-trim');
+        advanceDelay = 2000;
+        break;
+      case 12:
+      case 13:
+        Ipc.playDrillSound('controls-still-clear');
+        advanceDelay = 2200;
+        break;
+      case 17:
+        // Intentionally empty per user directive
+        advanceDelay = 1200;
+        break;
+      case 18:
+        Ipc.playDrillSound('cleared-off');
+        advanceDelay = 3500;
+        break;
+    }
+
     setTimeout(() => {
       setIsChiefResponding(false);
       if (currentSubstepIndex < activeStep.substeps.length - 1) {
@@ -497,7 +668,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       } else if (activeStep.id < 18) {
         onAdvanceStep(activeStep.id + 1);
       }
-    }, 1200);
+    }, advanceDelay);
   }, [activeStep, currentSubstepIndex, onAdvanceSubstep, onAdvanceStep, onConsumeSpeech, onEngageChief]);
 
   useEffect(() => {
@@ -698,6 +869,9 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   };
 
   const handleThrottleCutoffToIdle = () => {
+    if (engineSpoolingRef.current) return;
+    engineSpoolingRef.current = true;
+
     Sound.playSwitch();
     setThrottlePosition('IDLE');
 
@@ -756,6 +930,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         setJfsPosition('OFF');
         setJfsRunLit(false);
         Sound.playCommit();
+        Ipc.playDrillSound('good-start');
         setStep2EngineStabilized(true);
       }
     }, 100);
@@ -812,6 +987,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       setStep3FlirSrc('/crewchief/FLCS/nozzleClosed.webp');
       setStep3FlirOpen(true);
       Sound.playCommit();
+      Ipc.playDrillSound('nozzle-closed');
       // Keep FLIR overlay for 3s then close and proceed to Substep 3 (Spool to 73%)
       setTimeout(() => {
         setStep3FlirOpen(false);
@@ -824,6 +1000,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       setStep3FlirSrc('/crewchief/FLCS/nozzleOpen.webp');
       setStep3FlirOpen(true);
       Sound.playCommit();
+      Ipc.playDrillSound('nozzle-open');
       // Hang for 3 seconds then close and proceed to Substep 2 (Nozzle 100% open verification)
       setTimeout(() => {
         setStep3FlirOpen(false);
@@ -1009,12 +1186,30 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   useEffect(() => {
     if (activeStep.id === 11 && currentSubstepIndex === 2) {
       const timers = [
-        setTimeout(() => setPitchTrim(1.0), 800),
-        setTimeout(() => setPitchTrim(-1.1), 2000),
-        setTimeout(() => setRollTrim(-1.2), 3200),
-        setTimeout(() => setRollTrim(1.1), 4400),
-        setTimeout(() => setYawTrim(-1.5), 5600),
-        setTimeout(() => setYawTrim(1.6), 6800),
+        setTimeout(() => {
+          setPitchTrim(1.0);
+          Ipc.playDrillSound('trim-nose-up');
+        }, 800),
+        setTimeout(() => {
+          setPitchTrim(-1.1);
+          Ipc.playDrillSound('trim-nose-down');
+        }, 2000),
+        setTimeout(() => {
+          setRollTrim(-1.2);
+          Ipc.playDrillSound('trim-roll-left');
+        }, 3200),
+        setTimeout(() => {
+          setRollTrim(1.1);
+          Ipc.playDrillSound('trim-roll-right');
+        }, 4400),
+        setTimeout(() => {
+          setYawTrim(-1.5);
+          Ipc.playDrillSound('trim-yaw-left');
+        }, 5600),
+        setTimeout(() => {
+          setYawTrim(1.6);
+          Ipc.playDrillSound('trim-yaw-right');
+        }, 6800),
         setTimeout(() => {
           Sound.playCommit();
           onAdvanceSubstep(3); // Prompt user to manually re-center trims
@@ -1043,10 +1238,16 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   // Step 12 Substep 2: Roll Axis Detection (20% deflection from neutral: <0.40 or >0.60; order does not matter)
   useEffect(() => {
     if (activeStep.id === 12 && currentSubstepIndex === 1) {
-      if (rollDisplay < 0.40) setRollLeftDone(true);
-      if (rollDisplay > 0.60) setRollRightDone(true);
+      if (rollDisplay < 0.40 && !rollLeftDone) {
+        setRollLeftDone(true);
+        Ipc.playDrillSound('big-roll-left');
+      }
+      if (rollDisplay > 0.60 && !rollRightDone) {
+        setRollRightDone(true);
+        Ipc.playDrillSound('big-roll-right');
+      }
     }
-  }, [activeStep.id, currentSubstepIndex, rollDisplay]);
+  }, [activeStep.id, currentSubstepIndex, rollDisplay, rollLeftDone, rollRightDone]);
 
   // Step 12 Substep 2 Advance: Trigger when both roll directions completed
   useEffect(() => {
@@ -1065,10 +1266,16 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   // Step 12 Substep 3: Pitch Axis Detection (20% deflection: Strict order: Nose Up >0.60 first, then Nose Down <0.40)
   useEffect(() => {
     if (activeStep.id === 12 && currentSubstepIndex === 2) {
-      if (pitchDisplay > 0.60) setPitchNoseUpDone(true);
-      if (pitchNoseUpDone && pitchDisplay < 0.40) setPitchNoseDownDone(true);
+      if (pitchDisplay > 0.60 && !pitchNoseUpDone) {
+        setPitchNoseUpDone(true);
+        Ipc.playDrillSound('big-nose-up');
+      }
+      if (pitchNoseUpDone && pitchDisplay < 0.40 && !pitchNoseDownDone) {
+        setPitchNoseDownDone(true);
+        Ipc.playDrillSound('big-nose-down');
+      }
     }
-  }, [activeStep.id, currentSubstepIndex, pitchDisplay, pitchNoseUpDone]);
+  }, [activeStep.id, currentSubstepIndex, pitchDisplay, pitchNoseUpDone, pitchNoseDownDone]);
 
   // Step 12 Substep 3 Advance: Trigger when Nose Down reached after Nose Up
   useEffect(() => {
@@ -1090,6 +1297,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       if (telemetry.mpo_active && !hasAdvancedStep12SubstepRef.current) {
         hasAdvancedStep12SubstepRef.current = true;
         Sound.playCommit();
+        Ipc.playDrillSound('mpo-kick');
         setMpoKickActive(true);
         const t = setTimeout(() => {
           setMpoKickActive(false);
@@ -1103,10 +1311,16 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   // Step 12 Substep 5: Yaw Axis Detection (20% deflection from neutral: <0.40 or >0.60; order does not matter)
   useEffect(() => {
     if (activeStep.id === 12 && currentSubstepIndex === 4) {
-      if (yawDisplay < 0.40) setYawLeftDone(true);
-      if (yawDisplay > 0.60) setYawRightDone(true);
+      if (yawDisplay < 0.40 && !yawLeftDone) {
+        setYawLeftDone(true);
+        Ipc.playDrillSound('big-yaw-left');
+      }
+      if (yawDisplay > 0.60 && !yawRightDone) {
+        setYawRightDone(true);
+        Ipc.playDrillSound('big-yaw-right');
+      }
     }
-  }, [activeStep.id, currentSubstepIndex, yawDisplay]);
+  }, [activeStep.id, currentSubstepIndex, yawDisplay, yawLeftDone, yawRightDone]);
 
   // Step 12 Substep 5 Advance: Trigger when both rudder directions completed
   useEffect(() => {
@@ -1198,10 +1412,12 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     Sound.playSwitch();
     if (!speedbrakesOpen) {
       setSpeedbrakesOpen(true);
+      Ipc.playDrillSound('speedbrakes-open');
     } else {
       setSpeedbrakesOpen(false);
       setSpeedbrakeCycleDone(true); // Disable immediately after second click
       Sound.playCommit();
+      Ipc.playDrillSound('speedbrakes-closed');
       setTimeout(() => {
         onAdvanceStep(13); // Proceed to Step 13 (DBU)
       }, 800);
@@ -1221,53 +1437,148 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     }
   };
 
+  // Step 13: Flight stick & rudder movement audio callouts during Digital Backup Check
+  useEffect(() => {
+    if (activeStep.id !== 13 || !dbuSwitchOn) {
+      dbuRollAnnouncedRef.current = null;
+      dbuPitchAnnouncedRef.current = null;
+      dbuYawAnnouncedRef.current = null;
+      return;
+    }
+
+    // Roll
+    if (rollDisplay < 0.38) {
+      if (dbuRollAnnouncedRef.current !== 'left') {
+        dbuRollAnnouncedRef.current = 'left';
+        Ipc.playDrillSound('big-roll-left');
+      }
+    } else if (rollDisplay > 0.62) {
+      if (dbuRollAnnouncedRef.current !== 'right') {
+        dbuRollAnnouncedRef.current = 'right';
+        Ipc.playDrillSound('big-roll-right');
+      }
+    } else if (rollDisplay >= 0.44 && rollDisplay <= 0.56) {
+      dbuRollAnnouncedRef.current = null;
+    }
+
+    // Pitch
+    if (pitchDisplay < 0.38) {
+      if (dbuPitchAnnouncedRef.current !== 'down') {
+        dbuPitchAnnouncedRef.current = 'down';
+        Ipc.playDrillSound('big-nose-down');
+      }
+    } else if (pitchDisplay > 0.62) {
+      if (dbuPitchAnnouncedRef.current !== 'up') {
+        dbuPitchAnnouncedRef.current = 'up';
+        Ipc.playDrillSound('big-nose-up');
+      }
+    } else if (pitchDisplay >= 0.44 && pitchDisplay <= 0.56) {
+      dbuPitchAnnouncedRef.current = null;
+    }
+
+    // Yaw
+    if (yawDisplay < 0.38) {
+      if (dbuYawAnnouncedRef.current !== 'left') {
+        dbuYawAnnouncedRef.current = 'left';
+        Ipc.playDrillSound('big-yaw-left');
+      }
+    } else if (yawDisplay > 0.62) {
+      if (dbuYawAnnouncedRef.current !== 'right') {
+        dbuYawAnnouncedRef.current = 'right';
+        Ipc.playDrillSound('big-yaw-right');
+      }
+    } else if (yawDisplay >= 0.44 && yawDisplay <= 0.56) {
+      dbuYawAnnouncedRef.current = null;
+    }
+  }, [activeStep.id, dbuSwitchOn, rollDisplay, pitchDisplay, yawDisplay]);
+
+  // Reset brake tracking timers on step or substep change
+  useEffect(() => {
+    if (activeStep.id !== 14 || currentSubstepIndex !== 1) {
+      leftBrakeMovedRef.current = false;
+      if (leftBrakeIdleTimerRef.current) {
+        clearTimeout(leftBrakeIdleTimerRef.current);
+        leftBrakeIdleTimerRef.current = null;
+      }
+    }
+    if (activeStep.id !== 15 || currentSubstepIndex !== 1) {
+      rightBrakeMovedRef.current = false;
+      if (rightBrakeIdleTimerRef.current) {
+        clearTimeout(rightBrakeIdleTimerRef.current);
+        rightBrakeIdleTimerRef.current = null;
+      }
+    }
+  }, [activeStep.id, currentSubstepIndex]);
+
   // =========================================================================
-  // STEP 14 & 15: PHYSICAL BRAKE PEDAL INTEGRATION (3-SECOND HOLD)
+  // STEP 14 & 15: PHYSICAL BRAKE PEDAL INTEGRATION (MOVEMENT & IDLE DETECTION)
   // =========================================================================
   useEffect(() => {
     if (activeStep.id === 14 && currentSubstepIndex === 1) {
-      let interval: NodeJS.Timeout | null = null;
-      if (leftBrakeDeflection >= 0.15) {
-        interval = setInterval(() => {
-          setBrakeHoldTimer((prev) => {
-            const next = prev + 1;
-            if (next >= 3) {
-              if (interval) clearInterval(interval);
-              Sound.playCommit();
-              onAdvanceSubstep(2);
-              return 3;
-            }
-            return next;
-          });
+      let holdInterval: NodeJS.Timeout | null = null;
+      if (leftBrakeDeflection >= 0.20) {
+        if (leftBrakeIdleTimerRef.current) {
+          clearTimeout(leftBrakeIdleTimerRef.current);
+          leftBrakeIdleTimerRef.current = null;
+        }
+        if (!leftBrakeMovedRef.current) {
+          leftBrakeMovedRef.current = true;
+          Sound.playCommit();
+          Ipc.playDrillSound('left-brake-movement');
+        }
+        holdInterval = setInterval(() => {
+          setBrakeHoldTimer((prev) => Math.min(3, prev + 1));
         }, 1000);
       } else {
         setBrakeHoldTimer(0);
+        if (leftBrakeDeflection <= 0.05 && leftBrakeMovedRef.current) {
+          if (!leftBrakeIdleTimerRef.current) {
+            leftBrakeIdleTimerRef.current = setTimeout(() => {
+              leftBrakeIdleTimerRef.current = null;
+              leftBrakeMovedRef.current = false;
+              Sound.playCommit();
+              Ipc.playDrillSound('left-brake-nomovement');
+              onAdvanceSubstep(2);
+            }, 2000);
+          }
+        }
       }
       return () => {
-        if (interval) clearInterval(interval);
+        if (holdInterval) clearInterval(holdInterval);
       };
     }
 
     if (activeStep.id === 15 && currentSubstepIndex === 1) {
-      let interval: NodeJS.Timeout | null = null;
-      if (rightBrakeDeflection >= 0.15) {
-        interval = setInterval(() => {
-          setBrakeHoldTimer((prev) => {
-            const next = prev + 1;
-            if (next >= 3) {
-              if (interval) clearInterval(interval);
-              Sound.playCommit();
-              onAdvanceSubstep(2);
-              return 3;
-            }
-            return next;
-          });
+      let holdInterval: NodeJS.Timeout | null = null;
+      if (rightBrakeDeflection >= 0.20) {
+        if (rightBrakeIdleTimerRef.current) {
+          clearTimeout(rightBrakeIdleTimerRef.current);
+          rightBrakeIdleTimerRef.current = null;
+        }
+        if (!rightBrakeMovedRef.current) {
+          rightBrakeMovedRef.current = true;
+          Sound.playCommit();
+          Ipc.playDrillSound('right-brake-movement');
+        }
+        holdInterval = setInterval(() => {
+          setBrakeHoldTimer((prev) => Math.min(3, prev + 1));
         }, 1000);
       } else {
         setBrakeHoldTimer(0);
+        if (rightBrakeDeflection <= 0.05 && rightBrakeMovedRef.current) {
+          if (!rightBrakeIdleTimerRef.current) {
+            rightBrakeIdleTimerRef.current = setTimeout(() => {
+              rightBrakeIdleTimerRef.current = null;
+              rightBrakeMovedRef.current = false;
+              Sound.playCommit();
+              Ipc.playDrillSound('right-brake-nomovement');
+              onAdvanceSubstep(2);
+            }, 2000);
+          }
+        }
       }
       return () => {
-        if (interval) clearInterval(interval);
+        if (holdInterval) clearInterval(holdInterval);
       };
     }
     if (activeStep.id === 3 && currentSubstepIndex === 3) {
@@ -1299,9 +1610,11 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     if (activeStep.id === 16) {
       if (pos === 'OPEN' && currentSubstepIndex === 1) {
         Sound.playCommit();
+        Ipc.playDrillSound('aar-door-open');
         onAdvanceSubstep(2);
       } else if (pos === 'CLOSE' && currentSubstepIndex >= 2) {
         Sound.playCommit();
+        Ipc.playDrillSound('aar-door-closed');
         setTimeout(() => {
           onAdvanceStep(17);
         }, 1000);
@@ -1539,11 +1852,6 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     disableDrag
                     interactive={throttlePosition === 'CUTOFF'}
                     onClick={(detent) => {
-                      if (detent === 'IDLE' && throttlePosition === 'CUTOFF') {
-                        handleThrottleCutoffToIdle();
-                      }
-                    }}
-                    onPositionChange={(detent) => {
                       if (detent === 'IDLE' && throttlePosition === 'CUTOFF') {
                         handleThrottleCutoffToIdle();
                       }
