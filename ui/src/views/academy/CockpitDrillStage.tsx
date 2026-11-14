@@ -315,12 +315,20 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   const [rollTrim, setRollTrim] = useState(0.0);
   const [pitchTrim, setPitchTrim] = useState(0.0);
   const [yawTrim, setYawTrim] = useState(0.0);
+  const hasAdvancedStep11Ref = useRef(false);
 
   // Step 12 & 13: Big Movements, MPO Kick & Speedbrakes & DBU
   const [speedbrakesOpen, setSpeedbrakesOpen] = useState(false);
   const [speedbrakeCycleDone, setSpeedbrakeCycleDone] = useState(false);
   const [mpoKickActive, setMpoKickActive] = useState(false);
   const [dbuSwitchOn, setDbuSwitchOn] = useState(false);
+  const [rollLeftDone, setRollLeftDone] = useState(false);
+  const [rollRightDone, setRollRightDone] = useState(false);
+  const [pitchNoseUpDone, setPitchNoseUpDone] = useState(false);
+  const [pitchNoseDownDone, setPitchNoseDownDone] = useState(false);
+  const [yawLeftDone, setYawLeftDone] = useState(false);
+  const [yawRightDone, setYawRightDone] = useState(false);
+  const hasAdvancedStep12SubstepRef = useRef(false);
 
   // Step 14 & 15: Brakes (Physical Axis Integration)
   const [brakeHoldTimer, setBrakeHoldTimer] = useState(0);
@@ -339,13 +347,22 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     if (chiefEngaged) setInterphoneConnected(true);
   }, [chiefEngaged]);
 
-  // Reset Step 12 speedbrake cycle state when leaving Step 12
+  // Reset Step 12 speedbrake cycle and axis detection states when leaving Step 12
   useEffect(() => {
     if (activeStep.id !== 12) {
       setSpeedbrakeCycleDone(false);
       setSpeedbrakesOpen(false);
+      setRollLeftDone(false);
+      setRollRightDone(false);
+      setPitchNoseUpDone(false);
+      setPitchNoseDownDone(false);
+      setYawLeftDone(false);
+      setYawRightDone(false);
+      hasAdvancedStep12SubstepRef.current = false;
+    } else {
+      hasAdvancedStep12SubstepRef.current = false;
     }
-  }, [activeStep.id]);
+  }, [activeStep.id, currentSubstepIndex]);
 
   // Reset Step 16 AAR door switch position when leaving Step 16 or entering Step 16 substep 0
   useEffect(() => {
@@ -912,14 +929,14 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
 
     // Only advance if the user held consecutively for 5 full seconds
     if (epuHoldCompletedRef.current) {
-      if (activeStep.id === 6 && currentSubstepIndex === 2) {
+      if (activeStep.id === 6 && currentSubstepIndex === 3) {
         // EPU GEN and EPU PMG warning lights show up on release
         setStep6ThrottleAngle(2);
         setTachRpm(82);
         setEpuWarningLampsLit(true);
         Sound.playCommit();
         setTimeout(() => {
-          onAdvanceSubstep(3); // Advance to Substep 6-4: Throttle to idle with note
+          onAdvanceSubstep(4); // Advance to Substep 6-5: Throttle to idle with note
         }, 800);
       }
     } else {
@@ -1009,14 +1026,101 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
 
   // Advance to Step 12 when all trims re-centered
   useEffect(() => {
-    if (activeStep.id === 11 && currentSubstepIndex === 3 && isTrimsCentered) {
-      const t = setTimeout(() => {
+    if (activeStep.id === 11 && currentSubstepIndex === 3) {
+      if (isTrimsCentered && !hasAdvancedStep11Ref.current) {
+        hasAdvancedStep11Ref.current = true;
         Sound.playCommit();
-        onAdvanceStep(12);
-      }, 1000);
-      return () => clearTimeout(t);
+        const t = setTimeout(() => {
+          onAdvanceStep(12);
+        }, 500);
+        return () => clearTimeout(t);
+      }
+    } else {
+      hasAdvancedStep11Ref.current = false;
     }
   }, [activeStep.id, currentSubstepIndex, isTrimsCentered, onAdvanceStep]);
+
+  // Step 12 Substep 2: Roll Axis Detection (20% deflection from neutral: <0.40 or >0.60; order does not matter)
+  useEffect(() => {
+    if (activeStep.id === 12 && currentSubstepIndex === 1) {
+      if (rollDisplay < 0.40) setRollLeftDone(true);
+      if (rollDisplay > 0.60) setRollRightDone(true);
+    }
+  }, [activeStep.id, currentSubstepIndex, rollDisplay]);
+
+  // Step 12 Substep 2 Advance: Trigger when both roll directions completed
+  useEffect(() => {
+    if (activeStep.id === 12 && currentSubstepIndex === 1 && rollLeftDone && rollRightDone) {
+      if (!hasAdvancedStep12SubstepRef.current) {
+        hasAdvancedStep12SubstepRef.current = true;
+        Sound.playCommit();
+        const t = setTimeout(() => {
+          onAdvanceSubstep(2);
+        }, 500);
+        return () => clearTimeout(t);
+      }
+    }
+  }, [activeStep.id, currentSubstepIndex, rollLeftDone, rollRightDone, onAdvanceSubstep]);
+
+  // Step 12 Substep 3: Pitch Axis Detection (20% deflection: Strict order: Nose Up >0.60 first, then Nose Down <0.40)
+  useEffect(() => {
+    if (activeStep.id === 12 && currentSubstepIndex === 2) {
+      if (pitchDisplay > 0.60) setPitchNoseUpDone(true);
+      if (pitchNoseUpDone && pitchDisplay < 0.40) setPitchNoseDownDone(true);
+    }
+  }, [activeStep.id, currentSubstepIndex, pitchDisplay, pitchNoseUpDone]);
+
+  // Step 12 Substep 3 Advance: Trigger when Nose Down reached after Nose Up
+  useEffect(() => {
+    if (activeStep.id === 12 && currentSubstepIndex === 2 && pitchNoseUpDone && pitchNoseDownDone) {
+      if (!hasAdvancedStep12SubstepRef.current) {
+        hasAdvancedStep12SubstepRef.current = true;
+        Sound.playCommit();
+        const t = setTimeout(() => {
+          onAdvanceSubstep(3); // Advance to MPO while stick is held nose down
+        }, 400);
+        return () => clearTimeout(t);
+      }
+    }
+  }, [activeStep.id, currentSubstepIndex, pitchNoseUpDone, pitchNoseDownDone, onAdvanceSubstep]);
+
+  // Step 12 Substep 4: MPO Detection (DirectInput hardware binding or simulate)
+  useEffect(() => {
+    if (activeStep.id === 12 && currentSubstepIndex === 3) {
+      if (telemetry.mpo_active && !hasAdvancedStep12SubstepRef.current) {
+        hasAdvancedStep12SubstepRef.current = true;
+        Sound.playCommit();
+        setMpoKickActive(true);
+        const t = setTimeout(() => {
+          setMpoKickActive(false);
+          onAdvanceSubstep(4);
+        }, 600);
+        return () => clearTimeout(t);
+      }
+    }
+  }, [activeStep.id, currentSubstepIndex, telemetry.mpo_active, onAdvanceSubstep]);
+
+  // Step 12 Substep 5: Yaw Axis Detection (20% deflection from neutral: <0.40 or >0.60; order does not matter)
+  useEffect(() => {
+    if (activeStep.id === 12 && currentSubstepIndex === 4) {
+      if (yawDisplay < 0.40) setYawLeftDone(true);
+      if (yawDisplay > 0.60) setYawRightDone(true);
+    }
+  }, [activeStep.id, currentSubstepIndex, yawDisplay]);
+
+  // Step 12 Substep 5 Advance: Trigger when both rudder directions completed
+  useEffect(() => {
+    if (activeStep.id === 12 && currentSubstepIndex === 4 && yawLeftDone && yawRightDone) {
+      if (!hasAdvancedStep12SubstepRef.current) {
+        hasAdvancedStep12SubstepRef.current = true;
+        Sound.playCommit();
+        const t = setTimeout(() => {
+          onAdvanceSubstep(5); // Advance to Substep 6: Speedbrakes
+        }, 500);
+        return () => clearTimeout(t);
+      }
+    }
+  }, [activeStep.id, currentSubstepIndex, yawLeftDone, yawRightDone, onAdvanceSubstep]);
 
   // =========================================================================
   // STEP 12 & 13: DYNAMIC FLIR SURFACE RESPONSE & SPEEDBRAKES & DBU
@@ -1166,6 +1270,18 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         if (interval) clearInterval(interval);
       };
     }
+    if (activeStep.id === 3 && currentSubstepIndex === 3) {
+      if (leftBrakeDeflection >= 0.15 && rightBrakeDeflection >= 0.15) {
+        Sound.playCommit();
+        onAdvanceSubstep(4);
+      }
+    }
+    if (activeStep.id === 6 && currentSubstepIndex === 1) {
+      if (leftBrakeDeflection >= 0.15 && rightBrakeDeflection >= 0.15) {
+        Sound.playCommit();
+        onAdvanceSubstep(2);
+      }
+    }
     if (activeStep.id === 17 && currentSubstepIndex === 0) {
       if (leftBrakeDeflection >= 0.15 && rightBrakeDeflection >= 0.15) {
         Sound.playCommit();
@@ -1258,7 +1374,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* PANEL: TEST Panel (Step 1, Step 6-3)                     */}
             {/* -------------------------------------------------------- */}
-            {(activeStep.id === 1 || (activeStep.id === 6 && currentSubstepIndex === 2)) && (
+            {(activeStep.id === 1 || (activeStep.id === 6 && currentSubstepIndex === 3)) && (
               <motion.div
                 key="panel-test"
                 layout
@@ -1302,7 +1418,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* PANEL: ELEC Power Panel (Step 1, Step 6-3 & 6-4)         */}
             {/* -------------------------------------------------------- */}
-            {(activeStep.id === 1 || (activeStep.id === 6 && (currentSubstepIndex === 2 || currentSubstepIndex === 3))) && (
+            {(activeStep.id === 1 || (activeStep.id === 6 && (currentSubstepIndex === 3 || currentSubstepIndex === 4))) && (
               <motion.div
                 key="panel-elec-power"
                 layout
@@ -1387,8 +1503,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* PANEL: Throttle Quadrant (Step 2-3+, Step 3-4+, Step 6-2 & 6-4) */}
             {/* -------------------------------------------------------- */}
             {((activeStep.id === 2 && currentSubstepIndex >= 2) ||
-              (activeStep.id === 3 && currentSubstepIndex >= 3) ||
-              (activeStep.id === 6 && (currentSubstepIndex === 1 || currentSubstepIndex === 3))) && (
+              (activeStep.id === 3 && currentSubstepIndex >= 4) ||
+              (activeStep.id === 6 && (currentSubstepIndex === 2 || currentSubstepIndex === 4))) && (
               <motion.div
                 key="panel-throttle"
                 layout
@@ -1408,10 +1524,10 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   {activeStep.id === 2
                     ? 'THROTTLE (CUTOFF ➔ IDLE)'
                     : activeStep.id === 3
-                    ? currentSubstepIndex === 4
+                    ? currentSubstepIndex === 5
                       ? 'THROTTLE (RETARD TO IDLE)'
                       : 'THROTTLE (SPOOL TO 73% RPM)'
-                    : currentSubstepIndex === 3
+                    : currentSubstepIndex === 4
                     ? 'THROTTLE (RETARD TO IDLE)'
                     : 'THROTTLE (SPOOL TO 82% RPM)'}
                 </span>
@@ -1441,18 +1557,18 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     pointB="MIL"
                     disableDrag
                     hideMilBadge
-                    customPointBLabel={currentSubstepIndex === 4 ? undefined : "73%"}
-                    interactive={currentSubstepIndex === 3 || currentSubstepIndex === 4}
+                    customPointBLabel={currentSubstepIndex === 5 ? undefined : "73%"}
+                    interactive={currentSubstepIndex === 4 || currentSubstepIndex === 5}
                     onClick={() => {
                       Sound.playSwitch();
-                      if (currentSubstepIndex === 3) {
+                      if (currentSubstepIndex === 4) {
                         const targetAngle = -2;
                         setStep4ThrottleAngle(targetAngle);
                         setTachRpm(75);
                         handleSpoolTo73Rpm(75);
                         Sound.playCommit();
-                        onAdvanceSubstep(4);
-                      } else if (currentSubstepIndex === 4) {
+                        onAdvanceSubstep(5);
+                      } else if (currentSubstepIndex === 5) {
                         setStep4ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
                         setTachRpm(63);
                         Sound.playCommit();
@@ -1466,11 +1582,11 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                       const ratio = Math.max(0, Math.min(1, (angle - (-14)) / (-2 - (-14))));
                       const computedRpm = Math.round(63 + ratio * 12);
                       setTachRpm(computedRpm);
-                      if (currentSubstepIndex === 3 && computedRpm >= 73) {
+                      if (currentSubstepIndex === 4 && computedRpm >= 73) {
                         handleSpoolTo73Rpm(computedRpm);
                         Sound.playCommit();
-                        onAdvanceSubstep(4);
-                      } else if (currentSubstepIndex === 4 && computedRpm <= 65) {
+                        onAdvanceSubstep(5);
+                      } else if (currentSubstepIndex === 5 && computedRpm <= 65) {
                         Sound.playCommit();
                         setTimeout(() => {
                           onAdvanceStep(4);
@@ -1485,15 +1601,15 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     pointB="MIL"
                     disableDrag
                     allowContinuous
-                    interactive={currentSubstepIndex === 1 || currentSubstepIndex === 3}
+                    interactive={currentSubstepIndex === 2 || currentSubstepIndex === 4}
                     onClick={() => {
                       Sound.playSwitch();
-                      if (currentSubstepIndex === 1) {
+                      if (currentSubstepIndex === 2) {
                         setStep6ThrottleAngle(2);
                         setTachRpm(82);
                         Sound.playCommit();
-                        onAdvanceSubstep(2);
-                      } else if (currentSubstepIndex === 3) {
+                        onAdvanceSubstep(3);
+                      } else if (currentSubstepIndex === 4) {
                         setStep6ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
                         setTachRpm(63);
                         setEpuWarningLampsLit(false);
@@ -1504,10 +1620,10 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                       const ratio = Math.max(0, Math.min(1, (angle - (-14)) / (6 - (-14))));
                       const computedRpm = Math.round(63 + ratio * 24);
                       setTachRpm(computedRpm);
-                      if (currentSubstepIndex === 1 && computedRpm >= 82) {
+                      if (currentSubstepIndex === 2 && computedRpm >= 82) {
                         Sound.playCommit();
-                        onAdvanceSubstep(2);
-                      } else if (currentSubstepIndex === 3 && computedRpm <= 65) {
+                        onAdvanceSubstep(3);
+                      } else if (currentSubstepIndex === 4 && computedRpm <= 65) {
                         setEpuWarningLampsLit(false);
                       }
                     }}
@@ -1519,7 +1635,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* GAUGE: Tachometer % RPM (Step 2, 3, 4, 6)                */}
             {/* -------------------------------------------------------- */}
-            {(activeStep.id === 2 || activeStep.id === 3 || activeStep.id === 4 || (activeStep.id === 6 && currentSubstepIndex >= 1)) && (
+            {(activeStep.id === 2 || activeStep.id === 3 || activeStep.id === 4 || (activeStep.id === 6 && currentSubstepIndex >= 2)) && (
               <motion.div
                 key="gauge-tach-rpm"
                 layout
@@ -1621,9 +1737,9 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             )}
 
             {/* -------------------------------------------------------- */}
-            {/* PANEL: EPU Panel (Step 5, Step 6-0 to 6-2)               */}
+            {/* PANEL: EPU Panel (Step 5, Step 6-0 to 6-3)               */}
             {/* -------------------------------------------------------- */}
-            {(activeStep.id === 5 || (activeStep.id === 6 && currentSubstepIndex <= 2)) && (
+            {(activeStep.id === 5 || (activeStep.id === 6 && currentSubstepIndex <= 3)) && (
               <motion.div
                 key="panel-epu"
                 layout
@@ -2208,8 +2324,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
           </div>
         )}
 
-        {/* EPU Hold Progress Indicator in Step 06 Substep 2 */}
-        {activeStep.id === 6 && currentSubstepIndex === 2 && (
+        {/* EPU Hold Progress Indicator in Step 06 Substep 4 (Hold EPU/GEN Switch) */}
+        {activeStep.id === 6 && currentSubstepIndex === 3 && (
           <div className="flex flex-col items-center gap-2 mt-4">
             <span className="text-xs font-bold text-amber-400">
               {epuGenSwitchHeld
@@ -2225,8 +2341,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
           </div>
         )}
 
-        {/* Explanatory Note on Retard to Idle in Step 06 Substep 3 */}
-        {activeStep.id === 6 && currentSubstepIndex === 3 && (
+        {/* Explanatory Note on Retard to Idle in Step 06 Substep 5 */}
+        {activeStep.id === 6 && currentSubstepIndex === 4 && (
           <div className="w-full max-w-xl p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2 mt-4">
             <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">
               <AlertTriangle className="w-4 h-4 text-amber-400" />
@@ -2399,11 +2515,27 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   </span>
                 )}
                 {activeStep.id === 3 && currentSubstepIndex === 3 && (
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-amber-300 font-bold">
+                      ⚡ Depress toe brakes firmly (or click simulate) to hold aircraft stationary prior to throttle spool.
+                    </span>
+                    <button
+                      onClick={() => {
+                        Sound.playCommit();
+                        onAdvanceSubstep(4);
+                      }}
+                      className="px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] shrink-0"
+                    >
+                      HOLD TOE BRAKES • PROCEED
+                    </button>
+                  </div>
+                )}
+                {activeStep.id === 3 && currentSubstepIndex === 4 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Click or advance throttle forward to spool engine to 73% RPM minimum.
                   </span>
                 )}
-                {activeStep.id === 3 && currentSubstepIndex === 4 && (
+                {activeStep.id === 3 && currentSubstepIndex === 5 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Click or retard throttle back to IDLE. Observe nozzle remain closed (&lt; 5%).
                   </span>
@@ -2482,16 +2614,32 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   </span>
                 )}
                 {activeStep.id === 6 && currentSubstepIndex === 1 && (
-                  <span className="text-cyan-300 font-bold">
-                    ⚡ Action Required: Hold toe brakes firmly and advance throttle forward to ~82% RPM.
-                  </span>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-amber-300 font-bold">
+                      ⚡ Depress toe brakes firmly (or click simulate) to hold aircraft stationary prior to engine run-up.
+                    </span>
+                    <button
+                      onClick={() => {
+                        Sound.playCommit();
+                        onAdvanceSubstep(2);
+                      }}
+                      className="px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] shrink-0"
+                    >
+                      HOLD TOE BRAKES • PROCEED
+                    </button>
+                  </div>
                 )}
                 {activeStep.id === 6 && currentSubstepIndex === 2 && (
+                  <span className="text-cyan-300 font-bold">
+                    ⚡ Action Required: Advance throttle forward to ~82% RPM to generate bleed air for EPU.
+                  </span>
+                )}
+                {activeStep.id === 6 && currentSubstepIndex === 3 && (
                   <span className="text-amber-300 font-bold">
                     ⚡ Action Required: Click and hold EPU/GEN switch on TEST panel for 5 seconds.
                   </span>
                 )}
-                {activeStep.id === 6 && currentSubstepIndex === 3 && (
+                {activeStep.id === 6 && currentSubstepIndex === 4 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-cyan-300 font-bold">
                       ⚡ Action Required: Retard throttle back to IDLE. Observe EPU GEN and EPU PMG lamps.
@@ -2658,15 +2806,58 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     <span>Verbal Required: Transmit &quot;Clear big movements&quot;.</span>
                   </span>
                 )}
-                {activeStep.id === 12 && currentSubstepIndex > 0 && currentSubstepIndex < 3 && (
-                  <span className="text-cyan-300 font-bold">
-                    ⚡ Move sidestick through full roll and pitch deflection. Observe live FLIR camera feedback.
-                  </span>
+                {activeStep.id === 12 && currentSubstepIndex === 1 && (
+                  <div className="flex items-center justify-between gap-4 w-full">
+                    <div className="flex items-center gap-3">
+                      <span className="text-cyan-300 font-bold">
+                        ⚡ Deflect flight stick full LEFT and full RIGHT:
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${rollLeftDone ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}>
+                        {rollLeftDone ? '✓' : '○'} ROLL LEFT
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${rollRightDone ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}>
+                        {rollRightDone ? '✓' : '○'} ROLL RIGHT
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        Sound.playCommit();
+                        onAdvanceSubstep(2);
+                      }}
+                      className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 font-bold text-xs cursor-pointer shadow transition-[background-color] shrink-0"
+                    >
+                      SKIP ROLL TEST
+                    </button>
+                  </div>
+                )}
+                {activeStep.id === 12 && currentSubstepIndex === 2 && (
+                  <div className="flex items-center justify-between gap-4 w-full">
+                    <div className="flex items-center gap-3">
+                      <span className="text-cyan-300 font-bold">
+                        ⚡ Pull stick full AFT (Nose Up), then push full FWD (Nose Down):
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${pitchNoseUpDone ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}>
+                        {pitchNoseUpDone ? '✓' : '1.'} NOSE UP (AFT)
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${pitchNoseDownDone ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : pitchNoseUpDone ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}>
+                        {pitchNoseDownDone ? '✓' : '2.'} NOSE DOWN (FWD &amp; HOLD)
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        Sound.playCommit();
+                        onAdvanceSubstep(3);
+                      }}
+                      className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 font-bold text-xs cursor-pointer shadow transition-[background-color] shrink-0"
+                    >
+                      SKIP PITCH TEST
+                    </button>
+                  </div>
                 )}
                 {activeStep.id === 12 && currentSubstepIndex === 3 && (
-                  <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center justify-between gap-4 w-full">
                     <span className="text-cyan-300 font-bold">
-                      ⚡ Actuate physical MPO switch on throttle, or simulate/skip if no hardware assigned:
+                      ⚡ While holding Nose Down, actuate physical MPO switch on throttle (or simulate/skip):
                     </span>
                     <button
                       onClick={() => {
@@ -2684,9 +2875,28 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   </div>
                 )}
                 {activeStep.id === 12 && currentSubstepIndex === 4 && (
-                  <span className="text-cyan-300 font-bold">
-                    ⚡ Deflect rudder pedals left and right. Observe live vertical fin rudder response.
-                  </span>
+                  <div className="flex items-center justify-between gap-4 w-full">
+                    <div className="flex items-center gap-3">
+                      <span className="text-cyan-300 font-bold">
+                        ⚡ Deflect rudder pedals full LEFT and full RIGHT:
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${yawLeftDone ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}>
+                        {yawLeftDone ? '✓' : '○'} RUDDER LEFT
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${yawRightDone ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}>
+                        {yawRightDone ? '✓' : '○'} RUDDER RIGHT
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        Sound.playCommit();
+                        onAdvanceSubstep(5);
+                      }}
+                      className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 font-bold text-xs cursor-pointer shadow transition-[background-color] shrink-0"
+                    >
+                      SKIP YAW TEST
+                    </button>
+                  </div>
                 )}
                 {activeStep.id === 12 && currentSubstepIndex === 5 && (
                   <span className="text-amber-300 font-bold">
