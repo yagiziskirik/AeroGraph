@@ -1151,7 +1151,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         }
       ,
         expectedChiefResponse: "Nose Up... Nose Down... Roll Left... Roll Right... Yaw Left... Yaw Right.",
-        rationale: "Chief confirms that control surfaces respond correctly to manual trim inputs across all three axes."
+        rationale: "Chief confirms that control surfaces respond correctly to manual trim inputs across all three axes. You do that with joystick trim hat and manual trim wheel for Yaw in Falcon BMS."
       },
       {
         id: '11-4',
