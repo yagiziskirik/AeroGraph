@@ -438,6 +438,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let shared_config = Arc::new(Mutex::new(config.clone()));
     let reload_trigger = Arc::new(AtomicBool::new(false));
     let engage_trigger = Arc::new(AtomicBool::new(false));
+    let cockpit_drill_active = Arc::new(AtomicBool::new(false));
 
     let (manual_trigger_tx, manual_trigger_rx) = mpsc::channel::<()>();
     let shared_input_snapshot = Arc::new(Mutex::new(
@@ -478,6 +479,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let v_hardware_active = ui_hardware_active.clone();
     let v_ui_visible = ui_visible.clone();
     let v_mpo_binding = mpo_binding_active.clone();
+    let v_cockpit_drill_active = cockpit_drill_active.clone();
 
     let worker_ctx = VoiceWorkerContext {
         running: r_voice,
@@ -490,6 +492,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui_hardware_active: v_hardware_active,
         ui_visible: v_ui_visible,
         mpo_binding_active: v_mpo_binding,
+        cockpit_drill_active: v_cockpit_drill_active,
     };
 
     thread::spawn(move || {
@@ -742,6 +745,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     voice_recognition_enabled: &voice_recognition_enabled,
                     mpo_binding_active: &mpo_binding_active,
                     ui_hardware_active: &ui_hardware_active,
+                    cockpit_drill_active: &cockpit_drill_active,
                 };
                 handle_ipc_message(req, &mut ctx);
             }
@@ -1197,6 +1201,108 @@ struct IpcContext<'a> {
     voice_recognition_enabled: &'a Arc<AtomicBool>,
     mpo_binding_active: &'a Arc<AtomicBool>,
     ui_hardware_active: &'a Arc<AtomicBool>,
+    cockpit_drill_active: &'a Arc<AtomicBool>,
+}
+
+fn resolve_drill_cue_path(
+    cue: &str,
+    female: bool,
+    shared_profile: &Arc<Mutex<Option<LoadedProfile>>>,
+) -> Option<PathBuf> {
+    let rel_subpath = match cue {
+        "beep" => "VCC/Sounds/start-beep.mp3",
+        "comms-check" => {
+            if female {
+                "VCC/Sounds/1LoudAndClearMaam.mp3"
+            } else {
+                "VCC/Sounds/1LoudAndClearSir.mp3"
+            }
+        }
+        "clear-start-two" => "VCC/Sounds/2ClearForStart2.mp3",
+        "good-start" => {
+            if female {
+                "VCC/Sounds/3GoodStartMaam.mp3"
+            } else {
+                "VCC/Sounds/3GoodStart.mp3"
+            }
+        }
+        "clear-sec" => "VCC/Sounds/ClearForSEC1.mp3",
+        "copy" => {
+            if female {
+                "VCC/Sounds/YesMaamStart2/4Copy.mp3"
+            } else {
+                "VCC/Sounds/YesSirStart2/4Copy.mp3"
+            }
+        }
+        "copy-standby" => "VCC/Sounds/Standby/1CopyStandby.mp3",
+        "nozzle-closed" => "VCC/Sounds/8NozzleClosed.mp3",
+        "nozzle-open" => "VCC/Sounds/9NozzleOpen.mp3",
+        "no-flow" => "VCC/Sounds/6NoFlow.mp3",
+        "epu-runup" => "VCC/Sounds/5EPURunUp.mp3",
+        "speedbrakes-open" => "VCC/Sounds/10SpeedBreaksOpen.mp3",
+        "speedbrakes-closed" => "VCC/Sounds/11SpeedBreaksClosed.mp3",
+        "controls-clear" => "VCC/Sounds/FlightControlsClear.mp3",
+        "cleared-for-bit" => "VCC/Sounds/12ClearedForBit.mp3",
+        "ready-trim" => "VCC/Sounds/13ReadyTrim.mp3",
+        "trim-no-movement" => "VCC/Sounds/14TrimNoMovement.mp3",
+        "trim-nose-up" => "VCC/Sounds/Trims/NoseUp.mp3",
+        "trim-nose-down" => "VCC/Sounds/Trims/NoseDown.mp3",
+        "trim-roll-left" => "VCC/Sounds/Trims/RollLeft.mp3",
+        "trim-roll-right" => "VCC/Sounds/Trims/RollRight.mp3",
+        "trim-yaw-left" => "VCC/Sounds/Trims/YawLeft.mp3",
+        "trim-yaw-right" => "VCC/Sounds/Trims/YawRight.mp3",
+        "controls-still-clear" => "VCC/Sounds/16FlightControlsStillClear.mp3",
+        "big-roll-left" => "VCC/Sounds/BigMovements/RollLeft.mp3",
+        "big-roll-right" => "VCC/Sounds/BigMovements/RollRight.mp3",
+        "big-nose-up" => "VCC/Sounds/BigMovements/NoseUp.mp3",
+        "big-nose-down" => "VCC/Sounds/BigMovements/NoseDown.mp3",
+        "mpo-kick" => "VCC/Sounds/Trims/Kick.mp3",
+        "big-yaw-left" => "VCC/Sounds/BigMovements/YawLeft.mp3",
+        "big-yaw-right" => "VCC/Sounds/BigMovements/YawRight.mp3",
+        "ready-left-brake" => "VCC/Sounds/18aReadyLeftBrake.mp3",
+        "ready-right-brake" => "VCC/Sounds/19ReadyRightBrake.mp3",
+        "left-brake-movement" => "VCC/Sounds/Brakes/Ch1_Movement.mp3",
+        "left-brake-nomovement" => "VCC/Sounds/Brakes/Ch1_NoMovement.mp3",
+        "right-brake-movement" => "VCC/Sounds/Brakes/Ch2_Movement.mp3",
+        "right-brake-nomovement" => "VCC/Sounds/Brakes/Ch2_NoMovement.mp3",
+        "refuel-door-ready" => "VCC/Sounds/AAR Door/RefuelDoorCheck_Rdy.mp3",
+        "aar-door-open" => "VCC/Sounds/AAR Door/AARDoorCheck_Open.mp3",
+        "aar-door-closed" => "VCC/Sounds/AAR Door/AARDoorCheck_Closed.mp3",
+        "cleared-off" => {
+            if female {
+                "VCC/Sounds/ClearedOffFP/BringHerBackCode1Maam.mp3"
+            } else {
+                "VCC/Sounds/ClearedOff/BringHerBackCode1.mp3"
+            }
+        }
+        other => other,
+    };
+
+    // 1. Try resolving relative to currently loaded profile
+    {
+        let prof_guard = shared_profile.lock().unwrap();
+        if let Some(ref lp) = *prof_guard {
+            let p = lp.resolve_asset_path(rel_subpath);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+
+    // 2. Fallback relative to bundled profiles directory
+    let fallback_base = PathBuf::from("assets/profiles/Falcon BMS 4.38 v1.3.1");
+    let cand = fallback_base.join(rel_subpath);
+    if cand.exists() {
+        return Some(cand);
+    }
+
+    // 3. Raw file path directly
+    let raw = PathBuf::from(rel_subpath);
+    if raw.exists() {
+        return Some(raw);
+    }
+
+    None
 }
 
 fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>) {
@@ -1205,6 +1311,24 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
         IpcRequest::SetUiMode { mode } => {
             ctx.ui_hardware_active
                 .store(mode == "hardware", Ordering::Relaxed);
+        }
+        IpcRequest::SetCockpitDrillActive { active } => {
+            log::info!("SetCockpitDrillActive: active={}", active);
+            ctx.cockpit_drill_active.store(active, Ordering::SeqCst);
+        }
+        IpcRequest::PlayDrillSound { cue } => {
+            log::info!("PlayDrillSound requested: \"{}\"", cue);
+            let female = {
+                let cfg = ctx.shared_config.lock().unwrap();
+                cfg.pilot_female
+            };
+            if let Some(path) = resolve_drill_cue_path(&cue, female, ctx.shared_profile) {
+                if let Some(player) = ctx.audio_player {
+                    player.play_sound(&path, &[], false);
+                }
+            } else {
+                log::warn!("Could not resolve drill sound cue: \"{}\"", cue);
+            }
         }
         IpcRequest::DragWindow | IpcRequest::ResizeWindow { .. } | IpcRequest::MinimizeWindow => {
             // Handled directly inside window event callback
@@ -2366,6 +2490,7 @@ struct VoiceWorkerContext {
     ui_hardware_active: Arc<AtomicBool>,
     ui_visible: Arc<AtomicBool>,
     mpo_binding_active: Arc<AtomicBool>,
+    cockpit_drill_active: Arc<AtomicBool>,
 }
 
 fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
@@ -2380,6 +2505,7 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
         ui_hardware_active,
         ui_visible,
         mpo_binding_active,
+        cockpit_drill_active,
     } = ctx;
     let mut bms_client = BmsSharedMemoryClient::new();
     let mut sapi: Option<SapiEngine> = None;
@@ -2500,6 +2626,8 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
             };
             last_compiled_config = None;
         }
+
+        state_engine.suppress_profile_audio = cockpit_drill_active.load(Ordering::Relaxed);
 
         let reload = reload_trigger.swap(false, Ordering::SeqCst);
         if reload {
@@ -2857,32 +2985,38 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                             if ptt_allowed {
                                 if let Some(cmd) = group.Commands.get(c_idx) {
                                     let cmd_name = cmd.Name.as_deref().unwrap_or("Unnamed");
-                                    if let Some(conds) = &cmd.Conditions {
-                                        if !state_engine.evaluate_condition_groups(conds) {
-                                            log::info!("🚫 [Condition Gated] Command [{}] condition not met under current state. Ignoring \"{}\"", cmd_name, text);
-                                            let _ = proxy.send_event(AppEvent::SpeechRecognized {
-                                                text: text.clone(),
-                                                confidence,
-                                                group: grp_name.to_string(),
-                                                command: cmd_name.to_string(),
-                                                status: "DENIED".to_string(),
-                                                reason: Some(format!(
-                                                    "Step='{}', rpm='{}'",
-                                                    state_engine
-                                                        .variables
-                                                        .get("Step")
-                                                        .map(|s| s.as_str())
-                                                        .unwrap_or(""),
-                                                    state_engine
-                                                        .variables
-                                                        .get("rpm")
-                                                        .map(|s| s.as_str())
-                                                        .unwrap_or("0")
-                                                )),
-                                            });
-                                            continue;
+                                    let is_drill = cockpit_drill_active.load(Ordering::Relaxed);
+
+                                    if !is_drill {
+                                        if let Some(conds) = &cmd.Conditions {
+                                            if !state_engine.evaluate_condition_groups(conds) {
+                                                log::info!("🚫 [Condition Gated] Command [{}] condition not met under current state. Ignoring \"{}\"", cmd_name, text);
+                                                let _ =
+                                                    proxy.send_event(AppEvent::SpeechRecognized {
+                                                        text: text.clone(),
+                                                        confidence,
+                                                        group: grp_name.to_string(),
+                                                        command: cmd_name.to_string(),
+                                                        status: "DENIED".to_string(),
+                                                        reason: Some(format!(
+                                                            "Step='{}', rpm='{}'",
+                                                            state_engine
+                                                                .variables
+                                                                .get("Step")
+                                                                .map(|s| s.as_str())
+                                                                .unwrap_or(""),
+                                                            state_engine
+                                                                .variables
+                                                                .get("rpm")
+                                                                .map(|s| s.as_str())
+                                                                .unwrap_or("0")
+                                                        )),
+                                                    });
+                                                continue;
+                                            }
                                         }
                                     }
+
                                     log::info!(
                                         "🎤 Recognized speech (conf: {:.2}): \"{}\" -> [{} > {}]",
                                         confidence,
@@ -2898,33 +3032,37 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                                         status: "VERIFIED".to_string(),
                                         reason: None,
                                     });
-                                    state_engine.execute_command(cmd, loaded);
 
-                                    let cur_step = state_engine
-                                        .variables
-                                        .get("Step")
-                                        .cloned()
-                                        .unwrap_or_default();
-                                    let cur_completed = state_engine
-                                        .variables
-                                        .get("Completed")
-                                        .cloned()
-                                        .unwrap_or_default();
-                                    let cur_engaged = state_engine.is_chief_engaged();
-                                    if cur_step != last_sent_step
-                                        || cur_completed != last_sent_completed
-                                        || cur_engaged != last_sent_engaged
-                                    {
-                                        let _ = proxy.send_event(AppEvent::CrewChiefStateChanged {
-                                            step: cur_step.clone(),
-                                            completed: cur_completed.clone(),
-                                            is_chief_engaged: cur_engaged,
-                                            last_command: cmd_name.to_string(),
-                                            last_phrase: text.clone(),
-                                        });
-                                        last_sent_step = cur_step;
-                                        last_sent_completed = cur_completed;
-                                        last_sent_engaged = cur_engaged;
+                                    if !is_drill {
+                                        state_engine.execute_command(cmd, loaded);
+
+                                        let cur_step = state_engine
+                                            .variables
+                                            .get("Step")
+                                            .cloned()
+                                            .unwrap_or_default();
+                                        let cur_completed = state_engine
+                                            .variables
+                                            .get("Completed")
+                                            .cloned()
+                                            .unwrap_or_default();
+                                        let cur_engaged = state_engine.is_chief_engaged();
+                                        if cur_step != last_sent_step
+                                            || cur_completed != last_sent_completed
+                                            || cur_engaged != last_sent_engaged
+                                        {
+                                            let _ =
+                                                proxy.send_event(AppEvent::CrewChiefStateChanged {
+                                                    step: cur_step.clone(),
+                                                    completed: cur_completed.clone(),
+                                                    is_chief_engaged: cur_engaged,
+                                                    last_command: cmd_name.to_string(),
+                                                    last_phrase: text.clone(),
+                                                });
+                                            last_sent_step = cur_step;
+                                            last_sent_completed = cur_completed;
+                                            last_sent_engaged = cur_engaged;
+                                        }
                                     }
                                 }
                             } else {
@@ -2953,7 +3091,7 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                 }
             }
 
-            if voice_enabled && listening_enabled {
+            if voice_enabled && listening_enabled && !cockpit_drill_active.load(Ordering::Relaxed) {
                 state_engine.evaluate_reactive_groups(loaded, &input_vars);
                 let cur_step = state_engine
                     .variables
