@@ -423,6 +423,22 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
     }, 1400);
   };
 
+  const handleAdvanceStep = useCallback((nextStepIdx: number) => {
+    setCurrentStepIndex(nextStepIdx);
+    setCurrentSubstepIndex(0);
+    if (nextStepIdx > 0) {
+      setChiefEngaged(true);
+    }
+  }, []);
+
+  const handleAdvanceSubstep = useCallback((nextSubstepIdx: number) => {
+    setCurrentSubstepIndex(nextSubstepIdx);
+  }, []);
+
+  const handleEngageChief = useCallback(() => {
+    setChiefEngaged(true);
+  }, []);
+
   const handleResetChief = () => {
     Sound.playSwitch();
     Ipc.resetCrewChief();
@@ -682,17 +698,14 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
             <CockpitDrillStage
               activeStep={activeStep}
               currentSubstepIndex={currentSubstepIndex}
-              onAdvanceSubstep={setCurrentSubstepIndex}
-              onAdvanceStep={(nextStepIdx) => {
-                setCurrentStepIndex(nextStepIdx);
-                setCurrentSubstepIndex(0);
-              }}
+              onAdvanceSubstep={handleAdvanceSubstep}
+              onAdvanceStep={handleAdvanceStep}
               onRestartDrill={handleResetChief}
               telemetry={telemetry}
               invertBrakes={invertBrakes}
               lastSpeech={lastSpeech}
               chiefEngaged={chiefEngaged}
-              onEngageChief={() => setChiefEngaged(true)}
+              onEngageChief={handleEngageChief}
               onConsumeSpeech={handleConsumeSpeech}
               onExitDrill={onBack}
             />
