@@ -216,6 +216,12 @@ export const Ipc = {
   engageCrewChief() {
     this.send('EngageCrewChief');
   },
+  setCockpitDrillActive(active: boolean) {
+    this.send('SetCockpitDrillActive', { active });
+  },
+  playDrillSound(cue: string) {
+    this.send('PlayDrillSound', { cue });
+  },
   testVoiceAudio(phrase: string) {
     this.send('TestVoiceAudio', { phrase });
   },

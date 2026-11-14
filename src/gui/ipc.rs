@@ -118,6 +118,12 @@ pub enum IpcRequest {
     SetUiMode {
         mode: String,
     },
+    SetCockpitDrillActive {
+        active: bool,
+    },
+    PlayDrillSound {
+        cue: String,
+    },
     OpenLogFile,
     GetConsoleLogs,
     OpenImagesFolder,
