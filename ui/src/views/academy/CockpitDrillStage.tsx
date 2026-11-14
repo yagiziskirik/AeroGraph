@@ -331,6 +331,12 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   const [rollTrim, setRollTrim] = useState(0.0);
   const [pitchTrim, setPitchTrim] = useState(0.0);
   const [yawTrim, setYawTrim] = useState(0.0);
+  const [trimPitchUpDone, setTrimPitchUpDone] = useState(false);
+  const [trimPitchDownDone, setTrimPitchDownDone] = useState(false);
+  const [trimRollLeftDone, setTrimRollLeftDone] = useState(false);
+  const [trimRollRightDone, setTrimRollRightDone] = useState(false);
+  const [trimYawLeftDone, setTrimYawLeftDone] = useState(false);
+  const [trimYawRightDone, setTrimYawRightDone] = useState(false);
   const hasAdvancedStep11Ref = useRef(false);
 
   // Step 12 & 13: Big Movements, MPO Kick & Speedbrakes & DBU
@@ -345,9 +351,9 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   const [yawLeftDone, setYawLeftDone] = useState(false);
   const [yawRightDone, setYawRightDone] = useState(false);
   const hasAdvancedStep12SubstepRef = useRef(false);
+  const mpoTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Step 14 & 15: Brakes (Physical Axis Integration)
-  const [brakeHoldTimer, setBrakeHoldTimer] = useState(0);
 
   // Step 16: Fuel Panel / AAR Door
   const [airRefuelDoorPos, setAirRefuelDoorPos] = useState<'CLOSE' | 'OPEN'>('CLOSE');
@@ -363,11 +369,16 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     if (chiefEngaged) setInterphoneConnected(true);
   }, [chiefEngaged]);
 
-  // Reset Step 12 speedbrake cycle and axis detection states when leaving Step 12
+  // Reset Step 12 speedbrake cycle, MPO kick, and axis detection states
   useEffect(() => {
     if (activeStep.id !== 12) {
       setSpeedbrakeCycleDone(false);
       setSpeedbrakesOpen(false);
+      setMpoKickActive(false);
+      if (mpoTimerRef.current) {
+        clearTimeout(mpoTimerRef.current);
+        mpoTimerRef.current = null;
+      }
       setRollLeftDone(false);
       setRollRightDone(false);
       setPitchNoseUpDone(false);
@@ -377,6 +388,13 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       hasAdvancedStep12SubstepRef.current = false;
     } else {
       hasAdvancedStep12SubstepRef.current = false;
+      if (currentSubstepIndex !== 3) {
+        setMpoKickActive(false);
+        if (mpoTimerRef.current) {
+          clearTimeout(mpoTimerRef.current);
+          mpoTimerRef.current = null;
+        }
+      }
     }
   }, [activeStep.id, currentSubstepIndex]);
 
@@ -675,8 +693,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     if (!lastSpeech.phrase || lastSpeech.status !== 'VERIFIED') return;
     if (lastSpeech.id === lastProcessedSpeechIdRef.current) return;
 
-    // Optional pilot acknowledgment: Step 01 Substep 4 (or 3) ("Loud and clear" or continue)
-    if (activeStep.id === 1 && (currentSubstepIndex === 2 || currentSubstepIndex === 3)) {
+    // Pilot acknowledgment: Step 01 Substep 4 ("Loud and clear" or continue)
+    if (activeStep.id === 1 && currentSubstepIndex === 3) {
       const p = lastSpeech.phrase.toUpperCase();
       if (
         p.includes('LOUD AND CLEAR') ||
@@ -687,7 +705,41 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         lastProcessedSpeechIdRef.current = lastSpeech.id;
         Sound.playCommit();
         onConsumeSpeech();
-        onAdvanceStep(2);
+        onAdvanceSubstep(4);
+        return;
+      }
+    }
+
+    // Step 01 Substep 5: How's Chief (phaseType: 'ACTION')
+    if (activeStep.id === 1 && currentSubstepIndex === 4) {
+      const p = lastSpeech.phrase.toUpperCase();
+      const c = (lastSpeech.command || '').toUpperCase();
+      const valid = [
+        "HOW'S CHIEF DOING", "HOW'S CHIEF", "HOW IS CHIEF", "HOW ARE YOU DOING",
+        "HOW YOU DOING", "HOW YOU DOING CHIEF", "HOW'S IT GOING", "WHAT'S HAPPENING",
+        "HOW ARE YOU", "HOWS CHIEF DOING", "HOWS CHIEF", "WHATS HAPPENING", "HOWS IT GOING"
+      ];
+      if (
+        valid.includes(p) ||
+        p.includes("HOW'S CHIEF") ||
+        p.includes("HOWS CHIEF") ||
+        p.includes("HOW YOU DOING") ||
+        p.includes("HOW ARE YOU") ||
+        c.includes("HOW'S CHIEF") ||
+        c.includes("HOWS CHIEF") ||
+        c.includes("HOW'S") ||
+        c.includes("HOWS")
+      ) {
+        lastProcessedSpeechIdRef.current = lastSpeech.id;
+        Sound.playCommit();
+        onConsumeSpeech();
+        Ipc.playDrillSound('hows-chief');
+        setIsChiefResponding(true);
+        setChiefDialogue("Doin' good! How you doing?");
+        setTimeout(() => {
+          setIsChiefResponding(false);
+          onAdvanceStep(2);
+        }, 2500);
         return;
       }
     }
@@ -877,7 +929,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
 
     // Smooth 8.5s multi-stage progression:
     // Tachometer: 24% -> 63%
-    // FTIT: 120°C -> 700°C -> 550°C
+    // FTIT: 120°C -> 650°C -> 550°C
     // Hyd A & B: 0.0 -> 3.0 (3,000 PSI / 12 o'clock)
     let tick = 0;
     const totalTicks = 85;
@@ -895,11 +947,11 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         if (curRpm > 63) curRpm = 63;
       }
 
-      // 2. FTIT progression: rise to 700°C over first 35 ticks, then settle to 550°C over next 40 ticks
+      // 2. FTIT progression: rise to 650°C over first 35 ticks, then settle to 550°C over next 40 ticks
       if (tick <= 35) {
-        curTemp += (700 - 120) / 35;
+        curTemp += (650 - 120) / 35;
       } else if (tick <= 75) {
-        curTemp -= (700 - 550) / 40;
+        curTemp -= (650 - 550) / 40;
       } else {
         curTemp = 550;
       }
@@ -1182,42 +1234,88 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     return Math.abs(rollTrim) <= 0.2 && Math.abs(pitchTrim) <= 0.2 && Math.abs(yawTrim) <= 0.2;
   }, [rollTrim, pitchTrim, yawTrim]);
 
-  // Step 11 Trim Animation
+  // Reset Step 11 trim checks when leaving Step 11
+  useEffect(() => {
+    if (activeStep.id !== 11) {
+      setTrimPitchUpDone(false);
+      setTrimPitchDownDone(false);
+      setTrimRollLeftDone(false);
+      setTrimRollRightDone(false);
+      setTrimYawLeftDone(false);
+      setTrimYawRightDone(false);
+    }
+  }, [activeStep.id]);
+
+  // Step 11 Substep 2: User-driven 6-Axis Trim Deflection Checks (Past 1.0 or -1.0)
+  useEffect(() => {
+    if (activeStep.id !== 11 || currentSubstepIndex !== 2) return;
+
+    if (pitchTrim <= -1.0 && !trimPitchUpDone) {
+      setTrimPitchUpDone(true);
+      Ipc.playDrillSound('trim-nose-up');
+    }
+    if (pitchTrim >= 1.0 && !trimPitchDownDone) {
+      setTrimPitchDownDone(true);
+      Ipc.playDrillSound('trim-nose-down');
+    }
+    if (rollTrim <= -1.0 && !trimRollLeftDone) {
+      setTrimRollLeftDone(true);
+      Ipc.playDrillSound('trim-roll-left');
+    }
+    if (rollTrim >= 1.0 && !trimRollRightDone) {
+      setTrimRollRightDone(true);
+      Ipc.playDrillSound('trim-roll-right');
+    }
+    if (yawTrim <= -1.0 && !trimYawLeftDone) {
+      setTrimYawLeftDone(true);
+      Ipc.playDrillSound('trim-yaw-left');
+    }
+    if (yawTrim >= 1.0 && !trimYawRightDone) {
+      setTrimYawRightDone(true);
+      Ipc.playDrillSound('trim-yaw-right');
+    }
+  }, [
+    activeStep.id,
+    currentSubstepIndex,
+    pitchTrim,
+    rollTrim,
+    yawTrim,
+    trimPitchUpDone,
+    trimPitchDownDone,
+    trimRollLeftDone,
+    trimRollRightDone,
+    trimYawLeftDone,
+    trimYawRightDone,
+  ]);
+
+  // Step 11 Substep 2 Advance: When all 6 axes are verified, proceed directly to centering step
   useEffect(() => {
     if (activeStep.id === 11 && currentSubstepIndex === 2) {
-      const timers = [
-        setTimeout(() => {
-          setPitchTrim(1.0);
-          Ipc.playDrillSound('trim-nose-up');
-        }, 800),
-        setTimeout(() => {
-          setPitchTrim(-1.1);
-          Ipc.playDrillSound('trim-nose-down');
-        }, 2000),
-        setTimeout(() => {
-          setRollTrim(-1.2);
-          Ipc.playDrillSound('trim-roll-left');
-        }, 3200),
-        setTimeout(() => {
-          setRollTrim(1.1);
-          Ipc.playDrillSound('trim-roll-right');
-        }, 4400),
-        setTimeout(() => {
-          setYawTrim(-1.5);
-          Ipc.playDrillSound('trim-yaw-left');
-        }, 5600),
-        setTimeout(() => {
-          setYawTrim(1.6);
-          Ipc.playDrillSound('trim-yaw-right');
-        }, 6800),
-        setTimeout(() => {
-          Sound.playCommit();
-          onAdvanceSubstep(3); // Prompt user to manually re-center trims
-        }, 8000),
-      ];
-      return () => timers.forEach(clearTimeout);
+      if (
+        trimPitchUpDone &&
+        trimPitchDownDone &&
+        trimRollLeftDone &&
+        trimRollRightDone &&
+        trimYawLeftDone &&
+        trimYawRightDone
+      ) {
+        const t = setTimeout(() => {
+          onAdvanceSubstep(3);
+        }, 800);
+        return () => clearTimeout(t);
+      }
     }
-  }, [activeStep.id, currentSubstepIndex, onAdvanceSubstep]);
+  }, [
+    activeStep.id,
+    currentSubstepIndex,
+    trimPitchUpDone,
+    trimPitchDownDone,
+    trimRollLeftDone,
+    trimRollRightDone,
+    trimYawLeftDone,
+    trimYawRightDone,
+    onAdvanceSubstep,
+  ]);
 
   // Advance to Step 12 when all trims re-centered
   useEffect(() => {
@@ -1299,11 +1397,12 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         Sound.playCommit();
         Ipc.playDrillSound('mpo-kick');
         setMpoKickActive(true);
-        const t = setTimeout(() => {
+        if (mpoTimerRef.current) clearTimeout(mpoTimerRef.current);
+        mpoTimerRef.current = setTimeout(() => {
+          mpoTimerRef.current = null;
           setMpoKickActive(false);
           onAdvanceSubstep(4);
         }, 600);
-        return () => clearTimeout(t);
       }
     }
   }, [activeStep.id, currentSubstepIndex, telemetry.mpo_active, onAdvanceSubstep]);
@@ -1343,7 +1442,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     if (speedbrakesOpen) {
       return { src: '/crewchief/FLCS/spdBrakes.webp', label: 'SPEEDBRAKES OPEN' };
     }
-    if (telemetry.mpo_active || mpoKickActive) {
+    if ((activeStep.id === 12 && currentSubstepIndex === 3 && telemetry.mpo_active) || mpoKickActive) {
       return { src: '/crewchief/FLCS/mpoKick.webp', label: 'MPO ACTIVE' };
     }
     if (rollDisplay < 0.38) {
@@ -1365,7 +1464,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       return { src: '/crewchief/FLCS/rudderRight.webp', label: 'FLCS RUDDER RIGHT' };
     }
     return { src: '/crewchief/FLCS/neutral.webp', label: 'FLCS NEUTRAL' };
-  }, [speedbrakesOpen, telemetry.mpo_active, mpoKickActive, rollDisplay, pitchDisplay, yawDisplay]);
+  }, [activeStep.id, currentSubstepIndex, speedbrakesOpen, telemetry.mpo_active, mpoKickActive, rollDisplay, pitchDisplay, yawDisplay]);
 
   // Unified FLIR overlay state across all training scenes
   const flirOverlayState = useMemo(() => {
@@ -1515,7 +1614,6 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   // =========================================================================
   useEffect(() => {
     if (activeStep.id === 14 && currentSubstepIndex === 1) {
-      let holdInterval: NodeJS.Timeout | null = null;
       if (leftBrakeDeflection >= 0.20) {
         if (leftBrakeIdleTimerRef.current) {
           clearTimeout(leftBrakeIdleTimerRef.current);
@@ -1526,11 +1624,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
           Sound.playCommit();
           Ipc.playDrillSound('left-brake-movement');
         }
-        holdInterval = setInterval(() => {
-          setBrakeHoldTimer((prev) => Math.min(3, prev + 1));
-        }, 1000);
       } else {
-        setBrakeHoldTimer(0);
         if (leftBrakeDeflection <= 0.05 && leftBrakeMovedRef.current) {
           if (!leftBrakeIdleTimerRef.current) {
             leftBrakeIdleTimerRef.current = setTimeout(() => {
@@ -1543,13 +1637,9 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
           }
         }
       }
-      return () => {
-        if (holdInterval) clearInterval(holdInterval);
-      };
     }
 
     if (activeStep.id === 15 && currentSubstepIndex === 1) {
-      let holdInterval: NodeJS.Timeout | null = null;
       if (rightBrakeDeflection >= 0.20) {
         if (rightBrakeIdleTimerRef.current) {
           clearTimeout(rightBrakeIdleTimerRef.current);
@@ -1560,11 +1650,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
           Sound.playCommit();
           Ipc.playDrillSound('right-brake-movement');
         }
-        holdInterval = setInterval(() => {
-          setBrakeHoldTimer((prev) => Math.min(3, prev + 1));
-        }, 1000);
       } else {
-        setBrakeHoldTimer(0);
         if (rightBrakeDeflection <= 0.05 && rightBrakeMovedRef.current) {
           if (!rightBrakeIdleTimerRef.current) {
             rightBrakeIdleTimerRef.current = setTimeout(() => {
@@ -1577,9 +1663,6 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
           }
         }
       }
-      return () => {
-        if (holdInterval) clearInterval(holdInterval);
-      };
     }
     if (activeStep.id === 3 && currentSubstepIndex === 3) {
       if (leftBrakeDeflection >= 0.15 && rightBrakeDeflection >= 0.15) {
@@ -1685,9 +1768,51 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             )}
 
             {/* -------------------------------------------------------- */}
+            {/* PANEL: Solotürk Crew Chief Interphone (Step 1 Substep 5) */}
+            {/* -------------------------------------------------------- */}
+            {activeStep.id === 1 && currentSubstepIndex === 4 && (
+              <motion.div
+                key="panel-crew-chief-soloturk"
+                layout
+                initial={{ opacity: 0, scale: 0.92, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.92, y: -12 }}
+                transition={{
+                  layout: { duration: 0.35, ease: [0.16, 1, 0.3, 1] },
+                  opacity: { duration: 0.22 },
+                  scale: { duration: 0.22 },
+                  y: { duration: 0.22 },
+                }}
+                style={{ willChange: 'opacity, transform' }}
+                className="flex flex-col items-center"
+              >
+                <TacticalDisplayCard
+                  src="/crewchief/soloturk.webp"
+                  alt="Crew Chief Solotürk"
+                  title="CREW CHIEF // SOLOTÜRK"
+                  badge="INTERPHONE COMM"
+                  badgeColor="#38bdf8"
+                  badgeBg="rgba(56, 189, 248, 0.15)"
+                  badgeBorder="rgba(56, 189, 248, 0.4)"
+                  caption="GROUND INTERPHONE // HOW'S CHIEF"
+                  footerRight="SOLOTURK-01"
+                  width={540}
+                  aspectRatio="video"
+                  priority
+                />
+
+                <div className="flex flex-col items-center gap-2 mt-4 font-mono">
+                  <p className="text-[11px] text-zinc-400 text-center max-w-md font-sans">
+                    Ground interphone verified. Inquire &quot;How&apos;s chief doing&quot; over the loop before commencing turbine start.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
+            {/* -------------------------------------------------------- */}
             {/* PANEL: TEST Panel (Step 1, Step 6-3)                     */}
             {/* -------------------------------------------------------- */}
-            {(activeStep.id === 1 || (activeStep.id === 6 && currentSubstepIndex === 3)) && (
+            {((activeStep.id === 1 && currentSubstepIndex < 4) || (activeStep.id === 6 && currentSubstepIndex === 3)) && (
               <motion.div
                 key="panel-test"
                 layout
@@ -1731,7 +1856,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* PANEL: ELEC Power Panel (Step 1, Step 6-3 & 6-4)         */}
             {/* -------------------------------------------------------- */}
-            {(activeStep.id === 1 || (activeStep.id === 6 && (currentSubstepIndex === 3 || currentSubstepIndex === 4))) && (
+            {((activeStep.id === 1 && currentSubstepIndex < 4) || (activeStep.id === 6 && (currentSubstepIndex === 3 || currentSubstepIndex === 4))) && (
               <motion.div
                 key="panel-elec-power"
                 layout
@@ -2085,7 +2210,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* CARD: EPU Ground Safety Pin (Step 5, Substeps 0 & 1)     */}
             {/* -------------------------------------------------------- */}
-            {activeStep.id === 5 && currentSubstepIndex < 2 && (
+            {activeStep.id === 5 && currentSubstepIndex < 3 && (
               <motion.div
                 key="card-epu-pin"
                 layout
@@ -2291,9 +2416,9 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   }}
                   allowSwitchClick={{
                     trimDisc: (activeStep.id === 10 && currentSubstepIndex === 0) || (activeStep.id === 11 && currentSubstepIndex === 0),
-                    rollTrim: activeStep.id === 11 && currentSubstepIndex === 3,
-                    pitchTrim: activeStep.id === 11 && currentSubstepIndex === 3,
-                    yawTrim: activeStep.id === 11 && currentSubstepIndex === 3,
+                    rollTrim: activeStep.id === 11 && (currentSubstepIndex === 2 || currentSubstepIndex === 3),
+                    pitchTrim: activeStep.id === 11 && (currentSubstepIndex === 2 || currentSubstepIndex === 3),
+                    yawTrim: activeStep.id === 11 && (currentSubstepIndex === 2 || currentSubstepIndex === 3),
                   }}
                   className="scale-95"
                 />
@@ -2323,13 +2448,26 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   MANUAL PITCH OVRD (MPO)
                 </span>
                 <ManualPitchPanel
-                  isOvrd={telemetry.mpo_active ?? mpoKickActive}
-                  allowSwitchClick={false}
+                  isOvrd={telemetry.mpo_active || mpoKickActive}
+                  allowSwitchClick={currentSubstepIndex === 3}
+                  onOvrdChange={(val) => {
+                    if (val && currentSubstepIndex === 3 && !hasAdvancedStep12SubstepRef.current) {
+                      hasAdvancedStep12SubstepRef.current = true;
+                      Sound.playCommit();
+                      Ipc.playDrillSound('mpo-kick');
+                      setMpoKickActive(true);
+                      setTimeout(() => {
+                        setMpoKickActive(false);
+                        onAdvanceSubstep(4);
+                      }, 600);
+                    }
+                  }}
                 />
                 {currentSubstepIndex === 3 && (
                   <button
                     onClick={() => {
                       Sound.playCommit();
+                      Ipc.playDrillSound('mpo-kick');
                       setMpoKickActive(true);
                       setTimeout(() => {
                         setMpoKickActive(false);
@@ -2425,7 +2563,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   {currentSubstepIndex === 1 && (
                     <div className="flex items-center justify-between pt-2">
                       <span className="text-xs text-amber-300 font-bold">
-                        Hold pedal down for 3 seconds ({brakeHoldTimer}/3s)
+                        Press and release the {activeStep.id === 14 ? 'left' : 'right'} toe brake pedal.
                       </span>
                       <button
                         onClick={() => onAdvanceStep(activeStep.id === 14 ? 15 : 16)}
@@ -2756,18 +2894,42 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   </span>
                 )}
                 {activeStep.id === 1 && currentSubstepIndex === 3 && (
-                  <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center justify-between gap-4 w-full">
                     <span className="text-emerald-400 font-bold">
-                      Chief Responded: &quot;Loud and clear, sir/ma&apos;am.&quot;
+                      Chief Responded: &quot;Loud and clear, sir/ma&apos;am.&quot; Speak &quot;Loud and clear&quot; to acknowledge.
                     </span>
                     <button
                       onClick={() => {
                         Sound.playCommit();
-                        onAdvanceStep(2);
+                        onAdvanceSubstep(4);
                       }}
                       className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
                     >
                       <span>Continue</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+                {activeStep.id === 1 && currentSubstepIndex === 4 && (
+                  <div className="flex items-center justify-between gap-4 w-full">
+                    <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
+                      <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                      <span>Action Required: Inquire &quot;How&apos;s chief doing&quot; (or &quot;How are you doing&quot;, &quot;How&apos;s it going&quot;).</span>
+                    </span>
+                    <button
+                      onClick={() => {
+                        Sound.playCommit();
+                        Ipc.playDrillSound('hows-chief');
+                        setIsChiefResponding(true);
+                        setChiefDialogue("Doin' good! How you doing?");
+                        setTimeout(() => {
+                          setIsChiefResponding(false);
+                          onAdvanceStep(2);
+                        }, 2500);
+                      }}
+                      className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
+                    >
+                      <span>Simulate / Continue</span>
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -3094,6 +3256,33 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     <span>Verbal Required: Transmit &quot;Connected&quot;.</span>
                   </span>
                 )}
+                {activeStep.id === 11 && currentSubstepIndex === 2 && (
+                  <div className="flex flex-col items-center gap-1.5">
+                    <span className="text-cyan-300 font-bold">
+                      ⚡ Slew pitch, roll, and yaw trim dials past ±1.0 to verify each axis deflection.
+                    </span>
+                    <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] font-mono mt-1">
+                      <span className={`px-2 py-0.5 rounded border ${trimPitchUpDone ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-bold' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}>
+                        PITCH UP {trimPitchUpDone ? '✓' : '(-1.0)'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded border ${trimPitchDownDone ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-bold' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}>
+                        PITCH DN {trimPitchDownDone ? '✓' : '(+1.0)'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded border ${trimRollLeftDone ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-bold' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}>
+                        ROLL L {trimRollLeftDone ? '✓' : '(-1.0)'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded border ${trimRollRightDone ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-bold' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}>
+                        ROLL R {trimRollRightDone ? '✓' : '(+1.0)'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded border ${trimYawLeftDone ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-bold' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}>
+                        YAW L {trimYawLeftDone ? '✓' : '(-1.0)'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded border ${trimYawRightDone ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-bold' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}>
+                        YAW R {trimYawRightDone ? '✓' : '(+1.0)'}
+                      </span>
+                    </div>
+                  </div>
+                )}
                 {activeStep.id === 11 && currentSubstepIndex === 3 && (
                   <div className="flex flex-col items-center gap-1">
                     <span className="text-amber-300 font-bold">
@@ -3170,6 +3359,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     <button
                       onClick={() => {
                         Sound.playCommit();
+                        Ipc.playDrillSound('mpo-kick');
                         setMpoKickActive(true);
                         setTimeout(() => {
                           setMpoKickActive(false);
