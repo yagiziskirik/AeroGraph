@@ -175,16 +175,32 @@ export const RAMP_START_STEPS: RampStartStep[] = [
         order: 4,
         label: 'Pilot Acknowledgment / Continue',
         phaseType: 'ACTION',
-        description: 'Chief confirmed loud and clear. Speak "Loud and clear" into microphone to acknowledge, or click Continue to proceed to Step 02.',
+        description: 'Chief confirmed loud and clear. Speak "Loud and clear" into microphone to acknowledge, or click Continue to proceed to How\'s Chief.',
         cockpitPanel: 'Left Console / AUDIO 1 Panel',
         visualCue: 'Chief online on ground headset. Interphone comms established 5x5.',
         interactiveControl: {
           type: 'MOCK_BUTTON',
-          label: 'CONTINUE TO STEP 02',
+          label: 'CONTINUE TO HOW\'S CHIEF',
           actionPrompt: 'Speak "Loud and clear" or click Continue'
         },
         expectedChiefResponse: "[Standing by for JFS start callout.]",
         rationale: "Confirms positive two-way comms before commencing turbine start sequence."
+      },
+      {
+        id: '1-5',
+        order: 5,
+        label: "Ground Interphone Check (How's Chief)",
+        phaseType: 'ACTION',
+        description: "Inquire after the Crew Chief over the ground interphone line to verify conversational fidelity before turbine start.",
+        cockpitPanel: 'Left Console / AUDIO 1 Panel',
+        visualCue: 'Crew Chief Solotürk visual display card active on tactical monitor.',
+        interactiveControl: {
+          type: 'MOCK_BUTTON',
+          label: 'CONTINUE TO STEP 02',
+          actionPrompt: 'Speak "How\'s chief doing" or click Continue'
+        },
+        expectedChiefResponse: "Doin' good! How you doing?",
+        rationale: "Confirms positive two-way comms and chief operational status before commencing turbine start sequence."
       }
     ]
   },
@@ -1395,7 +1411,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
     title: 'Ready Left Brake Check',
     phase: 'FLIGHT_CONTROLS',
     whatHappenedLast: 'DBU check complete and switch guarded in OFF.',
-    whatToPerformNow: 'Transmit "Ready Left Brake", wait for Chief ("Ready left brake"), then depress left toe brake firmly for 3 seconds.',
+    whatToPerformNow: 'Transmit "Ready Left Brake", wait for Chief ("Ready left brake"), then press and release left toe brake pedal.',
     whatToExpectNext: 'Chief calls: "Copy" (wait 2.5s) -> "Ready left brake." Chief verifies left caliper clamping and zero hydraulic leaks.',
     cockpitVisual: {
       panelName: 'LEFT RUDDER TOE BRAKE & LEFT MAIN GEAR',
@@ -1429,17 +1445,17 @@ export const RAMP_START_STEPS: RampStartStep[] = [
       {
         id: '14-2',
         order: 2,
-        label: 'Left Toe Brake Pressure Application (3 Seconds)',
+        label: 'Left Toe Brake Press and Release',
         phaseType: 'ACTION',
-        description: 'Apply firm downward pressure on the left toe brake pedal for 3 seconds. Uses inverted axis calibration matching HardwareView.',
+        description: 'Depress left toe brake pedal past 20% to announce movement, then release back to idle to verify caliper release.',
         cockpitPanel: 'Rudder Footwell (Left Pedal)',
-        visualCue: 'Left brake progress bar fills to 100% for 3 seconds.',
+        visualCue: 'Left brake progress bar responds dynamically to pedal deflection.',
         interactiveControl: {
           type: 'AXIS_MONITOR',
           axisChannel: 'left_brake',
-          axisThreshold: 0.15,
-          label: 'APPLY LEFT BRAKE (3S)',
-          actionPrompt: 'Depress left toe brake firmly for 3s (or skip)'
+          axisThreshold: 0.20,
+          label: 'PRESS & RELEASE LEFT BRAKE',
+          actionPrompt: 'Press and release left toe brake (or skip)'
         }
       ,
         rationale: "Applies 3,000 PSI hydraulic pressure to multi-disc left carbon brake assembly."
@@ -1473,7 +1489,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
     title: 'Ready Right Brake Check',
     phase: 'FLIGHT_CONTROLS',
     whatHappenedLast: 'Left brake inspected and verified good.',
-    whatToPerformNow: 'Transmit "Ready Right Brake", wait for Chief ("Ready right brake"), then depress right toe brake firmly for 3 seconds.',
+    whatToPerformNow: 'Transmit "Ready Right Brake", wait for Chief ("Ready right brake"), then press and release right toe brake pedal.',
     whatToExpectNext: 'Chief calls: "Copy" (wait 2.5s) -> "Ready right brake." Chief verifies right caliper clamping and zero hydraulic leaks.',
     cockpitVisual: {
       panelName: 'RIGHT RUDDER TOE BRAKE & RIGHT MAIN GEAR',
@@ -1507,17 +1523,17 @@ export const RAMP_START_STEPS: RampStartStep[] = [
       {
         id: '15-2',
         order: 2,
-        label: 'Right Toe Brake Pressure Application (3 Seconds)',
+        label: 'Right Toe Brake Press and Release',
         phaseType: 'ACTION',
-        description: 'Apply firm downward pressure on the right toe brake pedal for 3 seconds. Uses inverted axis calibration matching HardwareView.',
+        description: 'Depress right toe brake pedal past 20% to announce movement, then release back to idle to verify caliper release.',
         cockpitPanel: 'Rudder Footwell (Right Pedal)',
-        visualCue: 'Right brake progress bar fills to 100% for 3 seconds.',
+        visualCue: 'Right brake progress bar responds dynamically to pedal deflection.',
         interactiveControl: {
           type: 'AXIS_MONITOR',
           axisChannel: 'right_brake',
-          axisThreshold: 0.15,
-          label: 'APPLY RIGHT BRAKE (3S)',
-          actionPrompt: 'Depress right toe brake firmly for 3s (or skip)'
+          axisThreshold: 0.20,
+          label: 'PRESS & RELEASE RIGHT BRAKE',
+          actionPrompt: 'Press and release right toe brake (or skip)'
         }
       ,
         rationale: "Applies 3,000 PSI hydraulic pressure to multi-disc right carbon brake assembly."
