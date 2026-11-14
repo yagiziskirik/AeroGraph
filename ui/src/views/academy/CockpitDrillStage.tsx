@@ -17,6 +17,7 @@ import { RampStartStep, StepSubstep } from '../../services/voiceTrainingData';
 import { getCockpitLocatorConfig } from './cockpitLocatorConfig';
 import {
   TacticalDisplayCard,
+  TacticalControlInputCard,
   TacticalFlirOverlay,
   CockpitLocatorOverlay,
   ElecPowerPanel,
@@ -2280,11 +2281,11 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             )}
 
             {/* -------------------------------------------------------- */}
-            {/* CARD: Flight Stick & Rudder Crosshair (Step 7, 12, 13)   */}
+            {/* CARD: Modernized FLCS Deflection Monitor (Step 7, 12, 13) */}
             {/* -------------------------------------------------------- */}
             {(activeStep.id === 7 || activeStep.id === 12 || activeStep.id === 13) && (
               <motion.div
-                key="card-stick-crosshair"
+                key="card-flcs-deflection"
                 layout
                 initial={{ opacity: 0, scale: 0.92, y: 12 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -2296,28 +2297,18 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   y: { duration: 0.22 },
                 }}
                 style={{ willChange: 'opacity, transform' }}
-                className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-zinc-900 border border-zinc-800"
               >
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                  {activeStep.id === 7 ? 'FLIGHT CONTROL SURFACE DEFLECTION' : 'FLIGHT STICK POSITION'}
-                </span>
-                <div className="relative w-44 h-44 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-center overflow-hidden shadow-inner">
-                  <div className="absolute inset-x-0 h-px bg-zinc-800" />
-                  <div className="absolute inset-y-0 w-px bg-zinc-800" />
-                  <div
-                    className={`w-5 h-5 rounded-full border transition-[transform] duration-75 ${
-                      activeStep.id === 7
-                        ? 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.8)] border-emerald-200'
-                        : 'bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.8)] border-cyan-200'
-                    }`}
-                    style={{
-                      transform: `translate(${(rollDisplay - 0.5) * 140}px, ${(pitchDisplay - 0.5) * 140}px)`,
-                    }}
-                  />
-                </div>
-                <div className="text-[10px] text-zinc-400">
-                  RUDDER: {Math.round((yawDisplay - 0.5) * 200)}%
-                </div>
+                <TacticalControlInputCard
+                  title={activeStep.id === 7 ? 'FLCS // SURFACE DEFLECTION' : 'FLCS // DEFLECTION MONITOR'}
+                  roll={rollDisplay}
+                  pitch={pitchDisplay}
+                  yaw={yawDisplay}
+                  leftBrake={leftBrakeDeflection}
+                  rightBrake={rightBrakeDeflection}
+                  showGimbal={true}
+                  showBrakes={false}
+                  width={270}
+                />
               </motion.div>
             )}
 
@@ -2529,7 +2520,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   y: { duration: 0.22 },
                 }}
                 style={{ willChange: 'opacity, transform' }}
-                className="flex flex-col items-center gap-6"
+                className="flex flex-col lg:flex-row items-center justify-center gap-6"
               >
                 <TacticalDisplayCard
                   src={activeStep.id === 14 ? '/crewchief/FLCS/leftBrake.webp' : '/crewchief/FLCS/rightBrake.webp'}
@@ -2540,40 +2531,21 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   badgeBg="rgba(34, 197, 94, 0.15)"
                   badgeBorder="rgba(34, 197, 94, 0.4)"
                   caption="OBSERVE BRAKE CLAMPING ACTION"
-                  width={420}
+                  width={380}
                   aspectRatio="video"
                 />
 
-                <div className="w-full max-w-md p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3">
-                  <div className="flex items-center justify-between text-xs font-bold text-zinc-300">
-                    <span>{activeStep.id === 14 ? 'LEFT' : 'RIGHT'} BRAKE DEFLECTION</span>
-                    <span className="text-emerald-400 font-mono">
-                      {Math.round((activeStep.id === 14 ? leftBrakeDeflection : rightBrakeDeflection) * 100)}%
-                    </span>
-                  </div>
-                  <div className="w-full h-3 bg-zinc-950 rounded-full overflow-hidden border border-zinc-700/80">
-                    <div
-                      className="h-full bg-emerald-400 transition-[width] duration-100 shadow-[0_0_8px_rgba(52,211,153,0.8)]"
-                      style={{
-                        width: `${Math.round((activeStep.id === 14 ? leftBrakeDeflection : rightBrakeDeflection) * 100)}%`,
-                      }}
-                    />
-                  </div>
-
-                  {currentSubstepIndex === 1 && (
-                    <div className="flex items-center justify-between pt-2">
-                      <span className="text-xs text-amber-300 font-bold">
-                        Press and release the {activeStep.id === 14 ? 'left' : 'right'} toe brake pedal.
-                      </span>
-                      <button
-                        onClick={() => onAdvanceStep(activeStep.id === 14 ? 15 : 16)}
-                        className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-600 text-xs font-bold cursor-pointer transition-[background-color]"
-                      >
-                        SKIP BRAKE
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <TacticalControlInputCard
+                  title={activeStep.id === 14 ? 'BRAKES // LEFT BRAKE CHECK' : 'BRAKES // RIGHT BRAKE CHECK'}
+                  roll={rollDisplay}
+                  pitch={pitchDisplay}
+                  yaw={yawDisplay}
+                  leftBrake={leftBrakeDeflection}
+                  rightBrake={rightBrakeDeflection}
+                  showGimbal={false}
+                  showBrakes={true}
+                  width={270}
+                />
               </motion.div>
             )}
 
@@ -2858,7 +2830,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         {/* DYNAMIC STATUS / ACTION BANNER                               */}
         {/* ------------------------------------------------------------ */}
         {!(activeStep.id === 18 && currentSubstepIndex >= 1) && (
-          <div className="w-full max-w-xl p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-center text-xs overflow-hidden mt-4">
+          <div className="w-full max-w-3xl p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-center text-xs overflow-hidden mt-4">
             <AnimatePresence mode="wait">
               <motion.div
                 key={`banner-${activeStep.id}-${currentSubstepIndex}-${step2EngineStabilized}-${flcsBitActive}-${chocksInPlace}`}
@@ -2914,14 +2886,14 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   <div className="flex items-center justify-between gap-4 w-full">
                     <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                       <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
-                      <span>Action Required: Inquire &quot;How&apos;s chief doing&quot; (or &quot;How are you doing&quot;, &quot;How&apos;s it going&quot;).</span>
+                      <span>Action Required: Inquire &quot;How&apos;s chief doing&quot;.</span>
                     </span>
                     <button
                       onClick={() => {
                         Sound.playCommit();
                         Ipc.playDrillSound('hows-chief');
                         setIsChiefResponding(true);
-                        setChiefDialogue("Doin' good! How you doing?");
+                        setChiefDialogue("Oh, I'm alright, how you doin' sir?");
                         setTimeout(() => {
                           setIsChiefResponding(false);
                           onAdvanceStep(2);
@@ -2929,7 +2901,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                       }}
                       className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
                     >
-                      <span>Simulate / Continue</span>
+                      <span>Continue</span>
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -3421,6 +3393,19 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;{activeStep.id === 14 ? 'Ready on the left brake' : 'Ready on the right brake'}&quot;.</span>
                   </span>
+                )}
+                {(activeStep.id === 14 || activeStep.id === 15) && currentSubstepIndex === 1 && (
+                  <div className="flex items-center justify-between gap-4 w-full">
+                    <span className="text-amber-300 font-bold text-xs">
+                      ⚡ Action Required: Press and release the {activeStep.id === 14 ? 'left' : 'right'} toe brake pedal.
+                    </span>
+                    <button
+                      onClick={() => onAdvanceStep(activeStep.id === 14 ? 15 : 16)}
+                      className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 font-bold text-xs cursor-pointer shadow transition-[background-color] shrink-0"
+                    >
+                      SKIP BRAKE
+                    </button>
+                  </div>
                 )}
                 {(activeStep.id === 14 || activeStep.id === 15) && currentSubstepIndex === 2 && (
                   <div className="flex items-center justify-between gap-4">
