@@ -1218,6 +1218,37 @@ fn resolve_drill_cue_path(
                 "VCC/Sounds/1LoudAndClearSir.mp3"
             }
         }
+        "hows-chief" => {
+            const MALE_FILES: &[&str] = &[
+                "VCC/Sounds/HowsChiefNoStart/AlrightHowYou1.mp3",
+                "VCC/Sounds/HowsChiefNoStart/AlrightHowYou2.mp3",
+                "VCC/Sounds/HowsChiefNoStart/DoinGoodHowYou.mp3",
+                "VCC/Sounds/HowsChiefNoStart/GreatAirForceDay.mp3",
+                "VCC/Sounds/HowsChiefNoStart/GreatDay.mp3",
+                "VCC/Sounds/HowsChiefNoStart/GreatDay2.mp3",
+                "VCC/Sounds/HowsChiefNoStart/Hungry.mp3",
+                "VCC/Sounds/HowsChiefNoStart/LivinTheDream.mp3",
+                "VCC/Sounds/HowsChiefNoStart/LivinTheDream2.mp3",
+                "VCC/Sounds/HowsChiefNoStart/LivinTheDream3.mp3",
+                "VCC/Sounds/HowsChiefNoStart/OverG.mp3",
+                "VCC/Sounds/HowsChiefNoStart/OverG2.mp3",
+            ];
+            const FEMALE_FILES: &[&str] = &[
+                "VCC/Sounds/HowsChiefNoStartFP/AirForceDayMaam.mp3",
+                "VCC/Sounds/HowsChiefNoStartFP/AnotherDayOnLineMaam.mp3",
+                "VCC/Sounds/HowsChiefNoStartFP/LineNumberMaam.mp3",
+                "VCC/Sounds/HowsChiefNoStartFP/LivingTheDreamMaam1.mp3",
+                "VCC/Sounds/HowsChiefNoStartFP/LongDayMaam.mp3",
+                "VCC/Sounds/HowsChiefNoStartFP/OverGMaam.mp3",
+            ];
+            use rand::Rng;
+            let mut rng = rand::thread_rng();
+            if female {
+                FEMALE_FILES[rng.gen_range(0..FEMALE_FILES.len())]
+            } else {
+                MALE_FILES[rng.gen_range(0..MALE_FILES.len())]
+            }
+        }
         "clear-start-two" => "VCC/Sounds/2ClearForStart2.mp3",
         "good-start" => {
             if female {
