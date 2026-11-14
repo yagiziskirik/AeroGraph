@@ -1575,7 +1575,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
           actionPrompt: 'Set switch forward to OPEN'
         }
       ,
-        expectedChiefResponse: "Door open. -> And closed.",
+        expectedChiefResponse: "Door open.",
         rationale: "Hydraulically unlocks and rotates the dorsal slipway door open; illuminates cockpit RDY light and depressurizes fuel tanks."
       },
       {

@@ -346,6 +346,13 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     }
   }, [activeStep.id]);
 
+  // Reset Step 16 AAR door switch position when leaving Step 16 or entering Step 16 substep 0
+  useEffect(() => {
+    if (activeStep.id !== 16 || currentSubstepIndex === 0) {
+      setAirRefuelDoorPos('CLOSE');
+    }
+  }, [activeStep.id, currentSubstepIndex]);
+
   // Reset Step 17 chocks state when entering Step 17
   useEffect(() => {
     if (activeStep.id === 17 && currentSubstepIndex === 0) {
@@ -1041,11 +1048,16 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   const handleAarSwitchChange = (pos: any) => {
     Sound.playSwitch();
     setAirRefuelDoorPos(pos);
-    if (pos === 'CLOSE' && airRefuelDoorPos === 'OPEN') {
-      Sound.playCommit();
-      setTimeout(() => {
-        onAdvanceStep(17);
-      }, 1000);
+    if (activeStep.id === 16) {
+      if (pos === 'OPEN' && currentSubstepIndex === 1) {
+        Sound.playCommit();
+        onAdvanceSubstep(2);
+      } else if (pos === 'CLOSE' && currentSubstepIndex >= 2) {
+        Sound.playCommit();
+        setTimeout(() => {
+          onAdvanceStep(17);
+        }, 1000);
+      }
     }
   };
 
@@ -2547,9 +2559,14 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     <span>Verbal Required: Transmit &quot;Ready for AAR door check&quot;.</span>
                   </span>
                 )}
-                {activeStep.id === 16 && currentSubstepIndex >= 1 && (
+                {activeStep.id === 16 && currentSubstepIndex === 1 && (
                   <span className="text-cyan-300 font-bold">
-                    ⚡ Action Required: Toggle AIR REFUEL switch to OPEN, then return to CLOSE.
+                    ⚡ Action Required: Set AIR REFUEL switch to OPEN on FUEL panel.
+                  </span>
+                )}
+                {activeStep.id === 16 && currentSubstepIndex >= 2 && (
+                  <span className="text-cyan-300 font-bold">
+                    ⚡ Action Required: Return AIR REFUEL switch to CLOSE on FUEL panel.
                   </span>
                 )}
 
