@@ -13,6 +13,7 @@ import {
 import { Sound } from '../../services/sound';
 import { TelemetryData } from '../../types/ipc';
 import { RampStartStep, StepSubstep } from '../../services/voiceTrainingData';
+import { getCockpitLocatorConfig } from './cockpitLocatorConfig';
 import {
   TacticalDisplayCard,
   TacticalFlirOverlay,
@@ -951,9 +952,9 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     };
   }, [activeStep.id, step3FlirOpen, step3FlirSrc, flcsBitActive, dynamicFlirInfo]);
 
-  // Top-Right Cockpit Locator Overlay: Programmatically staged for Step 01 Substep 01
-  const isLocatorOpen = useMemo(() => {
-    return activeStep.id === 1 && currentSubstepIndex === 0;
+  // Top-Right Cockpit Locator Overlay: Programmatically driven by cockpitLocatorConfig
+  const locatorConfig = useMemo(() => {
+    return getCockpitLocatorConfig(activeStep.id, currentSubstepIndex);
   }, [activeStep.id, currentSubstepIndex]);
 
   // Toggle speedbrakes in Step 12 Substep 6
@@ -2749,7 +2750,10 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       {/* 4. TOP-RIGHT COCKPIT LOCATOR OVERLAY                           */}
       {/* ============================================================== */}
       <CockpitLocatorOverlay
-        isOpen={isLocatorOpen}
+        isOpen={!!locatorConfig}
+        targetArea={locatorConfig?.targetArea}
+        secondaryAreas={locatorConfig?.secondaryAreas}
+        pins={locatorConfig?.pins}
       />
     </div>
   );
