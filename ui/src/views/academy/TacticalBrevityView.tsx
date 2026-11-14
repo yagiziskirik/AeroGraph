@@ -53,7 +53,8 @@ export const TacticalBrevityView: React.FC<TacticalBrevityViewProps> = ({
     // Disambiguate by group: if lastSpeech.group is specified, ensure it belongs to this category
     if (lastSpeech.group && lastSpeech.group !== 'System' && lastSpeech.group !== 'Command') {
       const gUpper = lastSpeech.group.trim().toUpperCase();
-      const catUpper = activeCategory.name.trim().toUpperCase();
+      const catUpper = activeCategory?.name ? activeCategory.name.trim().toUpperCase() : '';
+      if (!catUpper) return;
       const isGroupMatch = catUpper === gUpper || catUpper.includes(gUpper) || gUpper.includes(catUpper);
       if (!isGroupMatch) return;
     }
@@ -68,22 +69,22 @@ export const TacticalBrevityView: React.FC<TacticalBrevityViewProps> = ({
         c.spoken_phrases.some((p) => p.toUpperCase() === normPhrase)
     );
 
-    if (matched) {
+    if (matched && activeCategory?.name) {
       const safeId = `brevity-cmd-${activeCategory.name.replace(/[^a-zA-Z0-9_-]/g, '_')}--${matched.name.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
       const el = document.getElementById(safeId);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [lastSpeech, filteredCommands, activeCategory.name]);
+  }, [lastSpeech, filteredCommands, activeCategory?.name]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       {/* Category Selector Pill Bar (with enabled status dot) */}
       <div className="flex flex-wrap gap-1.5 border-b border-zinc-800 pb-3">
-        {categories.map((cat) => (
+        {categories.map((cat, catIdx) => (
           <button
-            key={cat.name}
+            key={`${cat.name}-${catIdx}`}
             onClick={() => {
               Sound.playClick();
               onSelectCategory(cat.name);
@@ -164,7 +165,7 @@ export const TacticalBrevityView: React.FC<TacticalBrevityViewProps> = ({
                 >
                   {activeCategory.prefix_phrases.map((prefix, idx) => (
                     <span
-                      key={idx}
+                      key={`${prefix}-${idx}`}
                       className="px-2 py-0.5 bg-zinc-800/80 text-zinc-300 border border-zinc-700/60 rounded text-[11px]"
                     >
                       {`"${prefix}"`}
@@ -179,15 +180,16 @@ export const TacticalBrevityView: React.FC<TacticalBrevityViewProps> = ({
 
       {/* Commands Grid (All commands shown directly without 6-limit pagination) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 font-mono">
-        {filteredCommands.map((cmd) => {
+        {filteredCommands.map((cmd, idx) => {
+          const catName = activeCategory?.name || 'category';
           // Disambiguate matching: ensure the speech group matches this category if group is present
           const isGroupMatch =
             !lastSpeech.group ||
             lastSpeech.group === 'System' ||
             lastSpeech.group === 'Command' ||
-            activeCategory.name.toLowerCase() === lastSpeech.group.toLowerCase() ||
-            activeCategory.name.toLowerCase().includes(lastSpeech.group.toLowerCase()) ||
-            lastSpeech.group.toLowerCase().includes(activeCategory.name.toLowerCase());
+            catName.toLowerCase() === lastSpeech.group.toLowerCase() ||
+            catName.toLowerCase().includes(lastSpeech.group.toLowerCase()) ||
+            lastSpeech.group.toLowerCase().includes(catName.toLowerCase());
 
           const isMatchingVoice =
             isGroupMatch &&
@@ -196,11 +198,11 @@ export const TacticalBrevityView: React.FC<TacticalBrevityViewProps> = ({
               lastSpeech.phrase === cmd.name.toUpperCase() ||
               cmd.spoken_phrases.some((p) => p.toUpperCase() === lastSpeech.phrase));
 
-          const safeId = `brevity-cmd-${activeCategory.name.replace(/[^a-zA-Z0-9_-]/g, '_')}--${cmd.name.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+          const safeId = `brevity-cmd-${catName.replace(/[^a-zA-Z0-9_-]/g, '_')}--${cmd.name.replace(/[^a-zA-Z0-9_-]/g, '_')}--${idx}`;
 
           return (
             <div
-              key={cmd.name}
+              key={`${cmd.name}-${cmd.key_combination || ''}-${idx}`}
               id={safeId}
               className={`p-3.5 rounded border transition-[border-color,background-color] flex flex-col justify-between gap-3 shadow-sm ${
                 isMatchingVoice
@@ -227,9 +229,9 @@ export const TacticalBrevityView: React.FC<TacticalBrevityViewProps> = ({
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {cmd.spoken_phrases.length > 0 ? (
-                      cmd.spoken_phrases.map((phrase, idx) => (
+                      cmd.spoken_phrases.map((phrase, pIdx) => (
                         <span
-                          key={idx}
+                          key={`${phrase}-${pIdx}`}
                           className={`px-2 py-0.5 rounded text-[11px] border ${
                             lastSpeech.phrase === phrase.toUpperCase()
                               ? 'bg-emerald-500/30 text-emerald-300 border-emerald-400 font-bold'
