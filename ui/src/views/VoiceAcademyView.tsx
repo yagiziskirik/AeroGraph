@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   ArrowLeft,
-  RotateCcw,
   Target,
   Radio,
   BookOpen,
@@ -560,16 +559,7 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
             </div>
           )}
 
-          {activeMode === 'practice' && (
-            <button
-              onClick={handleResetChief}
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 rounded text-xs font-mono font-bold border border-zinc-700/80 transition-[background-color] cursor-pointer"
-              title="Reset Crew Chief state to Step 00"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-zinc-400" />
-              <span>RESET CHIEF</span>
-            </button>
-          )}
+
         </div>
       </header>
 
