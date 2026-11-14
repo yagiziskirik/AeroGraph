@@ -361,6 +361,75 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     }
   }, [activeStep.id, currentSubstepIndex]);
 
+  // Reset Step 02 JFS switch position when leaving Step 02 or entering Step 02 substep 0
+  useEffect(() => {
+    if (activeStep.id !== 2 || currentSubstepIndex === 0) {
+      setJfsPosition('OFF');
+    }
+  }, [activeStep.id, currentSubstepIndex]);
+
+  // Reset Step 05 EPU switch position when leaving Step 05 or entering Step 05 substep 0
+  useEffect(() => {
+    if ((activeStep.id !== 5 && activeStep.id !== 6) || (activeStep.id === 5 && currentSubstepIndex === 0)) {
+      setEpuSwitch('NORM');
+    }
+  }, [activeStep.id, currentSubstepIndex]);
+
+  // Dynamic Mistake Warning & Rollback Safety Mechanism
+  const [mistakeWarning, setMistakeWarning] = useState<{
+    type: 'warning' | 'danger';
+    title: string;
+    message: string;
+  } | null>(null);
+  const [isMistakeRollingBack, setIsMistakeRollingBack] = useState(false);
+  const mistakeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const warningDismissTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const clearMistakeRollback = useCallback(() => {
+    if (mistakeTimeoutRef.current) {
+      clearTimeout(mistakeTimeoutRef.current);
+      mistakeTimeoutRef.current = null;
+    }
+    setIsMistakeRollingBack(false);
+  }, []);
+
+  const clearMistakeWarning = useCallback(() => {
+    setMistakeWarning(null);
+    if (warningDismissTimeoutRef.current) {
+      clearTimeout(warningDismissTimeoutRef.current);
+      warningDismissTimeoutRef.current = null;
+    }
+  }, []);
+
+  const triggerMistakeWarning = useCallback(
+    (warning: { type: 'warning' | 'danger'; title: string; message: string }) => {
+      if (warningDismissTimeoutRef.current) {
+        clearTimeout(warningDismissTimeoutRef.current);
+      }
+      setMistakeWarning(warning);
+      // Auto-dismiss after 9 seconds
+      warningDismissTimeoutRef.current = setTimeout(() => {
+        setMistakeWarning(null);
+        warningDismissTimeoutRef.current = null;
+      }, 9000);
+    },
+    []
+  );
+
+  // Clear mistake timeouts & state on step or substep change
+  useEffect(() => {
+    clearMistakeWarning();
+    clearMistakeRollback();
+  }, [activeStep.id, currentSubstepIndex, clearMistakeWarning, clearMistakeRollback]);
+
+  // Clean up timeouts on component unmount
+  useEffect(() => {
+    return () => {
+      clearMistakeWarning();
+      clearMistakeRollback();
+    };
+  }, [clearMistakeWarning, clearMistakeRollback]);
+
   // =========================================================================
   // HARDWARE AXES TELEMETRY ALIGNMENT
   // =========================================================================
@@ -558,7 +627,31 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   const handleJfsSwitchChange = (pos: JfsSwitchPosition) => {
     Sound.playSwitch();
     setJfsPosition(pos);
+
+    // Accidental selection of START 1 during Step 2 Substep 2 (currentSubstepIndex === 1)
+    if (pos === 'START 1' && activeStep.id === 2 && currentSubstepIndex === 1) {
+      setIsMistakeRollingBack(true);
+      clearMistakeWarning();
+      if (mistakeTimeoutRef.current) clearTimeout(mistakeTimeoutRef.current);
+
+      mistakeTimeoutRef.current = setTimeout(() => {
+        setJfsPosition('OFF');
+        Sound.playSwitch();
+        Sound.playCaution();
+        setIsMistakeRollingBack(false);
+        triggerMistakeWarning({
+          type: 'warning',
+          title: 'CAUTION: JFS START 1 SELECTED (SINGLE ACCUMULATOR)',
+          message:
+            'START 1 discharges only hydraulic accumulator #1. In cold weather or normal field conditions, a single accumulator provides insufficient torque to motor the engine core to starting RPM, risking a failed start. Standard Dash-1 procedures mandate START 2 to discharge both accumulators. Switch returned to OFF — right-click to select START 2.',
+        });
+      }, 1000);
+      return;
+    }
+
     if (pos === 'START 2') {
+      clearMistakeWarning();
+      clearMistakeRollback();
       // Activate RUN light at 2.0s
       setTimeout(() => {
         setJfsRunLit(true);
@@ -739,6 +832,44 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   const epuTestTimerRef = useRef<NodeJS.Timeout | null>(null);
   const epuAirTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const epuHoldCompletedRef = useRef<boolean>(false);
+
+  const handleEpuSwitchChange = (pos: EpuSwitchPosition) => {
+    Sound.playSwitch();
+    setEpuSwitch(pos);
+
+    // Accidental selection of ON during Step 5 Substep 2 (currentSubstepIndex === 1)
+    if (pos === 'ON' && activeStep.id === 5 && currentSubstepIndex === 1) {
+      setIsMistakeRollingBack(true);
+      clearMistakeWarning();
+      if (mistakeTimeoutRef.current) clearTimeout(mistakeTimeoutRef.current);
+
+      mistakeTimeoutRef.current = setTimeout(() => {
+        setEpuSwitch('NORM');
+        Sound.playSwitch();
+        Sound.playCaution();
+        setIsMistakeRollingBack(false);
+        triggerMistakeWarning({
+          type: 'danger',
+          title: 'DANGER: EPU SWITCH SET TO ON (LETHAL GROUND HAZARD)',
+          message:
+            'Placing EPU to ON manually commands hydrazine ignition on the ground! This discharges lethal toxic H-70 fuel, endangers ground crew approaching the aircraft, and risks turbine overspeed. The switch must be set to OFF before pulling the ground safety pin. Switch returned to NORM — right-click to select OFF.',
+        });
+      }, 1000);
+      return;
+    }
+
+    if (pos === 'OFF' && activeStep.id === 5 && currentSubstepIndex === 1) {
+      clearMistakeWarning();
+      clearMistakeRollback();
+      Sound.playCommit();
+      onAdvanceSubstep(2);
+    } else if (pos === 'NORM' && activeStep.id === 5 && currentSubstepIndex === 3) {
+      clearMistakeWarning();
+      clearMistakeRollback();
+      Sound.playCommit();
+      onAdvanceStep(6);
+    }
+  };
 
   const startEpuTestHold = () => {
     Sound.playSwitch();
@@ -1238,7 +1369,11 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   engContPosition={engContPosition}
                   onEngContChange={handleEngContChange}
                   allowSwitchClick={{
-                    jfsSwitch: activeStep.id === 2 && currentSubstepIndex === 1 && jfsPosition === 'OFF',
+                    jfsSwitch:
+                      activeStep.id === 2 &&
+                      currentSubstepIndex === 1 &&
+                      jfsPosition === 'OFF' &&
+                      !isMistakeRollingBack,
                     engContSwitch:
                       (activeStep.id === 3 && currentSubstepIndex === 2 && engContPosition === 'PRI') ||
                       (activeStep.id === 4 && currentSubstepIndex === 1 && engContPosition === 'SEC'),
@@ -1509,20 +1644,14 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 </span>
                 <EpuPanel
                   switchPosition={epuSwitch}
-                  onSwitchChange={(pos) => {
-                    Sound.playSwitch();
-                    setEpuSwitch(pos);
-                    if (pos === 'OFF' && activeStep.id === 5 && currentSubstepIndex === 1) {
-                      Sound.playCommit();
-                      onAdvanceSubstep(2);
-                    } else if (pos === 'NORM' && activeStep.id === 5 && currentSubstepIndex === 3) {
-                      Sound.playCommit();
-                      onAdvanceStep(6);
-                    }
-                  }}
+                  onSwitchChange={handleEpuSwitchChange}
                   lights={{ runLight: epuRunLightLit, air: epuAirLightLit }}
                   allowSwitchClick={{
-                    epuSwitch: activeStep.id === 5 && (currentSubstepIndex === 1 || currentSubstepIndex === 3),
+                    epuSwitch:
+                      activeStep.id === 5 &&
+                      !isMistakeRollingBack &&
+                      ((currentSubstepIndex === 1 && epuSwitch === 'NORM') ||
+                        (currentSubstepIndex === 3 && epuSwitch === 'OFF')),
                   }}
                   className="scale-95"
                 />
@@ -2115,6 +2244,53 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             </button>
           </div>
         )}
+
+        {/* ------------------------------------------------------------ */}
+        {/* DYNAMIC WARNING ALERT FOR COCKPIT SWITCH MISTAKES             */}
+        {/* ------------------------------------------------------------ */}
+        <AnimatePresence>
+          {mistakeWarning && (
+            <motion.div
+              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+              style={{ willChange: 'opacity, transform' }}
+              className={`w-full max-w-xl p-3.5 rounded-xl border mt-3 select-none shadow-lg backdrop-blur-sm ${
+                mistakeWarning.type === 'danger'
+                  ? 'bg-rose-950/70 border-rose-500/80 text-rose-200 shadow-rose-950/40'
+                  : 'bg-amber-950/70 border-amber-500/80 text-amber-200 shadow-amber-950/40'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5 text-left">
+                  <AlertTriangle
+                    className={`w-4 h-4 shrink-0 mt-0.5 ${
+                      mistakeWarning.type === 'danger'
+                        ? 'text-rose-400 animate-pulse'
+                        : 'text-amber-400'
+                    }`}
+                  />
+                  <div className="space-y-1">
+                    <span className="font-mono font-bold text-xs tracking-wider block">
+                      {mistakeWarning.title}
+                    </span>
+                    <p className="text-[11px] leading-relaxed opacity-95 font-sans">
+                      {mistakeWarning.message}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={clearMistakeWarning}
+                  className="text-zinc-400 hover:text-zinc-200 p-1 text-xs shrink-0 cursor-pointer transition-colors"
+                  title="Dismiss warning"
+                >
+                  ✕
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ------------------------------------------------------------ */}
         {/* DYNAMIC STATUS / ACTION BANNER                               */}
