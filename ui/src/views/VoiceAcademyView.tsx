@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   ChevronLeft,
   ChevronRight,
+  HelpCircle,
 } from 'lucide-react';
 import { Sound } from '../services/sound';
 import { Ipc } from '../services/ipc';
@@ -23,6 +24,7 @@ import { RampStartStep, StepSubstep, RAMP_START_STEPS } from '../services/voiceT
 import { TacticalBrevityView } from './academy/TacticalBrevityView';
 import { Dash1ManualView } from './academy/Dash1ManualView';
 import { CockpitDrillStage } from './academy/CockpitDrillStage';
+import { AcademyDisclaimerModal } from './academy/AcademyDisclaimerModal';
 
 interface VoiceAcademyViewProps {
   onBack: () => void;
@@ -50,6 +52,25 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
 
   // Tactical Confirmation Modal on Exit during active drill
   const [showExitConfirmModal, setShowExitConfirmModal] = useState(false);
+
+  // Operational Context & Familiarization Notice Modal (Practice Drill & Dash-1 Checklist)
+  const [showDisclaimerModal, setShowDisclaimerModal] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && (initialMode === 'practice' || initialMode === 'manual')) {
+      return localStorage.getItem('aerograph_academy_disclaimer_dismissed') !== 'true';
+    }
+    return false;
+  });
+
+  const handleCloseDisclaimer = (dontShowAgain: boolean) => {
+    if (typeof window !== 'undefined') {
+      if (dontShowAgain) {
+        localStorage.setItem('aerograph_academy_disclaimer_dismissed', 'true');
+      } else {
+        localStorage.removeItem('aerograph_academy_disclaimer_dismissed');
+      }
+    }
+    setShowDisclaimerModal(false);
+  };
 
   // Dynamic TBA Categories loaded directly from profile
   const [profileCategories, setProfileCategories] = useState<ProfileCategoryView[]>(categories);
@@ -418,6 +439,14 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
       )}
 
       {/* ============================================================== */}
+      {/* OPERATIONAL FAMILIARIZATION NOTICE MODAL                       */}
+      {/* ============================================================== */}
+      <AcademyDisclaimerModal
+        isOpen={showDisclaimerModal}
+        onClose={handleCloseDisclaimer}
+      />
+
+      {/* ============================================================== */}
       {/* TOP COMMAND HEADER                                             */}
       {/* ============================================================== */}
       <header className="h-14 border-b border-zinc-800 bg-zinc-900/90 px-6 flex items-center justify-between shrink-0 z-30 backdrop-blur-md">
@@ -470,6 +499,19 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
                 {profileName}
               </span>
             </div>
+          )}
+
+          {(activeMode === 'practice' || activeMode === 'manual') && (
+            <button
+              onClick={() => {
+                Sound.playClick();
+                setShowDisclaimerModal(true);
+              }}
+              title="Operational Familiarization Notice"
+              className="p-1.5 rounded-lg bg-zinc-950 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-cyan-400 transition-[border-color,color] cursor-pointer"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
           )}
 
 
