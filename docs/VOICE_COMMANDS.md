@@ -8,6 +8,9 @@ This document provides the authentic voice command guide for **AeroGraph**, mapp
 > - Startup procedure contributions by **Tomcattwo**.
 > - *AeroGraph natively executes `.fvx` profiles directly in Rust with zero-overhead SAPI grammar trees. Profile creation or custom key mappings should always be performed inside FoxVox.*
 
+> 💡 **Interactive Practice in TAC:**  
+> Rather than just reading static reference tables, you can practice the complete ramp start dialogue interactively using your microphone in TAC's **Cockpit Voice Drill** (`[03] FOXVOX STATION` &rarr; `[PRACTICE DRILL]`), study the **Dash-1 Checklist Manual**, or search in-flight callouts with live speech recognition in the **Tactical Brevity Directory**.
+
 ---
 
 ## 📖 Table of Contents
@@ -101,6 +104,9 @@ Follow this authentic checklist sequence during cold ramp start:
 ## ✈️ Cockpit Voice Communications
 
 These are configurable from FoxVox, and not all of the categories activated by default. If you want to learn more about it, you can checkout the **[FoxVox Tutorial Series](https://foxster.itch.io/foxvox/devlog/870907/foxvox-tutorial-videos)** for more in-depth tutorials.
+
+> 💡 **Live Interactive Directory:**  
+> You can also browse and test all of these in-flight commands inside TAC's **Tactical Brevity Directory** (`[03] FOXVOX STATION` &rarr; `[TACTICAL BREVITY]`). Speak any phrase into your microphone to automatically jump to and highlight its command card.
 
 ### 1. Air Traffic Control (ATC)
 

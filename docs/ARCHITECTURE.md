@@ -44,6 +44,7 @@ flowchart TD
         BINDER["Dual Flight Pads Binder<br/>(32 Slots, Live Preview & Staging)"]
         BIT["Crew Chief BIT Station<br/>(Hardware Axis Gauges & MPO)"]
         COMMS["FoxVox Station<br/>(VU Meter, Live Terminal & 6 Sliders)"]
+        ACADEMY["Crew Chief Academy<br/>(Voice Drill, Dash-1 Checklist & Brevity)"]
         SYS["Cockpit & System Settings<br/>(Theme Palettes, Sound & AutoDock)"]
     end
 
@@ -139,6 +140,10 @@ flowchart TD
   - **`ipc.rs`**: Typed JSON IPC bridge handling window controls, telemetry streaming (25 Hz), CoreAudio levels, profile reloading, and config synchronization.
   - **`preset/`**: Standalone mission preset bundles (`.aeropreset`). Gzip-compresses 32-slot configurations, custom notes, HTML templates, and user images with base64 encoding and byte-level deduplication on import.
   - **`SmartAutoDock`**: Automatically closes and tears down the WebView2 instance upon entering Falcon BMS 3D flight, freeing 100% of GPU and memory resources for the simulator.
+  - **Voice Lifecycle & Safety**:
+    - **In-Flight State Preservation**: When the UI is closed while Falcon BMS is in 3D flight (`is_3d || bms_running`), the active voice recognition state is strictly preserved (neither enabled nor disabled) to protect live multiplayer and tactical comms.
+    - **Dormant State Restoration**: When the simulator is offline, entering Academy views captures the baseline voice state and automatically restores it upon exiting or closing the window.
+    - **Drill Audio Decoupling (`cockpit_drill_active`)**: Atomically suppresses duplicate audio playback from the underlying `.fvx` profile during ground rehearsal, allowing `CockpitDrillStage` to orchestrate authentic step-by-step sound feedback via `PlayDrillSound`.
 - **Next.js Frontend (`ui/`)**:
   - **`BinderView`**: Dual kneepad stations (`1L`–`16L`, `1R`–`16R`) with in-memory staging, orbital radial dial jumps, Alt + Scroll wheel page flipping, and live Markdown editor.
   - **`BitView`**: Crew Chief BIT station with live DirectInput flight control surface gauges (Pitch, Roll, Yaw), differential toe brakes with one-click axis inversion toggle, and HOTAS switch diagnostics.
@@ -146,6 +151,12 @@ flowchart TD
     - Master voice recognition toggle, standby mute control, profile manager, and pilot voice selector.
     - Continuous linear VU-meter ($-45\text{ dBFS}$ to $0\text{ dBFS}$) and live speech recognition terminal.
     - **SAPI & PTT Calibration Station**: $3 \times 2$ grid with 6 interactive sliders (Confidence Floor, PTT Min Hold, PTT Release Grace, End Silence, Ambiguous Silence, Initial Silence Timeout) featuring per-slider factory resets (`↺`), dirty state tracking, and live IPC configuration persistence.
+    - **Academy Entry Hub**: Integrated launcher cards for Cockpit Voice Drill, Tactical Brevity Directory, and Dash-1 Manual with automated voice engine lifecycle branching.
+  - **`VoiceAcademyView` (Crew Chief Academy)**:
+    - **`CockpitDrillStage`**: Sequential 18-step ground crew ramp start rehearsal, live Windows SAPI speech verification, integrated cockpit panel locator overlays, and real-time DirectInput FLCS/brake gauges.
+    - **`Dash1ManualView`**: USAF T.O. 1F-16CM-1 procedural checklist ledger table with phase badges, procedural cues, and cockpit panel coordinates.
+    - **`TacticalBrevityView`**: Real-time agency directory with live hot-mic speech recognition, prefix disambiguation, and automated scrolling to recognized commands.
+    - **`AcademyDisclaimerModal`**: Hardware-accelerated Framer Motion modal featuring the signature `ShiningCheckbox`, providing operational context and two-way persistent `localStorage` synchronization.
   - **`SystemView`**: Avionics luminescence color themes (8 HUD palettes), mechanical acoustic relays, and simulation automation options.
 
 ---

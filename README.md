@@ -48,7 +48,7 @@
 1. **Automated Kneeboard Generator & Live Briefing Watcher**: 
    A multi-threaded pipeline that detects mission briefings and dynamically renders pixel-calibrated, high-contrast, VR-optimized kneeboards (Package Roster, Comms Ladder, Steerpoints, Weather, 16k SkyVector Route & Combat Area Maps, Dynamic Airfield Ground Taxi Diagrams, ILS Approach Plates, and T.O. 1F-16 POH Flight Reference Cards). Texture injection into Falcon BMS 3D cockpit files (`7982.dds` through `7997.dds`) executes in **under 1.5 seconds**, while the entire end-to-end cycle; from briefing file detection to HTML rendering, map cropping, and texture injection, typically finishes in **under 10 seconds**.
 2. **Crew Chief & Cockpit Voice Engine**: 
-   A speech-recognition copilot and ground crew engine powered by the Microsoft Speech API (SAPI), DirectInput 8 HOTAS hardware axis and button sampling, and FoxVox `.fvx` profiles. Includes state-machine tracking (e.g. MPO kick check validation, wheel chocks, external air/power, engine start sequences) and low-latency audio cue feedback.
+   A speech-recognition copilot and ground crew engine powered by the Microsoft Speech API (SAPI), DirectInput 8 HOTAS hardware axis and button sampling, and FoxVox `.fvx` profiles. Includes state-machine tracking (e.g. MPO kick check validation, wheel chocks, external air/power, engine start sequences), low-latency audio cue feedback, and the **Crew Chief Academy** for procedural voice ramp start rehearsals, Dash-1 checklists, and in-flight brevity reference.
 
 ---
 
@@ -580,7 +580,7 @@ The **Crew Chief BIT** view is a dedicated pre-flight diagnostic station for fli
   <em>FoxVox Station: Real-time CoreAudio microphone VU-meter, live SAPI speech recognition terminal, and profile controller.</em>
 </p>
 
-The **FoxVox Station** is your comms center and real-time speech operations dashboard, uniting profile management, real-time audio meters, and live phrase recognition:
+The **FoxVox Station** is your comms center and real-time speech operations dashboard, uniting profile management, real-time audio meters, live phrase recognition, and the interactive **Crew Chief Academy**:
 
 #### 8.1 Profile Controller & Engine Management
 - **Voice Recognition Master Toggle**: One-click switch to turn speech recognition and controller switch sampling `ON` or `OFF`.
@@ -640,6 +640,57 @@ Different pilots fly with different microphones, headset background noise, and H
 - **`RESET ALL DEFAULTS`**: One-click reset to restore all six calibration parameters together.
 - **`DISCARD`**: Abandons unsaved slider changes and restores your currently saved configuration.
 - **`APPLY CONFIGURATION (UNSAVED)`**: A pulse-highlighted emerald button appears whenever any slider is adjusted. Clicking it writes your changes to `aerograph.toml` and hot-reloads the active Windows SAPI engine parameters live in memory without restarting AeroGraph or interrupting Falcon BMS!
+
+---
+
+#### 8.4 Crew Chief Academy & Procedural Voice Trainer
+
+The **Crew Chief Academy** is an interactive procedural training and reference module built directly into the FoxVox Station. It allows virtual pilots to practice the complete ramp start sequence with real-time speech validation, study the flight manual checklist, and look up in-flight voice commands.
+
+##### 8.4.1 Interactive Cockpit Voice Drill (`[PRACTICE DRILL]`)
+
+<p align="center">
+  <img src="docs/images/voice-drill.webp" alt="Cockpit Voice Drill Practice Stage" width="950" /><br />
+  <em>Cockpit Voice Drill: Step-by-step sequential ramp start rehearsal with live speech recognition, visual cockpit panel locators, and DirectInput flight control surface monitors.</em>
+</p>
+
+The **Cockpit Voice Drill** walks you through the entire ramp start sequence step by step before jumping into the simulator:
+- **Sequential 18-Step Rehearsal**: Progresses through pre-start comms checks, JFS engagement, SEC checks, FLCS BIT clearance, manual trim checks, control surface movements, and wheel chock removal.
+- **Live Speech Verification**: Listens for your authentic voice transmissions through your microphone and validates them against the active voice profile grammar before advancing to the next step.
+- **Cockpit Locator Guides**: Visual cues and locator overlays highlight the exact panel, switch position, and avionics indicators associated with each procedural check.
+- **Real-Time Control Surface Feedback**: Integrated live gauges for Elevator, Ailerons, Rudder, and Toe Brakes during control checks.
+- **Dedicated Ground Audio**: Automatically silences background profile triggers while in drill mode, playing authentic step-by-step ground crew feedback.
+
+##### 8.4.2 Tactical Brevity & Agencies Directory (`[TACTICAL BREVITY]`)
+
+<p align="center">
+  <img src="docs/images/brevity.webp" alt="Tactical Brevity and Agencies Directory" width="950" /><br />
+  <em>Tactical Brevity Directory: Real-time agency voice catalog with live hot-mic speech recognition and automated card centering.</em>
+</p>
+
+The **Tactical Brevity Directory** acts as a live voice command reference across all agencies:
+- **Agency Categorization**: Filter commands across ATC, AWACS, Tanker, Flight, and Wingman agencies.
+- **Live Voice Detection**: Speak any brevity phrase into your microphone; the directory automatically highlights the matching command card and scrolls it smoothly into view.
+- **In-Flight Safe**: Safe to open during active flights—it never reloads the voice profile or interrupts ongoing communications.
+
+##### 8.4.3 Dash-1 Procedural Checklist Manual (`[CHECKLIST MANUAL]`)
+
+<p align="center">
+  <img src="docs/images/dash-1.webp" alt="Dash-1 Procedural Checklist Manual" width="950" /><br />
+  <em>Dash-1 Checklist Manual: High-contrast procedural ledger organized by operational phase with step codes, pilot directives, verbal callouts, and panel locations.</em>
+</p>
+
+The **Dash-1 Checklist Manual** provides an authentic flight manual checklist organized in a clean, high-contrast ledger:
+- **Operational Phases**: Color-coded phase badges (`PRE_START`, `ENGINE_START`, `SECONDARY_POWER`, `FLIGHT_CONTROLS`, `TAXI_CLEAR`).
+- **Four-Column Breakdown**:
+  - **Step & Code**: Sequential reference numbers.
+  - **Action Item**: Exact cockpit directive and switch position.
+  - **Verbal Callout**: The spoken pilot transmission or crew chief response.
+  - **Panel Location**: Cockpit location coordinates for rapid switch acquisition.
+
+##### 8.4.4 Operational Familiarization Notice
+
+When entering the Cockpit Voice Drill or Dash-1 Checklist, an operational notice shares the my personal cockpit flow (integrating DTC loading, sensor power-up, and avionics setup between steps) and highlights the priority of the official Falcon BMS documentation. You can dismiss the notice permanently using the *"Do not show this notice again"* checkbox, or re-open it at any time using the `?` icon in the top header.
 
 ---
 
@@ -886,6 +937,9 @@ Use `{color: text}` anywhere in your titles, keys, values, warnings, cautions, c
 For a complete breakdown of all available voice interactions, dialogue trees, hardware DirectInput bindings, and T.O. 1F-16 cockpit procedures, see the dedicated reference:
 
 👉 **[Crew Chief & Cockpit Voice Engine Guide](docs/VOICE_COMMANDS.md)**
+
+> 💡 **Interactive Practice Available:**  
+> You can practice the complete ramp start dialogue interactively using your microphone in TAC's **Cockpit Voice Drill** (`[03] FOXVOX STATION` &rarr; `[PRACTICE DRILL]`) before heading to the flight line.
 
 ### Key Highlights:
 - **System Commands**: Say `"Stand by"` to mute recognition before speaking on human comms; say `"Radio check"` to resume.
