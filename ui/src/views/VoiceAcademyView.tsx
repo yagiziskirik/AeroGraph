@@ -79,14 +79,6 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
 
   // Simulation State Overrides & Mock Controls
   const [chiefEngaged, setChiefEngaged] = useState(false);
-
-  // In Tactical Brevity mode, ensure Crew Chief state is disengaged so all cockpit radio categories are active
-  useEffect(() => {
-    if (activeMode === 'brevity') {
-      Ipc.resetCrewChief();
-      setChiefEngaged(false);
-    }
-  }, [activeMode]);
   const [axisOverrides, setAxisOverrides] = useState<Record<string, boolean>>({});
 
   // Inverted Brake Calibration (matching HardwareView)

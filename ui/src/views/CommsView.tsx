@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Ipc } from '../services/ipc';
+import { Ipc, registerPreCloseHandler } from '../services/ipc';
 import { Sound } from '../services/sound';
 import { AppConfig, TelemetryData, ProfileCategoryView } from '../types/ipc';
 import { SpeakerToggle, MicrophoneToggle } from '../components/inputs';
@@ -161,27 +161,55 @@ export const CommsView: React.FC<CommsViewProps> = ({
     Sound.playCommit();
     setTargetAcademyMode(mode);
     Ipc.getProfileVoiceCommands();
-    preAcademyState.current = {
-      voice: config.voice_recognition,
-      listening: config.listening_enabled,
-    };
-    if (mode === 'practice' || mode === 'brevity') {
-      if (!config.voice_recognition) {
-        Ipc.setVoiceRecognition(true);
-      }
-      if (!config.listening_enabled) {
-        Ipc.setListening(true);
-      }
-      // Always reset crew chief on drill/brevity entry so full cockpit comms grammar is active
-      Ipc.resetCrewChief();
+
+    // 1. Capture baseline pre-academy state if not already captured
+    if (!preAcademyState.current) {
+      preAcademyState.current = {
+        voice: config.voice_recognition,
+        listening: config.listening_enabled,
+      };
     }
+
+    if (mode === 'practice') {
+      if (!config.voice_recognition) {
+        // Voice was OFF -> engage voice recognition and listening
+        Ipc.setVoiceRecognition(true);
+        Ipc.setListening(true);
+      } else {
+        // Voice was ALREADY ACTIVE -> do not restart engine, reload profile cleanly
+        Ipc.reloadProfile();
+      }
+      // Rehearsal drill always starts with fresh crew chief state & drill audio suppression active
+      Ipc.resetCrewChief();
+      Ipc.setCockpitDrillActive(true);
+    } else if (mode === 'brevity') {
+      if (!config.voice_recognition) {
+        // Voice was OFF -> engage voice recognition and listening for interactive search
+        Ipc.setVoiceRecognition(true);
+        Ipc.setListening(true);
+      } else {
+        // Voice was ALREADY ACTIVE -> DO NOT TOUCH ANYTHING!
+        // No restart, no reload, no resetCrewChief: preserves active flight profile and in-flight comms state.
+      }
+      Ipc.setCockpitDrillActive(false);
+    } else if (mode === 'manual') {
+      Ipc.setCockpitDrillActive(false);
+    }
+
     setViewMode('splash');
     setTimeout(() => setViewMode(mode), 350);
   };
 
   const handleExitAcademy = () => {
     Sound.playSwitch();
-    if (preAcademyState.current) {
+    Ipc.setCockpitDrillActive(false);
+
+    const isGameRunning = telemetry.bms_running || telemetry.is_3d;
+    if (isGameRunning) {
+      // When the game is running, do NOT touch or change the voice recognition state!
+      preAcademyState.current = null;
+    } else if (preAcademyState.current) {
+      // When the game is not running, revert to previous state if engine was not active before
       const { voice, listening } = preAcademyState.current;
       if (config.voice_recognition !== voice) {
         Ipc.setVoiceRecognition(voice);
@@ -191,9 +219,33 @@ export const CommsView: React.FC<CommsViewProps> = ({
       }
       preAcademyState.current = null;
     }
+
     setViewMode('splash');
     setTimeout(() => setViewMode('station'), 200);
   };
+
+  // Pre-close window hook: restore prior voice state if UI is closed and game is not running
+  useEffect(() => {
+    const unregister = registerPreCloseHandler(() => {
+      const isGameRunning = telemetry.bms_running || telemetry.is_3d;
+      if (isGameRunning) {
+        // Do NOT change the voice state when game is running (neither enable nor disable)
+        return;
+      }
+      if (preAcademyState.current) {
+        const { voice, listening } = preAcademyState.current;
+        if (config.voice_recognition !== voice) {
+          Ipc.setVoiceRecognition(voice);
+        }
+        if (config.listening_enabled !== listening) {
+          Ipc.setListening(listening);
+        }
+        preAcademyState.current = null;
+      }
+      Ipc.setCockpitDrillActive(false);
+    });
+    return unregister;
+  }, [telemetry.bms_running, telemetry.is_3d, config.voice_recognition, config.listening_enabled]);
   const [recognizedSpeech, setRecognizedSpeech] = useState<{
     phrase: string;
     confidence: number;
