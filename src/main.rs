@@ -558,6 +558,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 tactical_console.teardown();
                 ui_visible.store(false, Ordering::Relaxed);
+                cockpit_drill_active.store(false, Ordering::SeqCst);
             }
 
             // Custom User Events
@@ -653,6 +654,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 tactical_console.teardown();
                 ui_visible.store(false, Ordering::Relaxed);
+                cockpit_drill_active.store(false, Ordering::SeqCst);
             }
             Event::UserEvent(AppEvent::KneeboardRegenFinished) => {
                 log::info!("Kneeboard regeneration finished, notifying Tactical Console");
@@ -1384,6 +1386,7 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
             ctx.tactical_console.teardown();
             ctx.ui_visible.store(false, Ordering::Relaxed);
             ctx.ui_hardware_active.store(false, Ordering::Relaxed);
+            ctx.cockpit_drill_active.store(false, Ordering::SeqCst);
         }
         IpcRequest::GetInitialState => {
             let cfg = ctx.shared_config.lock().unwrap().clone();
