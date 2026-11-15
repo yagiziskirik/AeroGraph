@@ -89,8 +89,14 @@ pub enum IpcRequest {
 
     // Voice & Hardware
     SelectProfileFile,
+    LoadProfileByPath {
+        path: String,
+    },
     ReloadProfile,
     ResetDefaultProfile,
+    GetProfileVoiceCommands,
+    ResetCrewChief,
+    EngageCrewChief,
     TestVoiceAudio {
         phrase: String,
     },
@@ -111,6 +117,12 @@ pub enum IpcRequest {
     // Diagnostics & System
     SetUiMode {
         mode: String,
+    },
+    SetCockpitDrillActive {
+        active: bool,
+    },
+    PlayDrillSound {
+        cue: String,
     },
     OpenLogFile,
     GetConsoleLogs,

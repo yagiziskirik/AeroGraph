@@ -16,6 +16,7 @@ pub struct StateEngine {
     pub fired_commands: std::collections::HashSet<String>,
     pub bms_connected: bool,
     pub subscription_plan: BmsSubscriptionPlan,
+    pub suppress_profile_audio: bool,
 }
 
 impl StateEngine {
@@ -40,6 +41,7 @@ impl StateEngine {
             fired_commands: std::collections::HashSet::new(),
             bms_connected: false,
             subscription_plan: BmsSubscriptionPlan::default(),
+            suppress_profile_audio: false,
         }
     }
 
@@ -69,6 +71,7 @@ impl StateEngine {
 
         self.active_configuration = None;
         self.fired_commands.clear();
+        self.suppress_profile_audio = false;
     }
 
     /// Returns true if Crew Chief mode is actively engaged.
@@ -429,18 +432,22 @@ impl StateEngine {
 
         // 3. Play audio if present (and await its playback so successive steps don't talk over each other)
         if let Some(run_file) = &out.RunFile {
-            let primary = profile.resolve_asset_path(run_file);
-            let alts: Vec<PathBuf> = out
-                .AltFiles
-                .as_ref()
-                .unwrap_or(&Vec::new())
-                .iter()
-                .map(|f| profile.resolve_asset_path(f))
-                .collect();
+            if !self.suppress_profile_audio {
+                let primary = profile.resolve_asset_path(run_file);
+                let alts: Vec<PathBuf> = out
+                    .AltFiles
+                    .as_ref()
+                    .unwrap_or(&Vec::new())
+                    .iter()
+                    .map(|f| profile.resolve_asset_path(f))
+                    .collect();
 
-            let await_audio = out.AwaitAudio.unwrap_or(true);
-            if let Some(player) = &self.audio_player {
-                player.play_sound(&primary, &alts, await_audio);
+                let await_audio = out.AwaitAudio.unwrap_or(true);
+                if let Some(player) = &self.audio_player {
+                    player.play_sound(&primary, &alts, await_audio);
+                }
+            } else {
+                log::debug!("Audio suppressed during Cockpit Drill mode: {:?}", run_file);
             }
         }
 
@@ -689,5 +696,34 @@ mod tests {
             engine.variables.get("Step").map(|s| s.as_str()),
             Some("NozzleOpen")
         );
+    }
+
+    #[test]
+    fn test_suppress_profile_audio_in_drill_mode() {
+        let mut engine = StateEngine::new(false);
+        assert!(!engine.suppress_profile_audio);
+
+        // Enable drill mode suppression
+        engine.suppress_profile_audio = true;
+        assert!(engine.suppress_profile_audio);
+
+        // Path to test asset profile
+        let path = "assets/profiles/Falcon BMS 4.38 v1.3.1/Falcon BMS 4.38 v1.3.1.fvx";
+        let lp = match LoadedProfile::load_from_file(path) {
+            Ok(p) => p,
+            Err(_) => return,
+        };
+
+        // Execute "Ready Start Two" with suppression active: state updates but audio does not play
+        let ready_start_two = &lp.profile.CommandGroups[0].Commands[4];
+        engine.execute_command(ready_start_two, &lp);
+        assert_eq!(
+            engine.variables.get("Step").map(|s| s.as_str()),
+            Some("Start")
+        );
+
+        // Reset restores suppression flag to default false
+        engine.reset(false);
+        assert!(!engine.suppress_profile_audio);
     }
 }

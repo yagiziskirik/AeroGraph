@@ -244,7 +244,7 @@ impl SapiEngine {
                     }
                 }
 
-                let grp_segments = if is_chief_group {
+                let grp_segments = if is_chief_group || grp_name == "Engage Crew Chief" {
                     &[][..]
                 } else {
                     group
@@ -336,12 +336,106 @@ impl SapiEngine {
                                 phrases.push("ready two".to_string());
                                 phrases.push("start two".to_string());
                                 phrases.push("clear start two".to_string());
+                                phrases.push("clear for start two".to_string());
                                 phrases.push("chief ready start two".to_string());
                             } else if cmd_name.contains("Comms Check") {
                                 phrases.push("comms check".to_string());
                                 phrases.push("radio check".to_string());
                                 phrases.push("chief comms check".to_string());
                                 phrases.push("crew chief comms check".to_string());
+                            } else if cmd_name.contains("Clear for SEC") {
+                                phrases.push("clear for sec check".to_string());
+                                phrases.push("ready for sec check".to_string());
+                                phrases.push("clear for sec".to_string());
+                                phrases.push("ready for sec".to_string());
+                                phrases.push("clear sec".to_string());
+                                phrases.push("ready sec".to_string());
+                                phrases.push("chief ready sec".to_string());
+                            } else if cmd_name.contains("SEC Check Good") {
+                                phrases.push("sec check good".to_string());
+                                phrases.push("sec good".to_string());
+                                phrases.push("sec check pass".to_string());
+                                phrases.push("sec pass".to_string());
+                                phrases.push("sec ok".to_string());
+                                phrases.push("sec check complete".to_string());
+                            } else if cmd_name.contains("Pull EPU")
+                                || cmd_name.contains("Safety Pin")
+                            {
+                                phrases.push("pull epu safety pin".to_string());
+                                phrases.push("remove epu safety pin".to_string());
+                                phrases.push("pull safety pin".to_string());
+                                phrases.push("remove safety pin".to_string());
+                                phrases.push("pull epu pin".to_string());
+                                phrases.push("remove epu pin".to_string());
+                                phrases.push("pull pin".to_string());
+                                phrases.push("remove pin".to_string());
+                                phrases.push("chief pull pin".to_string());
+                            } else if cmd_name.contains("flow") || cmd_name.contains("Flow") {
+                                phrases.push("check flow".to_string());
+                                phrases.push("check for flow".to_string());
+                                phrases.push("cleared to check for flow".to_string());
+                                phrases.push("verify flow".to_string());
+                                phrases.push("flow check".to_string());
+                                phrases.push("chief check flow".to_string());
+                            } else if cmd_name.contains("Flight Controls Clear") {
+                                phrases.push("flight controls clear".to_string());
+                                phrases.push("confirm flight controls clear".to_string());
+                                phrases.push("controls clear".to_string());
+                                phrases.push("chief flight controls clear".to_string());
+                            } else if cmd_name.contains("Cleared for Bit") {
+                                phrases.push("cleared for bit".to_string());
+                                phrases.push("clear for bit".to_string());
+                                phrases.push("ready for bit".to_string());
+                                phrases.push("ready bit".to_string());
+                                phrases.push("chief cleared for bit".to_string());
+                            } else if cmd_name.contains("Ready for Trim") {
+                                phrases.push("ready for trim check".to_string());
+                                phrases.push("ready for trim".to_string());
+                                phrases.push("ready trim check".to_string());
+                                phrases.push("ready trim".to_string());
+                                phrases.push("chief ready trim".to_string());
+                            } else if cmd_name.contains("Trim Disconnected") {
+                                phrases.push("trim disconnected".to_string());
+                                phrases.push("trim disconnect".to_string());
+                                phrases.push("chief trim disconnected".to_string());
+                            } else if cmd_name.contains("Trim Connected") {
+                                phrases.push("trim connected".to_string());
+                                phrases.push("trim connect".to_string());
+                                phrases.push("chief trim connected".to_string());
+                            } else if cmd_name.contains("Big Movements") {
+                                phrases.push("clear for big movements".to_string());
+                                phrases.push("ready for big movements".to_string());
+                                phrases.push("clear big movements".to_string());
+                                phrases.push("ready big movements".to_string());
+                                phrases.push("big movements".to_string());
+                                phrases.push("chief clear big movements".to_string());
+                            } else if cmd_name.contains("DBU") {
+                                phrases.push("dbu still clear".to_string());
+                                phrases.push("dbu clear".to_string());
+                                phrases.push("digital backup clear".to_string());
+                                phrases.push("chief dbu clear".to_string());
+                            } else if cmd_name.contains("Left Brake") {
+                                phrases.push("ready left brake".to_string());
+                                phrases.push("ready on the left brake".to_string());
+                                phrases.push("left brake".to_string());
+                                phrases.push("chief left brake".to_string());
+                            } else if cmd_name.contains("Right Brake") {
+                                phrases.push("ready right brake".to_string());
+                                phrases.push("ready on the right brake".to_string());
+                                phrases.push("right brake".to_string());
+                                phrases.push("chief right brake".to_string());
+                            } else if cmd_name.contains("AAR") {
+                                phrases.push("ready aar door".to_string());
+                                phrases.push("ready air refuel door".to_string());
+                                phrases.push("aar door".to_string());
+                                phrases.push("chief aar door".to_string());
+                            } else if cmd_name.contains("Chocks") {
+                                phrases.push("remove chocks".to_string());
+                                phrases.push("pull chocks".to_string());
+                                phrases.push("remove wheel chocks".to_string());
+                                phrases.push("pull wheel chocks".to_string());
+                                phrases.push("chocks away".to_string());
+                                phrases.push("chief remove chocks".to_string());
                             } else if cmd_name.contains("Cleared Off") {
                                 phrases.push("cleared off".to_string());
                                 phrases.push("clear off".to_string());
@@ -365,8 +459,13 @@ impl SapiEngine {
                             if grp_name == "Engage Crew Chief" {
                                 phrases.push("engage chief".to_string());
                                 phrases.push("engage crew chief".to_string());
+                                phrases.push("start chief".to_string());
+                                phrases.push("start crew chief".to_string());
+                                phrases.push("turn on chief".to_string());
+                                phrases.push("enable chief".to_string());
                                 phrases.push("activate chief".to_string());
                                 phrases.push("connect intercom".to_string());
+                                phrases.push("chief".to_string());
                             }
                         }
 

@@ -17,7 +17,21 @@ pub enum AppEvent {
     IpcMessage(crate::gui::ipc::IpcRequest),
     ToggleConsole,
     CloseConsole,
-    SpeechRecognized { text: String, confidence: f32 },
+    SpeechRecognized {
+        text: String,
+        confidence: f32,
+        group: String,
+        command: String,
+        status: String,
+        reason: Option<String>,
+    },
+    CrewChiefStateChanged {
+        step: String,
+        completed: String,
+        is_chief_engaged: bool,
+        last_command: String,
+        last_phrase: String,
+    },
     KneeboardRegenFinished,
     ImportPresetFile(PathBuf),
 }
@@ -423,6 +437,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let shared_profile = Arc::new(Mutex::new(loaded_profile));
     let shared_config = Arc::new(Mutex::new(config.clone()));
     let reload_trigger = Arc::new(AtomicBool::new(false));
+    let engage_trigger = Arc::new(AtomicBool::new(false));
+    let cockpit_drill_active = Arc::new(AtomicBool::new(false));
 
     let (manual_trigger_tx, manual_trigger_rx) = mpsc::channel::<()>();
     let shared_input_snapshot = Arc::new(Mutex::new(
@@ -442,26 +458,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         mic_peak_level.clone(),
     );
 
+    // 3c. Dedicated DirectInput Axis Sampler thread (adaptive rate: 60Hz UI active, configured rate tray/background)
+    AxisSampler::spawn_sampling_thread(
+        running.clone(),
+        ui_visible.clone(),
+        shared_config.clone(),
+        shared_profile.clone(),
+        shared_input_snapshot.clone(),
+        mpo_binding_active.clone(),
+        reload_trigger.clone(),
+    );
+
     // 4. Spawn background voice engine thread
     let v_profile = shared_profile.clone();
     let v_config = shared_config.clone();
     let v_reload = reload_trigger.clone();
+    let v_engage = engage_trigger.clone();
     let v_proxy = proxy.clone();
     let v_input = shared_input_snapshot.clone();
     let v_hardware_active = ui_hardware_active.clone();
     let v_ui_visible = ui_visible.clone();
     let v_mpo_binding = mpo_binding_active.clone();
+    let v_cockpit_drill_active = cockpit_drill_active.clone();
 
     let worker_ctx = VoiceWorkerContext {
         running: r_voice,
         profile_lock: v_profile,
         config_lock: v_config,
         reload_trigger: v_reload,
+        engage_trigger: v_engage,
         proxy: v_proxy,
         input_lock: v_input,
         ui_hardware_active: v_hardware_active,
         ui_visible: v_ui_visible,
         mpo_binding_active: v_mpo_binding,
+        cockpit_drill_active: v_cockpit_drill_active,
     };
 
     thread::spawn(move || {
@@ -527,6 +558,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 tactical_console.teardown();
                 ui_visible.store(false, Ordering::Relaxed);
+                cockpit_drill_active.store(false, Ordering::SeqCst);
             }
 
             // Custom User Events
@@ -540,15 +572,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     win.send_event("ListeningChanged", &json.to_string());
                 }
             }
-            Event::UserEvent(AppEvent::SpeechRecognized { text, confidence }) => {
+            Event::UserEvent(AppEvent::SpeechRecognized {
+                text,
+                confidence,
+                group,
+                command,
+                status,
+                reason,
+            }) => {
                 if let Some(win) = tactical_console.active_window() {
                     let json = serde_json::json!({
                         "phrase": text,
                         "confidence": (confidence * 100.0).round(),
-                        "timestamp": "",
-                        "status": "VERIFIED"
+                        "group": group,
+                        "command": command,
+                        "status": status,
+                        "reason": reason,
+                        "timestamp": ""
                     });
                     win.send_event("SpeechRecognized", &json.to_string());
+                }
+            }
+            Event::UserEvent(AppEvent::CrewChiefStateChanged {
+                step,
+                completed,
+                is_chief_engaged,
+                last_command,
+                last_phrase,
+            }) => {
+                if let Some(win) = tactical_console.active_window() {
+                    let json = serde_json::json!({
+                        "step": step,
+                        "completed": completed,
+                        "is_chief_engaged": is_chief_engaged,
+                        "last_command": last_command,
+                        "last_phrase": last_phrase
+                    });
+                    win.send_event("CrewChiefState", &json.to_string());
                 }
             }
             Event::UserEvent(AppEvent::ToggleConsole) => {
@@ -594,6 +654,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 tactical_console.teardown();
                 ui_visible.store(false, Ordering::Relaxed);
+                cockpit_drill_active.store(false, Ordering::SeqCst);
             }
             Event::UserEvent(AppEvent::KneeboardRegenFinished) => {
                 log::info!("Kneeboard regeneration finished, notifying Tactical Console");
@@ -676,6 +737,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     shared_config: &shared_config,
                     shared_profile: &shared_profile,
                     reload_trigger: &reload_trigger,
+                    engage_trigger: &engage_trigger,
                     manual_trigger_tx: &manual_trigger_tx,
                     tray: &tray,
                     last_tray_listening: &mut last_tray_listening,
@@ -685,6 +747,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     voice_recognition_enabled: &voice_recognition_enabled,
                     mpo_binding_active: &mpo_binding_active,
                     ui_hardware_active: &ui_hardware_active,
+                    cockpit_drill_active: &cockpit_drill_active,
                 };
                 handle_ipc_message(req, &mut ctx);
             }
@@ -1130,6 +1193,7 @@ struct IpcContext<'a> {
     shared_config: &'a Arc<Mutex<AppConfig>>,
     shared_profile: &'a Arc<Mutex<Option<LoadedProfile>>>,
     reload_trigger: &'a Arc<AtomicBool>,
+    engage_trigger: &'a Arc<AtomicBool>,
     manual_trigger_tx: &'a mpsc::Sender<()>,
     tray: &'a AppTray,
     last_tray_listening: &'a mut bool,
@@ -1139,6 +1203,139 @@ struct IpcContext<'a> {
     voice_recognition_enabled: &'a Arc<AtomicBool>,
     mpo_binding_active: &'a Arc<AtomicBool>,
     ui_hardware_active: &'a Arc<AtomicBool>,
+    cockpit_drill_active: &'a Arc<AtomicBool>,
+}
+
+fn resolve_drill_cue_path(
+    cue: &str,
+    female: bool,
+    shared_profile: &Arc<Mutex<Option<LoadedProfile>>>,
+) -> Option<PathBuf> {
+    let rel_subpath = match cue {
+        "beep" => "VCC/Sounds/start-beep.mp3",
+        "comms-check" => {
+            if female {
+                "VCC/Sounds/1LoudAndClearMaam.mp3"
+            } else {
+                "VCC/Sounds/1LoudAndClearSir.mp3"
+            }
+        }
+        "hows-chief" => {
+            const MALE_FILES: &[&str] = &[
+                "VCC/Sounds/HowsChiefNoStart/AlrightHowYou1.mp3",
+                "VCC/Sounds/HowsChiefNoStart/AlrightHowYou2.mp3",
+                "VCC/Sounds/HowsChiefNoStart/DoinGoodHowYou.mp3",
+                "VCC/Sounds/HowsChiefNoStart/GreatAirForceDay.mp3",
+                "VCC/Sounds/HowsChiefNoStart/GreatDay.mp3",
+                "VCC/Sounds/HowsChiefNoStart/GreatDay2.mp3",
+                "VCC/Sounds/HowsChiefNoStart/Hungry.mp3",
+                "VCC/Sounds/HowsChiefNoStart/LivinTheDream.mp3",
+                "VCC/Sounds/HowsChiefNoStart/LivinTheDream2.mp3",
+                "VCC/Sounds/HowsChiefNoStart/LivinTheDream3.mp3",
+                "VCC/Sounds/HowsChiefNoStart/OverG.mp3",
+                "VCC/Sounds/HowsChiefNoStart/OverG2.mp3",
+            ];
+            const FEMALE_FILES: &[&str] = &[
+                "VCC/Sounds/HowsChiefNoStartFP/AirForceDayMaam.mp3",
+                "VCC/Sounds/HowsChiefNoStartFP/AnotherDayOnLineMaam.mp3",
+                "VCC/Sounds/HowsChiefNoStartFP/LineNumberMaam.mp3",
+                "VCC/Sounds/HowsChiefNoStartFP/LivingTheDreamMaam1.mp3",
+                "VCC/Sounds/HowsChiefNoStartFP/LongDayMaam.mp3",
+                "VCC/Sounds/HowsChiefNoStartFP/OverGMaam.mp3",
+            ];
+            use rand::Rng;
+            let mut rng = rand::thread_rng();
+            if female {
+                FEMALE_FILES[rng.gen_range(0..FEMALE_FILES.len())]
+            } else {
+                MALE_FILES[rng.gen_range(0..MALE_FILES.len())]
+            }
+        }
+        "clear-start-two" => "VCC/Sounds/2ClearForStart2.mp3",
+        "good-start" => {
+            if female {
+                "VCC/Sounds/3GoodStartMaam.mp3"
+            } else {
+                "VCC/Sounds/3GoodStart.mp3"
+            }
+        }
+        "clear-sec" => "VCC/Sounds/ClearForSEC1.mp3",
+        "copy" => {
+            if female {
+                "VCC/Sounds/YesMaamStart2/4Copy.mp3"
+            } else {
+                "VCC/Sounds/YesSirStart2/4Copy.mp3"
+            }
+        }
+        "copy-standby" => "VCC/Sounds/Standby/1CopyStandby.mp3",
+        "nozzle-closed" => "VCC/Sounds/8NozzleClosed.mp3",
+        "nozzle-open" => "VCC/Sounds/9NozzleOpen.mp3",
+        "no-flow" => "VCC/Sounds/6NoFlow.mp3",
+        "epu-runup" => "VCC/Sounds/5EPURunUp.mp3",
+        "speedbrakes-open" => "VCC/Sounds/10SpeedBreaksOpen.mp3",
+        "speedbrakes-closed" => "VCC/Sounds/11SpeedBreaksClosed.mp3",
+        "controls-clear" => "VCC/Sounds/FlightControlsClear.mp3",
+        "cleared-for-bit" => "VCC/Sounds/12ClearedForBit.mp3",
+        "ready-trim" => "VCC/Sounds/13ReadyTrim.mp3",
+        "trim-no-movement" => "VCC/Sounds/14TrimNoMovement.mp3",
+        "trim-nose-up" => "VCC/Sounds/Trims/NoseUp.mp3",
+        "trim-nose-down" => "VCC/Sounds/Trims/NoseDown.mp3",
+        "trim-roll-left" => "VCC/Sounds/Trims/RollLeft.mp3",
+        "trim-roll-right" => "VCC/Sounds/Trims/RollRight.mp3",
+        "trim-yaw-left" => "VCC/Sounds/Trims/YawLeft.mp3",
+        "trim-yaw-right" => "VCC/Sounds/Trims/YawRight.mp3",
+        "controls-still-clear" => "VCC/Sounds/16FlightControlsStillClear.mp3",
+        "big-roll-left" => "VCC/Sounds/BigMovements/RollLeft.mp3",
+        "big-roll-right" => "VCC/Sounds/BigMovements/RollRight.mp3",
+        "big-nose-up" => "VCC/Sounds/BigMovements/NoseUp.mp3",
+        "big-nose-down" => "VCC/Sounds/BigMovements/NoseDown.mp3",
+        "mpo-kick" => "VCC/Sounds/Trims/Kick.mp3",
+        "big-yaw-left" => "VCC/Sounds/BigMovements/YawLeft.mp3",
+        "big-yaw-right" => "VCC/Sounds/BigMovements/YawRight.mp3",
+        "ready-left-brake" => "VCC/Sounds/18aReadyLeftBrake.mp3",
+        "ready-right-brake" => "VCC/Sounds/19ReadyRightBrake.mp3",
+        "left-brake-movement" => "VCC/Sounds/Brakes/Ch1_Movement.mp3",
+        "left-brake-nomovement" => "VCC/Sounds/Brakes/Ch1_NoMovement.mp3",
+        "right-brake-movement" => "VCC/Sounds/Brakes/Ch2_Movement.mp3",
+        "right-brake-nomovement" => "VCC/Sounds/Brakes/Ch2_NoMovement.mp3",
+        "refuel-door-ready" => "VCC/Sounds/AAR Door/RefuelDoorCheck_Rdy.mp3",
+        "aar-door-open" => "VCC/Sounds/AAR Door/AARDoorCheck_Open.mp3",
+        "aar-door-closed" => "VCC/Sounds/AAR Door/AARDoorCheck_Closed.mp3",
+        "cleared-off" => {
+            if female {
+                "VCC/Sounds/ClearedOffFP/BringHerBackCode1Maam.mp3"
+            } else {
+                "VCC/Sounds/ClearedOff/BringHerBackCode1.mp3"
+            }
+        }
+        other => other,
+    };
+
+    // 1. Try resolving relative to currently loaded profile
+    {
+        let prof_guard = shared_profile.lock().unwrap();
+        if let Some(ref lp) = *prof_guard {
+            let p = lp.resolve_asset_path(rel_subpath);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+
+    // 2. Fallback relative to bundled profiles directory
+    let fallback_base = PathBuf::from("assets/profiles/Falcon BMS 4.38 v1.3.1");
+    let cand = fallback_base.join(rel_subpath);
+    if cand.exists() {
+        return Some(cand);
+    }
+
+    // 3. Raw file path directly
+    let raw = PathBuf::from(rel_subpath);
+    if raw.exists() {
+        return Some(raw);
+    }
+
+    None
 }
 
 fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>) {
@@ -1147,6 +1344,24 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
         IpcRequest::SetUiMode { mode } => {
             ctx.ui_hardware_active
                 .store(mode == "hardware", Ordering::Relaxed);
+        }
+        IpcRequest::SetCockpitDrillActive { active } => {
+            log::info!("SetCockpitDrillActive: active={}", active);
+            ctx.cockpit_drill_active.store(active, Ordering::SeqCst);
+        }
+        IpcRequest::PlayDrillSound { cue } => {
+            log::info!("PlayDrillSound requested: \"{}\"", cue);
+            let female = {
+                let cfg = ctx.shared_config.lock().unwrap();
+                cfg.pilot_female
+            };
+            if let Some(path) = resolve_drill_cue_path(&cue, female, ctx.shared_profile) {
+                if let Some(player) = ctx.audio_player {
+                    player.play_sound(&path, &[], false);
+                }
+            } else {
+                log::warn!("Could not resolve drill sound cue: \"{}\"", cue);
+            }
         }
         IpcRequest::DragWindow | IpcRequest::ResizeWindow { .. } | IpcRequest::MinimizeWindow => {
             // Handled directly inside window event callback
@@ -1171,6 +1386,7 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
             ctx.tactical_console.teardown();
             ctx.ui_visible.store(false, Ordering::Relaxed);
             ctx.ui_hardware_active.store(false, Ordering::Relaxed);
+            ctx.cockpit_drill_active.store(false, Ordering::SeqCst);
         }
         IpcRequest::GetInitialState => {
             let cfg = ctx.shared_config.lock().unwrap().clone();
@@ -1640,6 +1856,65 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
                 let cfg = ctx.shared_config.lock().unwrap().clone();
                 push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
             }
+        }
+        IpcRequest::LoadProfileByPath { path } => {
+            let p = std::path::PathBuf::from(&path);
+            if p.exists() {
+                if let Ok(new_lp) = LoadedProfile::load_from_file(&p) {
+                    ctx.tray.set_profile_name(&new_lp.profile.Name);
+                    {
+                        let mut cfg = ctx.shared_config.lock().unwrap();
+                        cfg.profile_path = Some(p.to_string_lossy().to_string());
+                        let _ = cfg.save();
+                    }
+                    {
+                        let mut prof_guard = ctx.shared_profile.lock().unwrap();
+                        *prof_guard = Some(new_lp);
+                    }
+                    ctx.reload_trigger.store(true, Ordering::SeqCst);
+                    log::info!("Profile loaded by path: {:?}", p);
+                    if let Some(win) = ctx.tactical_console.active_window() {
+                        let cfg = ctx.shared_config.lock().unwrap().clone();
+                        push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+                    }
+                }
+            }
+        }
+        IpcRequest::GetProfileVoiceCommands => {
+            let categories = {
+                let guard = ctx.shared_profile.lock().unwrap();
+                if let Some(ref lp) = *guard {
+                    lp.extract_category_views()
+                } else {
+                    Vec::new()
+                }
+            };
+            if let Some(win) = ctx.tactical_console.active_window() {
+                if let Ok(json) = serde_json::to_string(&categories) {
+                    win.send_event("ProfileVoiceCommands", &json);
+                }
+            }
+        }
+        IpcRequest::ResetCrewChief => {
+            log::info!("ResetCrewChief requested via Tactical Console: clearing StateEngine");
+            ctx.reload_trigger.store(true, Ordering::SeqCst);
+            if let Some(win) = ctx.tactical_console.active_window() {
+                let cfg = ctx.shared_config.lock().unwrap().clone();
+                push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+                win.send_event("CrewChiefReset", "{}");
+                let reset_state = serde_json::json!({
+                    "step": "",
+                    "completed": "0",
+                    "is_chief_engaged": false,
+                    "last_command": "Reset",
+                    "last_phrase": ""
+                });
+                win.send_event("CrewChiefState", &reset_state.to_string());
+            }
+        }
+        IpcRequest::EngageCrewChief => {
+            log::info!("EngageCrewChief requested via Tactical Console");
+            ctx.engage_trigger.store(true, Ordering::SeqCst);
         }
         IpcRequest::TestVoiceAudio { phrase } => {
             let is_3d = ctx
@@ -2243,11 +2518,13 @@ struct VoiceWorkerContext {
     profile_lock: Arc<Mutex<Option<LoadedProfile>>>,
     config_lock: Arc<Mutex<AppConfig>>,
     reload_trigger: Arc<AtomicBool>,
+    engage_trigger: Arc<AtomicBool>,
     proxy: tao::event_loop::EventLoopProxy<AppEvent>,
     input_lock: Arc<Mutex<crate::input::axis_sampler::InputSnapshot>>,
     ui_hardware_active: Arc<AtomicBool>,
     ui_visible: Arc<AtomicBool>,
     mpo_binding_active: Arc<AtomicBool>,
+    cockpit_drill_active: Arc<AtomicBool>,
 }
 
 fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
@@ -2256,11 +2533,13 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
         profile_lock,
         config_lock,
         reload_trigger,
+        engage_trigger,
         proxy,
         input_lock,
         ui_hardware_active,
         ui_visible,
         mpo_binding_active,
+        cockpit_drill_active,
     } = ctx;
     let mut bms_client = BmsSharedMemoryClient::new();
     let mut sapi: Option<SapiEngine> = None;
@@ -2270,13 +2549,8 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
         cfg.pilot_female
     };
     let mut state_engine = StateEngine::new(initial_gender);
-    let mut axis_sampler: Option<AxisSampler> = None;
     let bms_dir = BmsConfig::find_bms_directory();
     log::info!("Falcon BMS directory: {:?}", bms_dir);
-    let cached_bms_cfg = bms_dir
-        .as_ref()
-        .and_then(|d| BmsConfig::load_from_bms(d, None).ok())
-        .unwrap_or_default();
     let mut active_profile_name: Option<String> = None;
     let mut last_compiled_config: Option<Option<String>> = None;
     let mut last_compiled_strings: Option<crate::bms::shared_memory::BmsStringInfo> = None;
@@ -2291,9 +2565,11 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
     let mut last_init_silence: u32 = 0;
     let mut last_chief_engaged = false;
     let mut last_bms_connect_attempt = std::time::Instant::now();
-    let mut last_sampler_attempt = std::time::Instant::now();
     let mut initial_chirp_played = false;
     let mut last_bms_connected = false;
+    let mut last_sent_step = String::new();
+    let mut last_sent_completed = String::new();
+    let mut last_sent_engaged = false;
 
     while running.load(Ordering::SeqCst) {
         let (polling_rate, voice_enabled, auto_engage) = {
@@ -2348,10 +2624,6 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
         }
 
         if !controllers_needed {
-            if axis_sampler.is_some() {
-                log::info!("Controllers not required: releasing DirectInput axis sampler");
-                axis_sampler = None;
-            }
             active_profile_name = None;
             last_compiled_config = None;
             thread::sleep(Duration::from_millis(100));
@@ -2389,6 +2661,8 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
             last_compiled_config = None;
         }
 
+        state_engine.suppress_profile_audio = cockpit_drill_active.load(Ordering::Relaxed);
+
         let reload = reload_trigger.swap(false, Ordering::SeqCst);
         if reload {
             log::info!("🔄 Reload requested: resetting internal state logic");
@@ -2401,9 +2675,33 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
             last_chief_engaged = false;
         }
 
-        // Process profile
-        let profile_opt = profile_lock.lock().unwrap();
-        if let Some(loaded) = profile_opt.as_ref() {
+        let engage = engage_trigger.swap(false, Ordering::SeqCst);
+
+        // Process profile (drop lock immediately so axis sampler and UI IPC are never blocked during speech)
+        let loaded_opt = {
+            let profile_opt = profile_lock.lock().unwrap();
+            profile_opt.as_ref().cloned()
+        };
+        if let Some(loaded) = loaded_opt.as_ref() {
+            if engage {
+                log::info!(
+                    "🎙️ Manual Crew Chief engagement requested: executing Engage Crew Chief"
+                );
+                let engage_cmd = loaded
+                    .profile
+                    .CommandGroups
+                    .iter()
+                    .find(|g| g.Name.as_deref() == Some("Engage Crew Chief"))
+                    .and_then(|g| g.Commands.first());
+                if let Some(cmd) = engage_cmd {
+                    state_engine.execute_command(cmd, loaded);
+                } else {
+                    state_engine.active_configuration =
+                        Some("3c7af383-7d72-46a4-9e32-233bb9fa2bc7".to_string());
+                    state_engine.fired_commands.clear();
+                }
+            }
+
             let profile_name = &loaded.profile.Name;
             let profile_changed = active_profile_name.as_ref() != Some(profile_name) || reload;
 
@@ -2411,51 +2709,10 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                 active_profile_name = Some(profile_name.clone());
                 log::info!("Loaded profile: {}", profile_name);
                 state_engine.compile_profile_subscriptions(loaded);
-
-                let bms_cfg = if let Some(ref _dir) = bms_dir {
-                    cached_bms_cfg.clone()
-                } else {
-                    BmsConfig::default()
-                };
-                let req_axes = loaded.extract_required_axes();
-                log::info!("Required axes for this profile: {:?}", req_axes);
-                match AxisSampler::new(bms_cfg, &req_axes) {
-                    Ok(mut sampler) => {
-                        sampler.set_mpo_binding(loaded.get_mpo_binding());
-                        log::info!("DirectInput axis sampler initialized successfully");
-                        axis_sampler = Some(sampler);
-                    }
-                    Err(e) => {
-                        log::error!("Failed to initialize DirectInput axis sampler: {:?}", e);
-                        axis_sampler = None;
-                    }
-                }
             }
 
             // Demand-driven sampling: reads ONLY variables subscribed by the profile + mandatory internal variables
             let (_in_3d, _bms_conn, strings) = state_engine.sample_bms(&mut bms_client);
-
-            // Retry initializing DirectInput sampler if disconnected
-            if axis_sampler.is_none() && last_sampler_attempt.elapsed() >= Duration::from_secs(3) {
-                last_sampler_attempt = Instant::now();
-                let bms_cfg = if let Some(ref dir) = bms_dir {
-                    BmsConfig::load_from_bms(dir, None).unwrap_or_default()
-                } else {
-                    BmsConfig::default()
-                };
-                let req_axes = loaded.extract_required_axes();
-                if let Ok(mut sampler) = AxisSampler::new(bms_cfg, &req_axes) {
-                    sampler.set_mpo_binding(loaded.get_mpo_binding());
-                    log::info!("DirectInput axis sampler re-connected successfully");
-                    axis_sampler = Some(sampler);
-                }
-            }
-
-            if profile_changed {
-                if let Some(ref mut sampler) = axis_sampler {
-                    sampler.set_mpo_binding(loaded.get_mpo_binding());
-                }
-            }
 
             let chief_engaged = state_engine.is_chief_engaged();
             let strings_changed = last_compiled_strings.as_ref() != Some(&strings);
@@ -2521,17 +2778,10 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                 last_compiled_strings = Some(strings.clone());
             }
 
-            let mut ptt_com1 = false;
-            let mut ptt_com2 = false;
-            let mut input_vars = std::collections::HashMap::new();
-
-            if let Some(ref mut sampler) = axis_sampler {
-                let snapshot = sampler.sample();
-                *input_lock.lock().unwrap() = snapshot.clone();
-                ptt_com1 = snapshot.ptt_com1_pressed;
-                ptt_com2 = snapshot.ptt_com2_pressed;
-                input_vars = snapshot.active_variables;
-            }
+            let snapshot = input_lock.lock().unwrap().clone();
+            let ptt_com1 = snapshot.ptt_com1_pressed;
+            let ptt_com2 = snapshot.ptt_com2_pressed;
+            let input_vars = snapshot.active_variables;
 
             let (
                 listening_enabled,
@@ -2619,10 +2869,6 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
 
             if let Some(ref engine) = sapi {
                 if let Some((g_idx, c_idx, text, confidence)) = engine.poll_recognition() {
-                    let _ = proxy.send_event(AppEvent::SpeechRecognized {
-                        text: text.clone(),
-                        confidence,
-                    });
                     let clean_text = text.trim().to_lowercase();
 
                     // System-wide Standby and Comms Check override EVERYTHING else
@@ -2631,6 +2877,15 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                             log::debug!("Speech \"{}\" ignored: already on Standby", clean_text);
                             continue;
                         }
+
+                        let _ = proxy.send_event(AppEvent::SpeechRecognized {
+                            text: text.clone(),
+                            confidence,
+                            group: "System".to_string(),
+                            command: "Standby".to_string(),
+                            status: "VERIFIED".to_string(),
+                            reason: None,
+                        });
 
                         log::info!(
                             "🛑 [Voice Command] \"{}\" -> Pausing voice recognition (System-wide Mute)",
@@ -2655,6 +2910,14 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                             !cfg.listening_enabled
                         };
                         if was_muted {
+                            let _ = proxy.send_event(AppEvent::SpeechRecognized {
+                                text: text.clone(),
+                                confidence,
+                                group: "System".to_string(),
+                                command: "Comms Check".to_string(),
+                                status: "VERIFIED".to_string(),
+                                reason: None,
+                            });
                             log::info!("🎙️ [Voice Command] \"{}\" -> Resuming voice recognition (System-wide Unmute)", text);
                             {
                                 let mut cfg = config_lock.lock().unwrap();
@@ -2671,6 +2934,14 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                             continue;
                         } else {
                             if !state_engine.is_chief_engaged() {
+                                let _ = proxy.send_event(AppEvent::SpeechRecognized {
+                                    text: text.clone(),
+                                    confidence,
+                                    group: "System".to_string(),
+                                    command: "Comms Check".to_string(),
+                                    status: "VERIFIED".to_string(),
+                                    reason: None,
+                                });
                                 log::info!(
                                     "🎙️ [Voice Command] \"{}\" -> Cockpit comms check acknowledged",
                                     text
@@ -2706,6 +2977,14 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                         let grp_name = group.Name.as_deref().unwrap_or("Command");
                         if !state_engine.is_group_active(group) {
                             log::info!("🚫 [Condition Gated] Command group [{}] is inactive under current conditions. Ignoring \"{}\"", grp_name, text);
+                            let _ = proxy.send_event(AppEvent::SpeechRecognized {
+                                text: text.clone(),
+                                confidence,
+                                group: grp_name.to_string(),
+                                command: "".to_string(),
+                                status: "GROUP_INACTIVE".to_string(),
+                                reason: Some(format!("Group [{}] condition not met", grp_name)),
+                            });
                         } else {
                             let requires_ptt1 = group.PushToTalk.as_ref().is_some_and(|ptt| {
                                 ptt.VariableInputs
@@ -2740,12 +3019,38 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                             if ptt_allowed {
                                 if let Some(cmd) = group.Commands.get(c_idx) {
                                     let cmd_name = cmd.Name.as_deref().unwrap_or("Unnamed");
-                                    if let Some(conds) = &cmd.Conditions {
-                                        if !state_engine.evaluate_condition_groups(conds) {
-                                            log::info!("🚫 [Condition Gated] Command [{}] condition not met under current state. Ignoring \"{}\"", cmd_name, text);
-                                            continue;
+                                    let is_drill = cockpit_drill_active.load(Ordering::Relaxed);
+
+                                    if !is_drill {
+                                        if let Some(conds) = &cmd.Conditions {
+                                            if !state_engine.evaluate_condition_groups(conds) {
+                                                log::info!("🚫 [Condition Gated] Command [{}] condition not met under current state. Ignoring \"{}\"", cmd_name, text);
+                                                let _ =
+                                                    proxy.send_event(AppEvent::SpeechRecognized {
+                                                        text: text.clone(),
+                                                        confidence,
+                                                        group: grp_name.to_string(),
+                                                        command: cmd_name.to_string(),
+                                                        status: "DENIED".to_string(),
+                                                        reason: Some(format!(
+                                                            "Step='{}', rpm='{}'",
+                                                            state_engine
+                                                                .variables
+                                                                .get("Step")
+                                                                .map(|s| s.as_str())
+                                                                .unwrap_or(""),
+                                                            state_engine
+                                                                .variables
+                                                                .get("rpm")
+                                                                .map(|s| s.as_str())
+                                                                .unwrap_or("0")
+                                                        )),
+                                                    });
+                                                continue;
+                                            }
                                         }
                                     }
+
                                     log::info!(
                                         "🎤 Recognized speech (conf: {:.2}): \"{}\" -> [{} > {}]",
                                         confidence,
@@ -2753,7 +3058,46 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                                         grp_name,
                                         cmd_name
                                     );
-                                    state_engine.execute_command(cmd, loaded);
+                                    let _ = proxy.send_event(AppEvent::SpeechRecognized {
+                                        text: text.clone(),
+                                        confidence,
+                                        group: grp_name.to_string(),
+                                        command: cmd_name.to_string(),
+                                        status: "VERIFIED".to_string(),
+                                        reason: None,
+                                    });
+
+                                    if !is_drill {
+                                        state_engine.execute_command(cmd, loaded);
+
+                                        let cur_step = state_engine
+                                            .variables
+                                            .get("Step")
+                                            .cloned()
+                                            .unwrap_or_default();
+                                        let cur_completed = state_engine
+                                            .variables
+                                            .get("Completed")
+                                            .cloned()
+                                            .unwrap_or_default();
+                                        let cur_engaged = state_engine.is_chief_engaged();
+                                        if cur_step != last_sent_step
+                                            || cur_completed != last_sent_completed
+                                            || cur_engaged != last_sent_engaged
+                                        {
+                                            let _ =
+                                                proxy.send_event(AppEvent::CrewChiefStateChanged {
+                                                    step: cur_step.clone(),
+                                                    completed: cur_completed.clone(),
+                                                    is_chief_engaged: cur_engaged,
+                                                    last_command: cmd_name.to_string(),
+                                                    last_phrase: text.clone(),
+                                                });
+                                            last_sent_step = cur_step;
+                                            last_sent_completed = cur_completed;
+                                            last_sent_engaged = cur_engaged;
+                                        }
+                                    }
                                 }
                             } else {
                                 let ptt_btn = if requires_ptt1 {
@@ -2762,18 +3106,56 @@ fn run_voice_worker_loop(ctx: VoiceWorkerContext) {
                                     "COM2 (VHF)"
                                 };
                                 log::info!("📻 [PTT Gated] Speech \"{}\" recognized for [{}], but {} was not held", text, grp_name, ptt_btn);
+                                let cmd_name = group
+                                    .Commands
+                                    .get(c_idx)
+                                    .and_then(|c| c.Name.clone())
+                                    .unwrap_or_default();
+                                let _ = proxy.send_event(AppEvent::SpeechRecognized {
+                                    text: text.clone(),
+                                    confidence,
+                                    group: grp_name.to_string(),
+                                    command: cmd_name,
+                                    status: "PTT_GATED".to_string(),
+                                    reason: Some(format!("Requires {} held", ptt_btn)),
+                                });
                             }
                         }
                     }
                 }
             }
 
-            if voice_enabled && listening_enabled {
+            if voice_enabled && listening_enabled && !cockpit_drill_active.load(Ordering::Relaxed) {
                 state_engine.evaluate_reactive_groups(loaded, &input_vars);
+                let cur_step = state_engine
+                    .variables
+                    .get("Step")
+                    .cloned()
+                    .unwrap_or_default();
+                let cur_completed = state_engine
+                    .variables
+                    .get("Completed")
+                    .cloned()
+                    .unwrap_or_default();
+                let cur_engaged = state_engine.is_chief_engaged();
+                if cur_step != last_sent_step
+                    || cur_completed != last_sent_completed
+                    || cur_engaged != last_sent_engaged
+                {
+                    let _ = proxy.send_event(AppEvent::CrewChiefStateChanged {
+                        step: cur_step.clone(),
+                        completed: cur_completed.clone(),
+                        is_chief_engaged: cur_engaged,
+                        last_command: "Reactive Trigger".to_string(),
+                        last_phrase: "".to_string(),
+                    });
+                    last_sent_step = cur_step;
+                    last_sent_completed = cur_completed;
+                    last_sent_engaged = cur_engaged;
+                }
             }
         }
 
-        drop(profile_opt);
         thread::sleep(poll_interval);
     }
 

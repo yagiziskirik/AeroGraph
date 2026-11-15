@@ -14,7 +14,27 @@ declare global {
 type EventCallback = (data: any) => void;
 const eventListeners: Map<string, Set<EventCallback>> = new Map();
 
-// Initialize IPC event bridge
+type PreCloseHandler = () => void;
+const preCloseHandlers: Set<PreCloseHandler> = new Set();
+
+export const registerPreCloseHandler = (handler: PreCloseHandler) => {
+  preCloseHandlers.add(handler);
+  return () => {
+    preCloseHandlers.delete(handler);
+  };
+};
+
+const executePreCloseHandlers = () => {
+  preCloseHandlers.forEach((handler) => {
+    try {
+      handler();
+    } catch (e) {
+      console.error('[IPC] Error in pre-close handler:', e);
+    }
+  });
+};
+
+// Initialize IPC event bridge & unload listener
 if (typeof window !== 'undefined') {
   window.__AEROGRAPH_RECEIVE_EVENT__ = (eventName: string, data: any) => {
     const listeners = eventListeners.get(eventName);
@@ -22,6 +42,10 @@ if (typeof window !== 'undefined') {
       listeners.forEach((callback) => callback(data));
     }
   };
+
+  window.addEventListener('beforeunload', () => {
+    executePreCloseHandlers();
+  });
 }
 
 export const Ipc = {
@@ -113,6 +137,7 @@ export const Ipc = {
     this.send('ToggleMaximize');
   },
   close() {
+    executePreCloseHandlers();
     this.send('CloseWindow');
   },
 
@@ -201,8 +226,26 @@ export const Ipc = {
   reloadProfile() {
     this.send('ReloadProfile');
   },
+  loadProfileByPath(path: string) {
+    this.send('LoadProfileByPath', { path });
+  },
   resetDefaultProfile() {
     this.send('ResetDefaultProfile');
+  },
+  getProfileVoiceCommands() {
+    this.send('GetProfileVoiceCommands');
+  },
+  resetCrewChief() {
+    this.send('ResetCrewChief');
+  },
+  engageCrewChief() {
+    this.send('EngageCrewChief');
+  },
+  setCockpitDrillActive(active: boolean) {
+    this.send('SetCockpitDrillActive', { active });
+  },
+  playDrillSound(cue: string) {
+    this.send('PlayDrillSound', { cue });
   },
   testVoiceAudio(phrase: string) {
     this.send('TestVoiceAudio', { phrase });

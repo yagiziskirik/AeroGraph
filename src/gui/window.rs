@@ -14,6 +14,70 @@ use crate::kneeboard::dds::{
     KneeboardSlotMap,
 };
 
+fn parse_range(header_val: &str, total_len: usize) -> Option<(usize, usize)> {
+    if !header_val.starts_with("bytes=") {
+        return None;
+    }
+    let range_part = &header_val["bytes=".len()..];
+    let mut parts = range_part.split('-');
+    let start_str = parts.next()?.trim();
+    let end_str = parts.next()?.trim();
+
+    if start_str.is_empty() {
+        let suffix_len: usize = end_str.parse().ok()?;
+        let start = total_len.saturating_sub(suffix_len);
+        Some((start, total_len.saturating_sub(1)))
+    } else {
+        let start: usize = start_str.parse().ok()?;
+        let end: usize = if end_str.is_empty() {
+            total_len.saturating_sub(1)
+        } else {
+            end_str.parse().ok()?
+        };
+        if start <= end && start < total_len {
+            Some((start, end.min(total_len.saturating_sub(1))))
+        } else {
+            None
+        }
+    }
+}
+
+fn build_http_response(
+    bytes: Cow<'static, [u8]>,
+    mime: &str,
+    range_header: Option<&str>,
+) -> wry::http::Response<Cow<'static, [u8]>> {
+    let total_len = bytes.len();
+    if let Some(range_str) = range_header {
+        if let Some((start, end)) = parse_range(range_str, total_len) {
+            let chunk = match bytes {
+                Cow::Borrowed(b) => Cow::Borrowed(&b[start..=end]),
+                Cow::Owned(ref v) => Cow::Owned(v[start..=end].to_vec()),
+            };
+            let content_range = format!("bytes {}-{}/{}", start, end, total_len);
+            let content_len = (end - start + 1).to_string();
+            return wry::http::Response::builder()
+                .status(wry::http::StatusCode::PARTIAL_CONTENT)
+                .header("Content-Type", mime)
+                .header("Accept-Ranges", "bytes")
+                .header("Content-Range", content_range)
+                .header("Content-Length", content_len)
+                .header("Access-Control-Allow-Origin", "*")
+                .body(chunk)
+                .unwrap();
+        }
+    }
+
+    wry::http::Response::builder()
+        .status(wry::http::StatusCode::OK)
+        .header("Content-Type", mime)
+        .header("Accept-Ranges", "bytes")
+        .header("Content-Length", total_len.to_string())
+        .header("Access-Control-Allow-Origin", "*")
+        .body(bytes)
+        .unwrap()
+}
+
 pub struct TacticalConsoleWindow {
     window: Arc<Window>,
     webview: WebView,
@@ -97,6 +161,7 @@ impl TacticalConsoleWindow {
         webview_builder =
             webview_builder.with_custom_protocol("aerograph".into(), move |_id, request| {
                 let path = request.uri().path();
+                let range_hdr = request.headers().get("range").and_then(|v| v.to_str().ok());
                 let clean_path = if path.is_empty() || path == "/" {
                     "/index.html"
                 } else {
@@ -194,11 +259,7 @@ impl TacticalConsoleWindow {
                                     "svg" => "image/svg+xml",
                                     _ => "application/octet-stream",
                                 };
-                                return wry::http::Response::builder()
-                                    .header("Content-Type", mime)
-                                    .header("Access-Control-Allow-Origin", "*")
-                                    .body(Cow::Owned(bytes))
-                                    .unwrap();
+                                return build_http_response(Cow::Owned(bytes), mime, range_hdr);
                             }
                         }
                     }
@@ -211,11 +272,7 @@ impl TacticalConsoleWindow {
                 }
 
                 match UiAssets::get_file_content(clean_path) {
-                    Some((bytes, mime)) => wry::http::Response::builder()
-                        .header("Content-Type", mime)
-                        .header("Access-Control-Allow-Origin", "*")
-                        .body(bytes)
-                        .unwrap(),
+                    Some((bytes, mime)) => build_http_response(bytes, &mime, range_hdr),
                     None => wry::http::Response::builder()
                         .status(wry::http::StatusCode::NOT_FOUND)
                         .body(Cow::Borrowed(b"404 Not Found" as &[u8]))

@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Ipc } from '../services/ipc';
+import { Ipc, registerPreCloseHandler } from '../services/ipc';
 import { Sound } from '../services/sound';
-import { AppConfig, TelemetryData } from '../types/ipc';
+import { AppConfig, TelemetryData, ProfileCategoryView } from '../types/ipc';
 import { SpeakerToggle, MicrophoneToggle } from '../components/inputs';
-import { HelpCircle, RotateCcw, Check, SlidersHorizontal, Undo2 } from 'lucide-react';
+import { HelpCircle, RotateCcw, Check, SlidersHorizontal, Undo2, BookOpen, Radio, Target, ArrowRight } from 'lucide-react';
+import { VoiceAcademyView } from './VoiceAcademyView';
 
 const SAPI_PTT_DEFAULTS = {
   min_confidence: 50,
@@ -140,6 +141,111 @@ export const CommsView: React.FC<CommsViewProps> = ({
 
   // Test Comms Audio & Live SAPI Speech Recognition
   const [testActive, setTestActive] = useState(false);
+  const [viewMode, setViewMode] = useState<'station' | 'splash' | 'practice' | 'brevity' | 'manual'>('station');
+  const [targetAcademyMode, setTargetAcademyMode] = useState<'practice' | 'brevity' | 'manual'>('practice');
+  const [profileCategories, setProfileCategories] = useState<ProfileCategoryView[]>([]);
+  const preAcademyState = useRef<{ voice: boolean; listening: boolean } | null>(null);
+
+  // Load Profile Voice Categories for Academy
+  useEffect(() => {
+    const unsub = Ipc.on('ProfileVoiceCommands', (data: any) => {
+      if (Array.isArray(data)) {
+        setProfileCategories(data);
+      }
+    });
+    Ipc.getProfileVoiceCommands();
+    return unsub;
+  }, [profileName, profilePath]);
+
+  const handleEnterAcademy = (mode: 'practice' | 'brevity' | 'manual' = 'practice') => {
+    Sound.playCommit();
+    setTargetAcademyMode(mode);
+    Ipc.getProfileVoiceCommands();
+
+    // 1. Capture baseline pre-academy state if not already captured
+    if (!preAcademyState.current) {
+      preAcademyState.current = {
+        voice: config.voice_recognition,
+        listening: config.listening_enabled,
+      };
+    }
+
+    if (mode === 'practice') {
+      if (!config.voice_recognition) {
+        // Voice was OFF -> engage voice recognition and listening
+        Ipc.setVoiceRecognition(true);
+        Ipc.setListening(true);
+      } else {
+        // Voice was ALREADY ACTIVE -> do not restart engine, reload profile cleanly
+        Ipc.reloadProfile();
+      }
+      // Rehearsal drill always starts with fresh crew chief state & drill audio suppression active
+      Ipc.resetCrewChief();
+      Ipc.setCockpitDrillActive(true);
+    } else if (mode === 'brevity') {
+      if (!config.voice_recognition) {
+        // Voice was OFF -> engage voice recognition and listening for interactive search
+        Ipc.setVoiceRecognition(true);
+        Ipc.setListening(true);
+      } else {
+        // Voice was ALREADY ACTIVE -> DO NOT TOUCH ANYTHING!
+        // No restart, no reload, no resetCrewChief: preserves active flight profile and in-flight comms state.
+      }
+      Ipc.setCockpitDrillActive(false);
+    } else if (mode === 'manual') {
+      Ipc.setCockpitDrillActive(false);
+    }
+
+    setViewMode('splash');
+    setTimeout(() => setViewMode(mode), 350);
+  };
+
+  const handleExitAcademy = () => {
+    Sound.playSwitch();
+    Ipc.setCockpitDrillActive(false);
+
+    const isGameRunning = telemetry.bms_running || telemetry.is_3d;
+    if (isGameRunning) {
+      // When the game is running, do NOT touch or change the voice recognition state!
+      preAcademyState.current = null;
+    } else if (preAcademyState.current) {
+      // When the game is not running, revert to previous state if engine was not active before
+      const { voice, listening } = preAcademyState.current;
+      if (config.voice_recognition !== voice) {
+        Ipc.setVoiceRecognition(voice);
+      }
+      if (config.listening_enabled !== listening) {
+        Ipc.setListening(listening);
+      }
+      preAcademyState.current = null;
+    }
+
+    setViewMode('splash');
+    setTimeout(() => setViewMode('station'), 200);
+  };
+
+  // Pre-close window hook: restore prior voice state if UI is closed and game is not running
+  useEffect(() => {
+    const unregister = registerPreCloseHandler(() => {
+      const isGameRunning = telemetry.bms_running || telemetry.is_3d;
+      if (isGameRunning) {
+        // Do NOT change the voice state when game is running (neither enable nor disable)
+        return;
+      }
+      if (preAcademyState.current) {
+        const { voice, listening } = preAcademyState.current;
+        if (config.voice_recognition !== voice) {
+          Ipc.setVoiceRecognition(voice);
+        }
+        if (config.listening_enabled !== listening) {
+          Ipc.setListening(listening);
+        }
+        preAcademyState.current = null;
+      }
+      Ipc.setCockpitDrillActive(false);
+    });
+    return unregister;
+  }, [telemetry.bms_running, telemetry.is_3d, config.voice_recognition, config.listening_enabled]);
   const [recognizedSpeech, setRecognizedSpeech] = useState<{
     phrase: string;
     confidence: number;
@@ -331,6 +437,49 @@ export const CommsView: React.FC<CommsViewProps> = ({
     Ipc.updateConfig(updated);
   };
 
+
+  if (viewMode === 'splash') {
+    return (
+      <div className="h-full w-full min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-8 select-none">
+        <div className="flex flex-col items-center space-y-6 max-w-md text-center">
+          <div className="w-20 h-20 rounded-full border-2 border-emerald-500/40 bg-emerald-500/10 flex items-center justify-center relative shadow-lg">
+            <Radio className="w-9 h-9 text-emerald-400 animate-pulse" />
+            <div className="absolute inset-0 rounded-full border border-emerald-400 animate-ping opacity-25" />
+          </div>
+
+          <div className="space-y-1.5">
+            <h2 className="text-xl font-mono font-black text-zinc-100 tracking-wider">
+              {targetAcademyMode === 'practice'
+                ? 'COCKPIT VOICE PRACTICE DRILL'
+                : targetAcademyMode === 'brevity'
+                ? 'TACTICAL BREVITY & AGENCIES DIRECTORY'
+                : 'DASH-1 CHECKLIST MANUAL'}
+            </h2>
+            <p className="text-xs font-mono text-zinc-400">
+              INITIALIZING COMMUNICATIONS PIPELINE // SAPI HOT
+            </p>
+          </div>
+
+          <div className="w-56 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="h-full bg-emerald-400 animate-pulse w-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (viewMode === 'practice' || viewMode === 'brevity' || viewMode === 'manual') {
+    return (
+      <VoiceAcademyView
+        onBack={handleExitAcademy}
+        profileName={profileName}
+        profilePath={profilePath || ''}
+        categories={profileCategories}
+        telemetry={telemetry}
+        initialMode={viewMode}
+      />
+    );
+  }
 
   return (
     <div className="h-full w-full p-5 bg-[#0A0A0C] flex flex-col space-y-4 select-none overflow-y-auto font-sans">
@@ -697,6 +846,107 @@ export const CommsView: React.FC<CommsViewProps> = ({
             <span>SAPI GRAMMAR RULES: ACTIVE</span>
             <span>PTT OVERRIDE: HOTAS GATED</span>
           </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 2. TRAINING & TACTICAL REFERENCE DECK                                     */}
+      {/* ========================================================================= */}
+      <div className="bg-[#121214] border border-white/[0.08] rounded p-4 shadow-xl">
+        <div className="flex items-center justify-between pb-3 border-b border-white/[0.08] mb-4">
+          <div>
+            <h3 className="text-xs font-bold tracking-[0.2em] text-white uppercase font-mono flex items-center gap-2">
+              <Radio className="w-4 h-4 text-emerald-400" />
+              TRAINING &amp; TACTICAL REFERENCE
+            </h3>
+            <p className="text-[11px] text-zinc-500 font-mono mt-0.5">
+              Practice procedural cold-and-dark voice drills, explore tactical brevities, or read the Dash-1 checklist.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* CARD 1: PRACTICE */}
+          <button
+            type="button"
+            onClick={() => handleEnterAcademy('practice')}
+            disabled={telemetry.is_3d || telemetry.bms_running}
+            className={`p-4 rounded border text-left flex flex-col justify-between transition-[background-color,border-color,box-shadow] group ${
+              telemetry.is_3d || telemetry.bms_running
+                ? 'bg-zinc-950/40 border-zinc-800/40 opacity-40 cursor-not-allowed'
+                : 'bg-[#18181B] hover:bg-[#202024] border-emerald-500/30 hover:border-emerald-500/70 hover:shadow-[0_0_15px_rgba(16,185,129,0.2)] cursor-pointer'
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold font-mono tracking-widest text-emerald-400 uppercase flex items-center gap-1.5">
+                  <Target className="w-4 h-4" />
+                  PRACTICE
+                </span>
+                {(telemetry.is_3d || telemetry.bms_running) && (
+                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-rose-950/60 border border-rose-500/40 text-rose-300">
+                    SIM RUNNING
+                  </span>
+                )}
+              </div>
+              <h4 className="text-sm font-bold text-white font-mono mb-1">COCKPIT VOICE DRILL</h4>
+              <p className="text-[11px] text-zinc-400 font-sans leading-relaxed">
+                Interactive F-16C cold-and-dark crew chief ramp start drill. Voice-gated with live SAPI recognition and tactile rehearsal.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs font-mono font-bold text-emerald-400">
+              <span>{telemetry.is_3d || telemetry.bms_running ? 'LOCKED IN 3D FLIGHT' : 'START DRILL'}</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </button>
+
+          {/* CARD 2: BREVITY */}
+          <button
+            type="button"
+            onClick={() => handleEnterAcademy('brevity')}
+            className="p-4 rounded border border-white/[0.08] hover:border-cyan-500/60 bg-[#18181B] hover:bg-[#202024] text-left flex flex-col justify-between transition-[background-color,border-color,box-shadow] hover:shadow-[0_0_15px_rgba(6,182,212,0.2)] cursor-pointer group"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold font-mono tracking-widest text-cyan-400 uppercase flex items-center gap-1.5">
+                  <Radio className="w-4 h-4" />
+                  BREVITY
+                </span>
+              </div>
+              <h4 className="text-sm font-bold text-white font-mono mb-1">TACTICAL BREVITY &amp; AGENCIES</h4>
+              <p className="text-[11px] text-zinc-400 font-sans leading-relaxed">
+                Complete radio directory for ATC, Tankers, AWACS, and Flight Wingmen with all recognized voice variations.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs font-mono font-bold text-cyan-400">
+              <span>BROWSE DIRECTORY</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </button>
+
+          {/* CARD 3: MANUAL */}
+          <button
+            type="button"
+            onClick={() => handleEnterAcademy('manual')}
+            className="p-4 rounded border border-white/[0.08] hover:border-amber-500/60 bg-[#18181B] hover:bg-[#202024] text-left flex flex-col justify-between transition-[background-color,border-color,box-shadow] hover:shadow-[0_0_15px_rgba(245,158,11,0.2)] cursor-pointer group"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold font-mono tracking-widest text-amber-400 uppercase flex items-center gap-1.5">
+                  <BookOpen className="w-4 h-4" />
+                  MANUAL
+                </span>
+              </div>
+              <h4 className="text-sm font-bold text-white font-mono mb-1">DASH-1 CHECKLIST MANUAL</h4>
+              <p className="text-[11px] text-zinc-400 font-sans leading-relaxed">
+                Comprehensive procedural cold-and-dark checklist reference with operational cautions and technical notes.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs font-mono font-bold text-amber-400">
+              <span>OPEN MANUAL</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </button>
         </div>
       </div>
 

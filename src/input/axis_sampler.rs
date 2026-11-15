@@ -1,6 +1,12 @@
 use crate::bms::config_parser::{AxisBinding, BmsConfig, ButtonBinding};
+use crate::config::AppConfig;
+use crate::fvx::loader::LoadedProfile;
 use crate::input::direct_input::{DirectInputManager, DIJOYSTATE2};
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
 pub struct InputSnapshot {
@@ -132,6 +138,154 @@ impl AxisSampler {
     /// Configures the active MPO binding (from active .fvx profile) to sample against.
     pub fn set_mpo_binding(&mut self, binding: (u32, String, String, bool)) {
         self.mpo_binding = Some(binding);
+    }
+
+    /// Dynamically updates the set of required axes and opens corresponding devices.
+    pub fn set_required_axes(&mut self, required_axis_names: &HashSet<String>) {
+        self.required_axis_names = required_axis_names.clone();
+        self.active_axes.clear();
+        for (axis_name, binding) in &self.bms_config.axes {
+            let matches = required_axis_names.iter().any(|req| {
+                req.to_lowercase().contains(&axis_name.to_lowercase())
+                    || (axis_name == "Pitch" && (req == "AFElevatorUp" || req == "AFElevatorDown"))
+                    || (axis_name == "Roll" && (req == "AFAileronLeft" || req == "AFAileronRight"))
+                    || (axis_name == "Yaw" && (req == "AFRudderLeft" || req == "AFRudderRight"))
+                    || (axis_name == "Toe_Brake" && req.contains("Toe_Brake"))
+                    || (axis_name == "Toe_Brake_Right" && req.contains("Toe_Brake_Right"))
+            });
+
+            if matches {
+                let _ = self.dinput.open_device(&binding.device_guid);
+                self.active_axes.insert(axis_name.clone(), binding.clone());
+            }
+        }
+    }
+
+    /// Spawns the dedicated background thread for DirectInput controller sampling.
+    /// Polling rate is adaptive: 60Hz when UI is active/visible, falling back to configured rate when in tray/background.
+    pub fn spawn_sampling_thread(
+        running: Arc<AtomicBool>,
+        ui_visible: Arc<AtomicBool>,
+        config_lock: Arc<Mutex<AppConfig>>,
+        profile_lock: Arc<Mutex<Option<LoadedProfile>>>,
+        shared_snapshot: Arc<Mutex<InputSnapshot>>,
+        mpo_binding_active: Arc<AtomicBool>,
+        reload_trigger: Arc<AtomicBool>,
+    ) {
+        thread::Builder::new()
+            .name("axis_sampler".to_string())
+            .spawn(move || {
+                let bms_dir = BmsConfig::find_bms_directory();
+                let bms_cfg = if let Some(ref dir) = bms_dir {
+                    BmsConfig::load_from_bms(dir, None).unwrap_or_default()
+                } else {
+                    BmsConfig::default()
+                };
+
+                let mut sampler_opt: Option<AxisSampler> = None;
+                let mut last_sampler_attempt = Instant::now() - Duration::from_secs(10);
+                let mut last_profile_path: Option<std::path::PathBuf> = None;
+                let mut last_mpo_binding: Option<(u32, String, String, bool)> = None;
+                let mut last_req_axes: HashSet<String> = HashSet::new();
+
+                while running.load(Ordering::SeqCst) {
+                    let is_ui_vis = ui_visible.load(Ordering::Relaxed);
+                    let is_mpo_bind = mpo_binding_active.load(Ordering::Relaxed);
+                    let (voice_enabled, configured_rate) = {
+                        let cfg = config_lock.lock().unwrap();
+                        (cfg.voice_recognition, cfg.polling_rate_hz.clamp(10, 100))
+                    };
+                    let controllers_needed = voice_enabled || is_ui_vis || is_mpo_bind;
+
+                    if !controllers_needed {
+                        if sampler_opt.is_some() {
+                            log::info!(
+                                "Controllers not required: releasing DirectInput axis sampler"
+                            );
+                            sampler_opt = None;
+                        }
+                        thread::sleep(Duration::from_millis(100));
+                        continue;
+                    }
+
+                    // Adaptive polling rate: 60Hz when UI is active, configured rate when minimized/tray
+                    let poll_interval = if is_ui_vis {
+                        Duration::from_millis(16)
+                    } else {
+                        Duration::from_millis((1000 / configured_rate) as u64)
+                    };
+
+                    // Check profile & MPO binding updates (use non-blocking try_lock so DirectInput sampling is never stalled)
+                    let (req_axes, mpo_b, cur_prof_path) = match profile_lock.try_lock() {
+                        Ok(prof_guard) => {
+                            if let Some(ref lp) = *prof_guard {
+                                (
+                                    lp.extract_required_axes(),
+                                    Some(lp.get_mpo_binding()),
+                                    Some(lp.profile_path.clone()),
+                                )
+                            } else {
+                                (HashSet::new(), None, None)
+                            }
+                        }
+                        Err(_) => (
+                            last_req_axes.clone(),
+                            last_mpo_binding.clone(),
+                            last_profile_path.clone(),
+                        ),
+                    };
+
+                    let reload = reload_trigger.load(Ordering::Relaxed);
+                    let profile_changed = cur_prof_path != last_profile_path || reload;
+
+                    if sampler_opt.is_none()
+                        && last_sampler_attempt.elapsed() >= Duration::from_secs(3)
+                    {
+                        last_sampler_attempt = Instant::now();
+                        match AxisSampler::new(bms_cfg.clone(), &req_axes) {
+                            Ok(mut s) => {
+                                if let Some(ref mpo) = mpo_b {
+                                    s.set_mpo_binding(mpo.clone());
+                                }
+                                log::info!(
+                                    "Dedicated DirectInput axis sampler initialized successfully"
+                                );
+                                sampler_opt = Some(s);
+                                last_profile_path = cur_prof_path.clone();
+                                last_mpo_binding = mpo_b.clone();
+                                last_req_axes = req_axes.clone();
+                            }
+                            Err(e) => {
+                                log::error!(
+                                    "Failed to initialize dedicated DirectInput sampler: {:?}",
+                                    e
+                                );
+                            }
+                        }
+                    } else if let Some(ref mut s) = sampler_opt {
+                        if profile_changed {
+                            s.set_required_axes(&req_axes);
+                            last_profile_path = cur_prof_path.clone();
+                            last_req_axes = req_axes.clone();
+                        }
+                        if mpo_b != last_mpo_binding {
+                            if let Some(ref mpo) = mpo_b {
+                                s.set_mpo_binding(mpo.clone());
+                            }
+                            last_mpo_binding = mpo_b;
+                        }
+                    }
+
+                    if let Some(ref mut sampler) = sampler_opt {
+                        let snap = sampler.sample();
+                        *shared_snapshot.lock().unwrap() = snap;
+                    }
+
+                    thread::sleep(poll_interval);
+                }
+                log::info!("Dedicated DirectInput sampling thread stopped.");
+            })
+            .expect("Failed to spawn axis_sampler thread");
     }
 
     /// Checks for newly attached USB game controllers (hotplug) and binds them if missing.

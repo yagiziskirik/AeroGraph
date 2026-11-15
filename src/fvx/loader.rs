@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use crate::fvx::models::FvxProfile;
 
+#[derive(Debug, Clone)]
 pub struct LoadedProfile {
     pub profile: FvxProfile,
     pub profile_path: PathBuf,
@@ -492,6 +493,100 @@ impl LoadedProfile {
 
         axes
     }
+
+    /// Extracts structured categories and their voice commands for the Tactical Brevity Browser.
+    pub fn extract_category_views(&self) -> Vec<ProfileCategoryView> {
+        let mut result = Vec::new();
+
+        for group in &self.profile.CommandGroups {
+            let name = group.Name.clone().unwrap_or_default();
+            if name.is_empty() {
+                continue;
+            }
+            let is_enabled = !group.Disabled.unwrap_or(false);
+
+            let mut prefix_phrases = Vec::new();
+            if let Some(gc) = &group.GroupCommand {
+                for seg in &gc.VoiceCommandKeys {
+                    for k in &seg.Keys {
+                        let trimmed = k.Key.trim();
+                        if !trimmed.is_empty() && !prefix_phrases.contains(&trimmed.to_string()) {
+                            prefix_phrases.push(trimmed.to_string());
+                        }
+                    }
+                }
+            }
+
+            let mut commands = Vec::new();
+            for cmd in &group.Commands {
+                let cname = cmd.Name.clone().unwrap_or_default();
+                if cname.is_empty() {
+                    continue;
+                }
+
+                let mut spoken_phrases = Vec::new();
+                if let Some(segments) = &cmd.VoiceCommandKeys {
+                    for seg in segments {
+                        for k in &seg.Keys {
+                            let trimmed = k.Key.trim();
+                            if !trimmed.is_empty() && !spoken_phrases.contains(&trimmed.to_string())
+                            {
+                                spoken_phrases.push(trimmed.to_string());
+                            }
+                        }
+                    }
+                }
+
+                let mut key_combo: Option<String> = None;
+                if let Some(outputs) = &cmd.Outputs {
+                    for o in outputs {
+                        if let Some(k) = &o.Name {
+                            if !k.is_empty() {
+                                key_combo = Some(k.clone());
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                commands.push(ProfileCommandView {
+                    name: cname,
+                    is_enabled: true,
+                    spoken_phrases,
+                    key_combination: key_combo,
+                    description: None,
+                });
+            }
+
+            if !commands.is_empty() {
+                result.push(ProfileCategoryView {
+                    name,
+                    is_enabled,
+                    prefix_phrases,
+                    commands,
+                });
+            }
+        }
+
+        result
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProfileCategoryView {
+    pub name: String,
+    pub is_enabled: bool,
+    pub prefix_phrases: Vec<String>,
+    pub commands: Vec<ProfileCommandView>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProfileCommandView {
+    pub name: String,
+    pub is_enabled: bool,
+    pub spoken_phrases: Vec<String>,
+    pub key_combination: Option<String>,
+    pub description: Option<String>,
 }
 
 #[cfg(test)]
@@ -535,5 +630,32 @@ mod tests {
             assert!(!r_is_key);
             let _ = std::fs::remove_file(temp_fvx);
         }
+    }
+
+    #[test]
+    fn test_extract_category_views_dynamic() {
+        let path = "assets/profiles/Falcon BMS 4.38 v1.3.1/Falcon BMS 4.38 v1.3.1.fvx";
+        let lp = LoadedProfile::load_from_file(path).expect("Failed to load profile");
+        let categories = lp.extract_category_views();
+        assert!(!categories.is_empty(), "Categories must not be empty");
+
+        let total_cmds: usize = categories.iter().map(|c| c.commands.len()).sum();
+        let total_phrases: usize = categories
+            .iter()
+            .flat_map(|c| c.commands.iter())
+            .map(|cmd| cmd.spoken_phrases.len())
+            .sum();
+
+        println!(
+            "Extracted {} categories, {} commands, {} spoken callout phrases",
+            categories.len(),
+            total_cmds,
+            total_phrases
+        );
+        assert!(total_cmds > 0, "Commands must not be empty");
+        assert!(
+            total_phrases > 0,
+            "Spoken callout phrases must be dynamically extracted from profile VoiceCommandKeys"
+        );
     }
 }
