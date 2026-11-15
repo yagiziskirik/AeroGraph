@@ -515,7 +515,7 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
               </div>
 
               {/* Ladder items with pb-36 for full bottom clearance */}
-              <div className="flex-1 overflow-y-auto p-2 pb-36 space-y-1">
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
                 {RAMP_START_STEPS.map((step, idx) => {
                   const isCurrent = idx === currentStepIndex;
                   const isCompleted = idx < currentStepIndex;
