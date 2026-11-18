@@ -421,10 +421,10 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
 
   return (
     <div
-      className={`w-full h-full flex flex-col bg-[#0A0A0C] text-zinc-100 select-none overflow-hidden font-sans ${
+      className={`w-full flex flex-col bg-[#0A0A0C] text-zinc-100 select-none overflow-hidden font-sans ${
         activeMode === 'practice'
           ? 'fixed top-11 inset-x-0 bottom-0 z-40'
-          : 'relative'
+          : 'relative h-full'
       }`}
     >
       {/* ============================================================== */}
