@@ -323,20 +323,14 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
   const handlePrevStep = () => {
     if (currentStepIndex > 0) {
       Sound.playClick();
-      setCurrentStepIndex(currentStepIndex - 1);
-      setCurrentSubstepIndex(0);
+      handleAdvanceStep(currentStepIndex - 1);
     }
   };
 
   const handleNextStep = () => {
     if (currentStepIndex < RAMP_START_STEPS.length - 1) {
       Sound.playClick();
-      const nextIdx = currentStepIndex + 1;
-      setCurrentStepIndex(nextIdx);
-      setCurrentSubstepIndex(0);
-      if (activeMode === 'practice' && nextIdx > 0) {
-        setChiefEngaged(true);
-      }
+      handleAdvanceStep(currentStepIndex + 1);
     }
   };
 
@@ -345,12 +339,44 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
     setCurrentSubstepIndex(0);
     if (nextStepIdx > 0) {
       setChiefEngaged(true);
+      Ipc.engageCrewChief();
+      Ipc.setCockpitDrillActive(true);
+    } else {
+      setChiefEngaged(false);
+      Ipc.setCockpitDrillActive(false);
+      Ipc.resetCrewChief();
     }
   }, []);
 
   const handleAdvanceSubstep = useCallback((nextSubstepIdx: number) => {
     setCurrentSubstepIndex(nextSubstepIdx);
   }, []);
+
+  const handlePrevSubstep = useCallback(() => {
+    Sound.playClick();
+    if (currentSubstepIndex > 0) {
+      setCurrentSubstepIndex((prev) => prev - 1);
+    } else if (currentStepIndex > 0) {
+      const prevStepIdx = currentStepIndex - 1;
+      setCurrentStepIndex(prevStepIdx);
+      const prevSubsteps = RAMP_START_STEPS[prevStepIdx]?.substeps;
+      setCurrentSubstepIndex(prevSubsteps ? prevSubsteps.length - 1 : 0);
+      if (prevStepIdx === 0) {
+        setChiefEngaged(false);
+        Ipc.setCockpitDrillActive(false);
+        Ipc.resetCrewChief();
+      }
+    }
+  }, [currentStepIndex, currentSubstepIndex]);
+
+  const handleNextSubstep = useCallback(() => {
+    Sound.playClick();
+    if (currentSubstepIndex < activeStep.substeps.length - 1) {
+      setCurrentSubstepIndex((prev) => prev + 1);
+    } else if (currentStepIndex < RAMP_START_STEPS.length - 1) {
+      handleAdvanceStep(currentStepIndex + 1);
+    }
+  }, [activeStep.substeps.length, currentStepIndex, currentSubstepIndex, handleAdvanceStep]);
 
   const handleEngageChief = useCallback(() => {
     setChiefEngaged(true);
@@ -514,6 +540,30 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
             </button>
           )}
 
+          {activeMode === 'practice' && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handlePrevSubstep}
+                disabled={currentStepIndex === 0 && currentSubstepIndex === 0}
+                title="Previous Substep"
+                className="p-1.5 rounded-lg bg-zinc-950 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-zinc-800 disabled:hover:text-zinc-400 transition-[border-color,color] cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleNextSubstep}
+                disabled={
+                  currentStepIndex === RAMP_START_STEPS.length - 1 &&
+                  currentSubstepIndex === activeStep.substeps.length - 1
+                }
+                title="Next Substep (Skip)"
+                className="p-1.5 rounded-lg bg-zinc-950 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-zinc-800 disabled:hover:text-zinc-400 transition-[border-color,color] cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
 
         </div>
       </header>
@@ -557,19 +607,11 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
                   return (
                     <button
                       key={step.id}
-                      disabled={activeMode !== 'manual'}
-                      onClick={
-                        activeMode === 'manual'
-                          ? () => {
-                              Sound.playClick();
-                              setCurrentStepIndex(idx);
-                              setCurrentSubstepIndex(0);
-                            }
-                          : undefined
-                      }
-                      className={`w-full text-left p-2.5 rounded border transition-[background-color,border-color] flex items-center gap-2.5 font-mono text-xs ${
-                        activeMode === 'manual' ? 'cursor-pointer hover:border-zinc-700' : 'cursor-default'
-                      } ${
+                      onClick={() => {
+                        Sound.playClick();
+                        handleAdvanceStep(idx);
+                      }}
+                      className={`w-full text-left p-2.5 rounded border transition-[background-color,border-color] flex items-center gap-2.5 font-mono text-xs cursor-pointer hover:border-zinc-700 ${
                         isCurrent
                           ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-bold shadow-sm'
                           : isCompleted

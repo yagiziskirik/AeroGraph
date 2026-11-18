@@ -367,7 +367,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
 
   // Sync chief engaged state
   useEffect(() => {
-    if (chiefEngaged) setInterphoneConnected(true);
+    setInterphoneConnected(chiefEngaged);
   }, [chiefEngaged]);
 
   // Reset Step 12 speedbrake cycle, MPO kick, and axis detection states
@@ -771,13 +771,35 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     triggerVerbalAdvance,
   ]);
 
-  // Reset FLCS Power Test passed status when returning to Step 0 or beginning of Step 1
+  // Step 0 & Step 1 switch and indicator state synchronization
   useEffect(() => {
-    if (activeStep.id === 0 || (activeStep.id === 1 && currentSubstepIndex === 0)) {
+    if (activeStep.id === 0) {
+      setElecSwitchPos('OFF');
       setFlcsPwrTestPassed(false);
       setFlcsPwrTestTriggered(false);
       setFlcsPwrTestPos('NORM');
       setIsFlcsPwrTestHeld(false);
+    } else if (activeStep.id === 1) {
+      if (currentSubstepIndex === 0) {
+        setElecSwitchPos('OFF');
+        setFlcsPwrTestPassed(false);
+        setFlcsPwrTestTriggered(false);
+        setFlcsPwrTestPos('NORM');
+        setIsFlcsPwrTestHeld(false);
+      } else if (currentSubstepIndex === 1) {
+        setElecSwitchPos('MAIN_PWR');
+        setFlcsPwrTestPassed(false);
+        setFlcsPwrTestTriggered(false);
+        setFlcsPwrTestPos('NORM');
+        setIsFlcsPwrTestHeld(false);
+      } else {
+        // Substep 2 and 3: Power test completed & transferred to buses
+        setElecSwitchPos('MAIN_PWR');
+        setFlcsPwrTestPassed(true);
+        setFlcsPwrTestTriggered(true);
+        setFlcsPwrTestPos('NORM');
+        setIsFlcsPwrTestHeld(false);
+      }
     }
   }, [activeStep.id, currentSubstepIndex]);
 
