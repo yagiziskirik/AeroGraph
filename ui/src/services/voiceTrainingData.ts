@@ -763,6 +763,22 @@ export const RAMP_START_STEPS: RampStartStep[] = [
           actionPrompt: 'Retard throttle to IDLE and verify lamps dark'
         },
         rationale: "Confirms EPU disengages cleanly and green RUN light extinguishes once test switch is released."
+      },
+      {
+        id: '6-6',
+        order: 6,
+        label: 'Release Toe Brakes',
+        phaseType: 'ACTION',
+        description: 'Release toe brake pedal pressure. Aircraft rests securely on wheel chocks in PRI idle.',
+        cockpitPanel: 'Rudder Footwell',
+        visualCue: 'Toe brake pressure released; aircraft secure on wheel chocks in PRI idle.',
+        interactiveControl: {
+          type: 'VERIFICATION',
+          label: 'BRAKES RELEASED',
+          actionPrompt: 'Release toe brakes'
+        }
+      ,
+        rationale: "Releasing brakes relieves hydraulic backpressure once idle thrust settles with fully opened nozzle petals."
       }
     ]
   },

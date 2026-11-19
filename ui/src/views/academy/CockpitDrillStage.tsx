@@ -262,12 +262,6 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   const [isChiefResponding, setIsChiefResponding] = useState(false);
   const [chiefDialogue, setChiefDialogue] = useState('');
 
-  // Clear sticky Chief dialogue and response state when advancing steps or substeps
-  useEffect(() => {
-    setChiefDialogue('');
-    setIsChiefResponding(false);
-  }, [activeStep.id, currentSubstepIndex]);
-
   // Manage Cockpit Drill Mode: Step 0 begins in default profile with Chief disengaged so "Engage Chief" is detectable.
   // Silent drill mode and Chief mode are engaged upon speaking "Engage Chief" or when entering Step >= 1.
   useEffect(() => {
@@ -367,66 +361,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
 
   // Sync chief engaged state
   useEffect(() => {
-    if (chiefEngaged) setInterphoneConnected(true);
+    setInterphoneConnected(chiefEngaged);
   }, [chiefEngaged]);
-
-  // Reset Step 12 speedbrake cycle, MPO kick, and axis detection states
-  useEffect(() => {
-    if (activeStep.id !== 12) {
-      setSpeedbrakeCycleDone(false);
-      setSpeedbrakesOpen(false);
-      setMpoKickActive(false);
-      if (mpoTimerRef.current) {
-        clearTimeout(mpoTimerRef.current);
-        mpoTimerRef.current = null;
-      }
-      setRollLeftDone(false);
-      setRollRightDone(false);
-      setPitchNoseUpDone(false);
-      setPitchNoseDownDone(false);
-      setYawLeftDone(false);
-      setYawRightDone(false);
-      hasAdvancedStep12SubstepRef.current = false;
-    } else {
-      hasAdvancedStep12SubstepRef.current = false;
-      if (currentSubstepIndex !== 3) {
-        setMpoKickActive(false);
-        if (mpoTimerRef.current) {
-          clearTimeout(mpoTimerRef.current);
-          mpoTimerRef.current = null;
-        }
-      }
-    }
-  }, [activeStep.id, currentSubstepIndex]);
-
-  // Reset Step 16 AAR door switch position when leaving Step 16 or entering Step 16 substep 0
-  useEffect(() => {
-    if (activeStep.id !== 16 || currentSubstepIndex === 0) {
-      setAirRefuelDoorPos('CLOSE');
-    }
-  }, [activeStep.id, currentSubstepIndex]);
-
-  // Reset Step 17 chocks state when entering Step 17
-  useEffect(() => {
-    if (activeStep.id === 17 && currentSubstepIndex === 0) {
-      setChocksInPlace(true);
-    }
-  }, [activeStep.id, currentSubstepIndex]);
-
-  // Reset Step 02 JFS switch position when leaving Step 02 or entering Step 02 substep 0
-  useEffect(() => {
-    if (activeStep.id !== 2 || currentSubstepIndex === 0) {
-      setJfsPosition('OFF');
-      engineSpoolingRef.current = false;
-    }
-  }, [activeStep.id, currentSubstepIndex]);
-
-  // Reset Step 05 EPU switch position when leaving Step 05 or entering Step 05 substep 0
-  useEffect(() => {
-    if ((activeStep.id !== 5 && activeStep.id !== 6) || (activeStep.id === 5 && currentSubstepIndex === 0)) {
-      setEpuSwitch('NORM');
-    }
-  }, [activeStep.id, currentSubstepIndex]);
 
   // Dynamic Mistake Warning & Rollback Safety Mechanism
   const [mistakeWarning, setMistakeWarning] = useState<{
@@ -469,12 +405,6 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     []
   );
 
-  // Clear mistake timeouts & state on step or substep change
-  useEffect(() => {
-    clearMistakeWarning();
-    clearMistakeRollback();
-  }, [activeStep.id, currentSubstepIndex, clearMistakeWarning, clearMistakeRollback]);
-
   // Clean up timeouts on component unmount
   useEffect(() => {
     return () => {
@@ -505,16 +435,353 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   const lastProcessedSpeechIdRef = useRef<number>(0);
   const engineSpoolingRef = useRef<boolean>(false);
 
+  // Step 08 FLCS BIT timer tracking
+  const bitTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // Step 13 DBU flight control surface audio tracking
   const dbuRollAnnouncedRef = useRef<'left' | 'right' | null>(null);
   const dbuPitchAnnouncedRef = useRef<'up' | 'down' | null>(null);
   const dbuYawAnnouncedRef = useRef<'left' | 'right' | null>(null);
+  const dbuControlsCheckedRef = useRef<boolean>(false);
 
   // Step 14 & 15 Brake pedal movement audio tracking
   const leftBrakeMovedRef = useRef<boolean>(false);
   const leftBrakeIdleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const rightBrakeMovedRef = useRef<boolean>(false);
   const rightBrakeIdleTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // 1. Clear sticky Chief dialogue and response state
+    setChiefDialogue('');
+    setIsChiefResponding(false);
+
+    // 2. Clear mistake timeouts & active state
+    clearMistakeWarning();
+    clearMistakeRollback();
+
+    // 3. Step 0 & Step 1 switch and indicator state synchronization
+    if (activeStep.id === 0) {
+      setElecSwitchPos('OFF');
+      setFlcsPwrTestPassed(false);
+      setFlcsPwrTestTriggered(false);
+      setFlcsPwrTestPos('NORM');
+      setIsFlcsPwrTestHeld(false);
+    } else if (activeStep.id === 1) {
+      if (currentSubstepIndex === 0) {
+        setElecSwitchPos('OFF');
+        setFlcsPwrTestPassed(false);
+        setFlcsPwrTestTriggered(false);
+        setFlcsPwrTestPos('NORM');
+        setIsFlcsPwrTestHeld(false);
+      } else if (currentSubstepIndex === 1) {
+        setElecSwitchPos('MAIN_PWR');
+        setFlcsPwrTestPassed(false);
+        setFlcsPwrTestTriggered(false);
+        setFlcsPwrTestPos('NORM');
+        setIsFlcsPwrTestHeld(false);
+      } else {
+        // Substep 2 and 3: Power test completed & transferred to buses
+        setElecSwitchPos('MAIN_PWR');
+        setFlcsPwrTestPassed(true);
+        setFlcsPwrTestTriggered(true);
+        setFlcsPwrTestPos('NORM');
+        setIsFlcsPwrTestHeld(false);
+      }
+    }
+
+    // 4. Step 02 JFS switch position reset when leaving Step 02 or entering Step 02 substep 0
+    if (activeStep.id === 2 && currentSubstepIndex === 0 || activeStep.id === 2 && currentSubstepIndex === 1) {
+      setJfsPosition('OFF');
+      setJfsRunLit(false);
+      setEngContPosition('PRI');
+      setTachRpm(0);
+      setHydPressA(0);
+      setHydPressB(0);
+      setFtitDeg(100);
+      engineSpoolingRef.current = false;
+      setStep2EngineStabilized(false);
+    }
+
+    if (activeStep.id === 2 && currentSubstepIndex === 2) {
+      setHydPressA(0);
+      setHydPressB(0);
+      setFtitDeg(100);
+      setTachRpm(25);
+      setThrottlePosition('CUTOFF');
+      setStep2EngineStabilized(false);
+    }
+
+    if (activeStep.id === 2 && currentSubstepIndex === 3) {
+      setTachRpm(25);
+      setThrottlePosition('IDLE');
+      setStep2EngineStabilized(false);
+    }
+
+    // 5. Step 03 SEC Check & Throttle Spool (73% RPM)
+    if (activeStep.id === 3) {
+      setThrottlePosition('IDLE');
+      if (currentSubstepIndex === 0) {
+        setSecTimerRemaining(30);
+      }
+
+      if (currentSubstepIndex === 0 || currentSubstepIndex === 1) {
+        setTachRpm(63);
+        setNozPosPercent(96);
+        setEngContPosition('PRI');
+        setStep4ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
+      } else if (currentSubstepIndex === 2) {
+        setStep3FlirSrc('/crewchief/FLCS/nozzleOpen.webp');
+        setStep3FlirOpen(true);
+        setStep4ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
+      } else if (currentSubstepIndex === 3) {
+        setEngContPosition('SEC');
+        setNozPosPercent(0);
+        setStep4ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
+      } else if (currentSubstepIndex === 4) {
+        setEngContPosition('SEC');
+        setNozPosPercent(0);
+        setStep4ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
+        setTachRpm(63);
+      } else if (currentSubstepIndex === 5) {
+        setEngContPosition('SEC');
+        setNozPosPercent(0);
+        setStep4ThrottleAngle(THROTTLE_DETENTS['MIL'].angle);
+        setTachRpm(75);
+      }
+    } else {
+      setStep4ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
+    }
+
+    // 6. Step 04 SEC mode and closed nozzle when beginning Step 4
+    if (activeStep.id === 4) {
+      setThrottlePosition('IDLE');
+      setStep4ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
+      setStep6ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
+      setTachRpm(63);
+
+      if (currentSubstepIndex === 0 || currentSubstepIndex === 1) {
+        setEngContPosition('SEC');
+        setNozPosPercent(0);
+      } else {
+        setEngContPosition('PRI');
+        setNozPosPercent(96);
+      }
+    }
+
+    // 7. Step 05 / 06 EPU switch position reset when leaving Step 05 or entering Step 05 substep 0
+    if ((activeStep.id !== 5 && activeStep.id !== 6) || (activeStep.id === 6 && currentSubstepIndex === 0)) {
+      setEpuSwitch('NORM');
+    }
+
+    if (activeStep.id === 5) {
+      setThrottlePosition('IDLE');
+      if (currentSubstepIndex === 0 || currentSubstepIndex === 1) {
+        setEpuSwitch('NORM');
+        setTachRpm(63);
+        setEpuPinRemoved(false);
+      } else if (currentSubstepIndex === 2) {
+        setEpuSwitch('OFF');
+        setEpuPinRemoved(false);
+      } else if (currentSubstepIndex === 3) {
+        setEpuPinRemoved(true);
+      }
+    }
+
+    // Step 06 EPU Flow & Run-Up Check Throttle Spool (80-85% RPM)
+    if (activeStep.id === 6) {
+      setThrottlePosition('IDLE');
+      if (currentSubstepIndex === 0 || currentSubstepIndex === 1) {
+        setStep6ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
+        setTachRpm(63);
+        setEpuWarningLampsLit(false);
+      } else if (currentSubstepIndex === 2) {
+        setStep6ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
+        setTachRpm(63);
+        setEpuWarningLampsLit(false);
+      } else if (currentSubstepIndex === 3) {
+        setStep6ThrottleAngle(2);
+        setTachRpm(85);
+        setEpuWarningLampsLit(false);
+      } else if (currentSubstepIndex === 4) {
+        setStep6ThrottleAngle(2);
+        setTachRpm(82);
+        setEpuWarningLampsLit(true);
+      }
+    } else {
+      setStep6ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
+    }
+
+    // Step 08 FLCS BIT switch and lamp state synchronization
+    if (activeStep.id !== 8) {
+      setFlcsBitSwitch(false);
+      setFlcsBitActive(false);
+      setFlcsBitElapsed(0);
+      if (bitTimerRef.current) {
+        clearInterval(bitTimerRef.current);
+        bitTimerRef.current = null;
+      }
+    } else {
+      if (currentSubstepIndex === 0 || currentSubstepIndex === 1) {
+        setFlcsBitSwitch(false);
+        setFlcsBitActive(false);
+        setFlcsBitElapsed(0);
+        if (bitTimerRef.current) {
+          clearInterval(bitTimerRef.current);
+          bitTimerRef.current = null;
+        }
+      } else if (currentSubstepIndex === 2) {
+        setFlcsBitSwitch(true);
+        setFlcsBitActive(true);
+      } else if (currentSubstepIndex === 3) {
+        setFlcsBitSwitch(false);
+        setFlcsBitActive(false);
+        if (bitTimerRef.current) {
+          clearInterval(bitTimerRef.current);
+          bitTimerRef.current = null;
+        }
+      }
+    }
+
+    if (activeStep.id === 10 && currentSubstepIndex === 0) {
+      setTrimDiscSwitch(true);
+    }
+
+    if (activeStep.id === 10 && currentSubstepIndex === 1) {
+      setTrimDiscSwitch(false);
+    }
+
+    if (activeStep.id === 11 && currentSubstepIndex === 0) {
+      setTrimDiscSwitch(false);
+    }
+
+    if (activeStep.id === 11 && currentSubstepIndex === 1) {
+      setTrimDiscSwitch(true);
+    }
+
+    if (activeStep.id === 11 && currentSubstepIndex === 2) {
+      setTrimPitchUpDone(false);
+      setTrimPitchDownDone(false);
+      setTrimRollLeftDone(false);
+      setTrimRollRightDone(false);
+      setTrimYawLeftDone(false);
+      setTrimYawRightDone(false);
+      setRollTrim(0.0);
+      setPitchTrim(0.0);
+      setYawTrim(0.0);
+      hasAdvancedStep11Ref.current = false;
+    }
+
+    if (activeStep.id == 12 && currentSubstepIndex === 0 || activeStep.id == 12 && currentSubstepIndex === 1) {
+      setSpeedbrakesOpen(false);
+      setSpeedbrakeCycleDone(false);
+      setRollLeftDone(false);
+      setRollRightDone(false);
+      setPitchNoseUpDone(false);
+      setPitchNoseDownDone(false);
+      setYawLeftDone(false);
+      setYawRightDone(false);
+      hasAdvancedStep12SubstepRef.current = false;
+      if (mpoTimerRef.current) {
+        clearTimeout(mpoTimerRef.current);
+        mpoTimerRef.current = null;
+      }
+    }
+
+    if (activeStep.id == 12 && currentSubstepIndex === 2) {
+      setPitchNoseUpDone(false);
+      setPitchNoseDownDone(false);
+    }
+
+    if (activeStep.id == 12 && currentSubstepIndex === 3) {
+      if (mpoTimerRef.current) {
+        clearTimeout(mpoTimerRef.current);
+        mpoTimerRef.current = null;
+      }
+    }
+
+    if (activeStep.id == 12 && currentSubstepIndex === 4) {
+      setYawLeftDone(false);
+      setYawRightDone(false);
+    }
+
+    // Step 13 DBU switch state synchronization
+    if (activeStep.id !== 13) {
+      setDbuSwitchOn(false);
+      dbuControlsCheckedRef.current = false;
+    } else {
+      if (currentSubstepIndex === 0 || currentSubstepIndex === 1) {
+        setDbuSwitchOn(false);
+        dbuControlsCheckedRef.current = false;
+      } else if (currentSubstepIndex === 2 || currentSubstepIndex === 3) {
+        setDbuSwitchOn(true);
+      }
+    }
+
+    // 8. Step 12 speedbrake cycle, MPO kick, and axis detection states reset
+    if (activeStep.id !== 12) {
+      setSpeedbrakeCycleDone(false);
+      setSpeedbrakesOpen(false);
+      setMpoKickActive(false);
+      if (mpoTimerRef.current) {
+        clearTimeout(mpoTimerRef.current);
+        mpoTimerRef.current = null;
+      }
+      setRollLeftDone(false);
+      setRollRightDone(false);
+      setPitchNoseUpDone(false);
+      setPitchNoseDownDone(false);
+      setYawLeftDone(false);
+      setYawRightDone(false);
+      hasAdvancedStep12SubstepRef.current = false;
+    } else {
+      hasAdvancedStep12SubstepRef.current = false;
+      if (currentSubstepIndex !== 0) {
+        setSpeedbrakeCycleDone(false);
+        setSpeedbrakesOpen(false);
+      }
+      if (currentSubstepIndex !== 3) {
+        setMpoKickActive(false);
+        if (mpoTimerRef.current) {
+          clearTimeout(mpoTimerRef.current);
+          mpoTimerRef.current = null;
+        }
+      }
+    }
+
+    // 9. Step 14 & 15 brake tracking timers & refs reset
+    if (activeStep.id !== 14 || currentSubstepIndex !== 1) {
+      leftBrakeMovedRef.current = false;
+      if (leftBrakeIdleTimerRef.current) {
+        clearTimeout(leftBrakeIdleTimerRef.current);
+        leftBrakeIdleTimerRef.current = null;
+      }
+    }
+    if (activeStep.id !== 15 || currentSubstepIndex !== 1) {
+      rightBrakeMovedRef.current = false;
+      if (rightBrakeIdleTimerRef.current) {
+        clearTimeout(rightBrakeIdleTimerRef.current);
+        rightBrakeIdleTimerRef.current = null;
+      }
+    }
+
+    // 10. Step 16 AAR door switch position reset when leaving Step 16 or entering Step 16 substep 0
+    if (activeStep.id !== 16 || currentSubstepIndex === 0) {
+      setAirRefuelDoorPos('CLOSE');
+    }
+
+    if (activeStep.id === 16 && currentSubstepIndex === 1) {
+      setAirRefuelDoorPos('CLOSE');
+    }
+
+    if (activeStep.id === 16 && currentSubstepIndex === 2) {
+      setAirRefuelDoorPos('OPEN');
+    }
+
+    // 11. Step 17 chocks state reset when entering Step 17
+    if (activeStep.id === 17 && currentSubstepIndex === 0) {
+      setChocksInPlace(true);
+    }
+  }, [activeStep.id, currentSubstepIndex, clearMistakeWarning, clearMistakeRollback]);
 
   const triggerVerbalAdvance = useCallback((expectedDialogue: string) => {
     Sound.playCommit();
@@ -771,16 +1038,6 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     triggerVerbalAdvance,
   ]);
 
-  // Reset FLCS Power Test passed status when returning to Step 0 or beginning of Step 1
-  useEffect(() => {
-    if (activeStep.id === 0 || (activeStep.id === 1 && currentSubstepIndex === 0)) {
-      setFlcsPwrTestPassed(false);
-      setFlcsPwrTestTriggered(false);
-      setFlcsPwrTestPos('NORM');
-      setIsFlcsPwrTestHeld(false);
-    }
-  }, [activeStep.id, currentSubstepIndex]);
-
   // =========================================================================
   // STEP 01: ELEC PANEL LIGHT MATRIX & FLCS TEST HOLD
   // =========================================================================
@@ -1016,22 +1273,6 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     return () => clearInterval(timer);
   }, [activeStep.id, currentSubstepIndex, onAdvanceSubstep]);
 
-  // When reaching Substep 3-3 (Flip ENG CONT to SEC), show FLIR overlay
-  useEffect(() => {
-    if (activeStep.id === 3 && currentSubstepIndex === 2) {
-      setStep3FlirSrc('/crewchief/FLCS/nozzleOpen.webp');
-      setStep3FlirOpen(true);
-    }
-  }, [activeStep.id, currentSubstepIndex]);
-
-  // Step 4 direct entry: Ensure SEC mode and closed nozzle when beginning Step 4
-  useEffect(() => {
-    if (activeStep.id === 4 && currentSubstepIndex === 0) {
-      setEngContPosition('SEC');
-      setNozPosPercent(0);
-    }
-  }, [activeStep.id, currentSubstepIndex]);
-
   const handleEngContChange = (pos: EngContSwitchPosition) => {
     Sound.playSwitch();
     setEngContPosition(pos);
@@ -1207,26 +1448,53 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   // =========================================================================
   const handleTriggerFlcsBit = () => {
     Sound.playSwitch();
+    Sound.playCommit();
+    setFlcsBitSwitch(true);
+    setFlcsBitActive(true);
+    setFlcsBitElapsed(0);
+    onAdvanceSubstep(2);
+  };
+
+  // Step 08 Substep 3: 15-Second Hands-off BIT Surface Sweep Timer
+  useEffect(() => {
+    if (activeStep.id !== 8 || currentSubstepIndex !== 2) {
+      if (bitTimerRef.current) {
+        clearInterval(bitTimerRef.current);
+        bitTimerRef.current = null;
+      }
+      return;
+    }
+
     setFlcsBitSwitch(true);
     setFlcsBitActive(true);
     setFlcsBitElapsed(0);
 
-    const bitTimer = setInterval(() => {
+    bitTimerRef.current = setInterval(() => {
       setFlcsBitElapsed((prev) => {
         const next = prev + 1;
         if (next >= 15) {
-          clearInterval(bitTimer);
+          if (bitTimerRef.current) {
+            clearInterval(bitTimerRef.current);
+            bitTimerRef.current = null;
+          }
           setFlcsBitActive(false);
           setFlcsBitSwitch(false);
           Sound.playSwitch();
           Sound.playCommit();
-          onAdvanceStep(9);
+          onAdvanceSubstep(3);
           return 15;
         }
         return next;
       });
     }, 1000);
-  };
+
+    return () => {
+      if (bitTimerRef.current) {
+        clearInterval(bitTimerRef.current);
+        bitTimerRef.current = null;
+      }
+    };
+  }, [activeStep.id, currentSubstepIndex, onAdvanceSubstep]);
 
   // =========================================================================
   // STEP 09 - 11: MANUAL TRIM PANEL & WHEEL RE-CENTERING
@@ -1528,12 +1796,18 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   const handleToggleDbu = (val: boolean) => {
     Sound.playSwitch();
     setDbuSwitchOn(val);
-    if (!val) {
-      // Switched back to OFF -> advance to Step 14
-      Sound.playCommit();
-      setTimeout(() => {
-        onAdvanceStep(14);
-      }, 800);
+    if (activeStep.id === 13) {
+      if (currentSubstepIndex === 1 && val) {
+        // Substep 13-2: Switched to ON -> advance to Substep 13-3
+        Sound.playCommit();
+        onAdvanceSubstep(2);
+      } else if (currentSubstepIndex === 3 && !val) {
+        // Substep 13-4: Switched to OFF -> advance to Step 14
+        Sound.playCommit();
+        setTimeout(() => {
+          onAdvanceStep(14);
+        }, 800);
+      }
     }
   };
 
@@ -1590,25 +1864,25 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     } else if (yawDisplay >= 0.44 && yawDisplay <= 0.56) {
       dbuYawAnnouncedRef.current = null;
     }
-  }, [activeStep.id, dbuSwitchOn, rollDisplay, pitchDisplay, yawDisplay]);
 
-  // Reset brake tracking timers on step or substep change
-  useEffect(() => {
-    if (activeStep.id !== 14 || currentSubstepIndex !== 1) {
-      leftBrakeMovedRef.current = false;
-      if (leftBrakeIdleTimerRef.current) {
-        clearTimeout(leftBrakeIdleTimerRef.current);
-        leftBrakeIdleTimerRef.current = null;
+    // Step 13 Substep 3: Detect flight stick or rudder movement in hardware
+    if (currentSubstepIndex === 2 && !dbuControlsCheckedRef.current) {
+      const isDeflected =
+        Math.abs(rollDisplay - 0.5) > 0.15 ||
+        Math.abs(pitchDisplay - 0.5) > 0.15 ||
+        Math.abs(yawDisplay - 0.5) > 0.15;
+      if (isDeflected) {
+        dbuControlsCheckedRef.current = true;
+        Sound.playCommit();
+        setChiefDialogue('[Chief announces the surface deflections]');
+        setIsChiefResponding(true);
+        setTimeout(() => {
+          setIsChiefResponding(false);
+          onAdvanceSubstep(3);
+        }, 1200);
       }
     }
-    if (activeStep.id !== 15 || currentSubstepIndex !== 1) {
-      rightBrakeMovedRef.current = false;
-      if (rightBrakeIdleTimerRef.current) {
-        clearTimeout(rightBrakeIdleTimerRef.current);
-        rightBrakeIdleTimerRef.current = null;
-      }
-    }
-  }, [activeStep.id, currentSubstepIndex]);
+  }, [activeStep.id, currentSubstepIndex, dbuSwitchOn, rollDisplay, pitchDisplay, yawDisplay, onAdvanceSubstep]);
 
   // =========================================================================
   // STEP 14 & 15: PHYSICAL BRAKE PEDAL INTEGRATION (MOVEMENT & IDLE DETECTION)
@@ -1671,10 +1945,22 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         onAdvanceSubstep(4);
       }
     }
+    if (activeStep.id === 4 && currentSubstepIndex === 3) {
+      if (leftBrakeDeflection <= 0.15 && rightBrakeDeflection <= 0.15) {
+        Sound.playCommit();
+        onAdvanceStep(5);
+      }
+    }
     if (activeStep.id === 6 && currentSubstepIndex === 1) {
       if (leftBrakeDeflection >= 0.15 && rightBrakeDeflection >= 0.15) {
         Sound.playCommit();
         onAdvanceSubstep(2);
+      }
+    }
+    if (activeStep.id === 6 && currentSubstepIndex === 5) {
+      if (leftBrakeDeflection <= 0.15 && rightBrakeDeflection <= 0.15) {
+        Sound.playCommit();
+        onAdvanceStep(7);
       }
     }
     if (activeStep.id === 17 && currentSubstepIndex === 0) {
@@ -2349,8 +2635,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   }}
                   lights={activeStep.id === 8 ? { run: flcsBitActive } : undefined}
                   allowSwitchClick={{
-                    bit: activeStep.id === 8 && currentSubstepIndex >= 1 && !flcsBitActive,
-                    digitalBackup: activeStep.id === 13 && currentSubstepIndex >= 1,
+                    bit: activeStep.id === 8 && currentSubstepIndex === 1 && !flcsBitActive,
+                    digitalBackup: activeStep.id === 13 && (currentSubstepIndex === 1 || currentSubstepIndex === 3),
                   }}
                   className="scale-95"
                 />
@@ -2770,7 +3056,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
               Normally, the EPU GEN and EPU PMG caution lights illuminate when the EPU/GEN switch is held below 82% RPM. In this training environment, the sequence is verified sequentially before retarding to idle.
             </p>
             <button
-              onClick={() => onAdvanceStep(7)}
+              onClick={() => onAdvanceSubstep(5)}
               className="w-full py-2 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center justify-center gap-1.5"
             >
               <span>Continue</span>
@@ -2995,7 +3281,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     ⚡ Action Required: Snap ENG CONT switch back to PRI and seat red safety guard down.
                   </span>
                 )}
-                {activeStep.id === 4 && currentSubstepIndex >= 2 && (
+                {activeStep.id === 4 && currentSubstepIndex === 2 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-emerald-400 font-bold">
                       ✓ Convergent nozzle opened to 100%. Engine electronic control restored to PRI.
@@ -3003,7 +3289,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     <button
                       onClick={() => {
                         Sound.playCommit();
-                        onAdvanceStep(5);
+                        onAdvanceSubstep(3);
                       }}
                       className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
                     >
@@ -3011,6 +3297,23 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
+                )}
+                {activeStep.id === 4 && currentSubstepIndex === 3 && (
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-cyan-300 font-bold">
+                      ⚡ Action Required: Release toe brakes.
+                    </span>
+                    <button
+                        onClick={() => {
+                          Sound.playCommit();
+                          onAdvanceStep(5);
+                        }}
+                        className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
+                      >
+                        <span>Continue</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                 )}
 
                 {/* Step 5 Banner */}
@@ -3102,6 +3405,23 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     )}
                   </div>
                 )}
+                {activeStep.id === 6 && currentSubstepIndex === 5 && (
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-cyan-300 font-bold">
+                      ⚡ Action Required: Release toe brakes.
+                    </span>
+                    <button
+                        onClick={() => {
+                          Sound.playCommit();
+                          onAdvanceStep(7);
+                        }}
+                        className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
+                      >
+                        <span>Continue</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                )}
 
                 {/* Step 7 Banner */}
                 {activeStep.id === 7 && currentSubstepIndex === 0 && (
@@ -3154,15 +3474,32 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     <span>Verbal Required: Transmit &quot;Clear BIT&quot;.</span>
                   </span>
                 )}
-                {activeStep.id === 8 && currentSubstepIndex >= 1 && !flcsBitActive && (
+                {activeStep.id === 8 && currentSubstepIndex === 1 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Toggle BIT switch to initiate FLCS surface sweep (Note: In simulator/jet takes 45s; condensed to 15s in drill).
                   </span>
                 )}
-                {activeStep.id === 8 && flcsBitActive && (
+                {activeStep.id === 8 && currentSubstepIndex === 2 && (
                   <span className="text-amber-400 font-bold animate-pulse">
                     FLCS BIT IN PROGRESS — SURFACE DEFLECTION RECORDING ({15 - flcsBitElapsed}s remaining • 45s on simulator/jet)
                   </span>
+                )}
+                {activeStep.id === 8 && currentSubstepIndex === 3 && (
+                  <div className="flex items-center justify-between gap-4 w-full">
+                    <span className="text-zinc-300 font-bold text-xs">
+                      ✓ FLCS BIT switch released to OFF • Green RUN light extinguished • Amber FAIL light remains dark.
+                    </span>
+                    <button
+                      onClick={() => {
+                        Sound.playCommit();
+                        onAdvanceStep(9);
+                      }}
+                      className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
+                    >
+                      <span>Continue</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 )}
 
                 {/* Step 9-11 Banners */}
@@ -3381,9 +3718,36 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     <span>Verbal Required: Transmit &quot;DBU Still Clear&quot; to ground crew.</span>
                   </span>
                 )}
-                {activeStep.id === 13 && currentSubstepIndex >= 1 && (
+                {activeStep.id === 13 && currentSubstepIndex === 1 && (
                   <span className="text-cyan-300 font-bold">
-                    ⚡ Action Required: Toggle DIGITAL BACKUP switch to ON, verify surface movements in FLIR, then return to OFF to proceed.
+                    ⚡ Action Required: Lift safety guard and flip DIGITAL BACKUP switch to ON.
+                  </span>
+                )}
+                {activeStep.id === 13 && currentSubstepIndex === 2 && (
+                  <div className="flex items-center justify-between gap-4 w-full">
+                    <span className="text-cyan-300 font-bold text-xs">
+                      ⚡ Action Required: Deflect stick or rudder pedals to verify surface response in DBU law:
+                    </span>
+                    <button
+                      onClick={() => {
+                        Sound.playCommit();
+                        setChiefDialogue('[Chief announces the surface deflection]');
+                        setIsChiefResponding(true);
+                        setTimeout(() => {
+                          setIsChiefResponding(false);
+                          onAdvanceSubstep(3);
+                        }, 1200);
+                      }}
+                      className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
+                    >
+                      <span>Continue</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+                {activeStep.id === 13 && currentSubstepIndex === 3 && (
+                  <span className="text-cyan-300 font-bold">
+                    ⚡ Action Required: Flip DIGITAL BACKUP switch to OFF and lower safety guard flush down.
                   </span>
                 )}
 
