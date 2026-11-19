@@ -2,13 +2,15 @@
 
 This document provides the authentic voice command guide for **AeroGraph**, mapped directly to the **FoxVox Falcon BMS 4.38 v1.3.1 profile**.
 
-> ℹ️ **Credits & Attribution:**
+> [!NOTE]
+> **Credits & Attribution:**
 > - FoxVox application and the Falcon BMS VCC voice library (`Falcon BMS 4.38 v1.3.1.fvx`) created by **[foxster](https://foxster.itch.io/foxvox)**. For in-depth video tutorials on setting up voice profiles and controller inputs, visit **[foxster's YouTube Channel](https://www.youtube.com/@foxster2)** and the **[FoxVox Tutorial Series](https://foxster.itch.io/foxvox/devlog/870907/foxvox-tutorial-videos)**.
 > - Original voice response audio recordings and sound design performed by **[Bogey Dope](https://www.youtube.com/@BogeyDope)**.
 > - Startup procedure contributions by **Tomcattwo**.
 > - *AeroGraph natively executes `.fvx` profiles directly in Rust with zero-overhead SAPI grammar trees. Profile creation or custom key mappings should always be performed inside FoxVox.*
 
-> 💡 **Interactive Practice in TAC:**  
+> [!TIP]
+> **Interactive Practice in TAC:**  
 > Rather than just reading static reference tables, you can practice the complete ramp start dialogue interactively using your microphone in TAC's **Cockpit Voice Drill** (`[03] FOXVOX STATION` &rarr; `[PRACTICE DRILL]`), study the **Dash-1 Checklist Manual**, or search in-flight callouts with live speech recognition in the **Tactical Brevity Directory**.
 
 ---
@@ -41,7 +43,7 @@ AeroGraph continuously listens to these global commands to allow fast hands-free
 | **`"Stand by"`** or **`"Standby"`** | Mutes speech recognition engine. | Plays `standing-by.mp3`; tray icon updates to *🎙️ Listening: Muted*. |
 | **`"Radio check"`** or **`"Comms check"`** | Unmutes speech recognition engine. | Plays `loud-n-clear.mp3`; tray icon updates to *🎙️ Listening: Active*. |
 
-> 💡 **Tip:**
+> [!TIP]
 > Use `"Stand by"` before talking on Teamspeak / Discord / IVC to prevent AeroGraph from parsing casual human voice chatter as cockpit commands.
 
 ---
@@ -60,6 +62,10 @@ To initiate ground crew communications during ramp start:
 ### Ramp Start Checklist & Dialogues
 
 Follow this authentic checklist sequence during cold ramp start:
+
+> [!TIP]
+> **Customizing the Sequence & Skipping Steps:**  
+> While the table below depicts the standard canonical ramp start procedure, AeroGraph allows pilots to reorder check blocks or toggle optional steps (such as SEC checks, EPU checks, Trim, and Brakes) to suit custom squadron SOPs or fast ramp start paces using the **Crew Chief Sequence Manager** in FoxVox Station (`[03] FOXVOX STATION` &rarr; `[CREW CHIEF SEQUENCE]`). Connected procedural checks move and toggle together automatically, and the underlying FoxVox state machine gates are rewired seamlessly.
 
 | Step | Action / Procedure | Spoken Pilot Phrase | Crew Chief Response | BMS / DirectInput Action |
 | :---: | :--- | :--- | :--- | :--- |
@@ -105,7 +111,8 @@ Follow this authentic checklist sequence during cold ramp start:
 
 These are configurable from FoxVox, and not all of the categories activated by default. If you want to learn more about it, you can checkout the **[FoxVox Tutorial Series](https://foxster.itch.io/foxvox/devlog/870907/foxvox-tutorial-videos)** for more in-depth tutorials.
 
-> 💡 **Live Interactive Directory:**  
+> [!TIP]
+> **Live Interactive Directory:**  
 > You can also browse and test all of these in-flight commands inside TAC's **Tactical Brevity Directory** (`[03] FOXVOX STATION` &rarr; `[TACTICAL BREVITY]`). Speak any phrase into your microphone to automatically jump to and highlight its command card.
 
 ### 1. Air Traffic Control (ATC)
