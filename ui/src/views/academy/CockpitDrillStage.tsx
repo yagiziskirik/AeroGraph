@@ -30,10 +30,10 @@ export const DRILL_STEP_ORDER: DrillStepName[] = [
   'ENGAGE_CHIEF',
   'ELEC_POWER',
   'JFS_START',
-  'SEC_CHECK',
-  'PRI_VERIFY',
   'EPU_PIN',
   'EPU_FLOW',
+  'SEC_CHECK',
+  'PRI_VERIFY',
   'FLIGHT_CONTROLS_CLEAR',
   'FLCS_BIT',
   'TRIM_VERIFY',
@@ -49,7 +49,17 @@ export const DRILL_STEP_ORDER: DrillStepName[] = [
 ];
 
 export const getOrderedDrillSteps = (order: DrillStepName[] = DRILL_STEP_ORDER): RampStartStep[] => {
-  return order.map((name) => RAMP_STEPS_BY_NAME[name]).filter(Boolean);
+  return order
+    .map((name, idx) => {
+      const base = RAMP_STEPS_BY_NAME[name];
+      if (!base) return null;
+      return {
+        ...base,
+        order: idx,
+        code: String(idx + 1).padStart(2, '0'),
+      };
+    })
+    .filter(Boolean) as RampStartStep[];
 };
 
 import {

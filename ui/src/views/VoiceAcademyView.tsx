@@ -23,7 +23,7 @@ import { TelemetryData, ProfileCategoryView, CrewChiefStateData } from '../types
 import { RampStartStep, StepSubstep, RAMP_START_STEPS, RAMP_STEPS_BY_NAME } from '../services/voiceTrainingData';
 import { TacticalBrevityView } from './academy/TacticalBrevityView';
 import { Dash1ManualView } from './academy/Dash1ManualView';
-import { CockpitDrillStage, DRILL_STEP_ORDER } from './academy/CockpitDrillStage';
+import { CockpitDrillStage, DRILL_STEP_ORDER, getOrderedDrillSteps } from './academy/CockpitDrillStage';
 import { AcademyDisclaimerModal } from './academy/AcademyDisclaimerModal';
 
 interface VoiceAcademyViewProps {
@@ -139,7 +139,7 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
 
   // Ordered steps for Cockpit Voice Practice Drill (reorderable via DRILL_STEP_ORDER in CockpitDrillStage)
   const orderedDrillSteps = useMemo(() => {
-    return DRILL_STEP_ORDER.map((name) => RAMP_STEPS_BY_NAME[name]).filter(Boolean) as RampStartStep[];
+    return getOrderedDrillSteps(DRILL_STEP_ORDER);
   }, []);
 
   const currentSteps = activeMode === 'practice' ? orderedDrillSteps : RAMP_START_STEPS;
@@ -286,7 +286,7 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
 
         if (data.status === 'VERIFIED') {
           if (activeMode === 'practice') {
-            if (activeStep.id === 0) {
+            if (activeStep.stepName === 'ENGAGE_CHIEF' || activeStep.id === 0) {
               setChiefEngaged(true);
             }
           } else if (activeMode === 'brevity') {
@@ -635,14 +635,14 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
                           </div>
                         ) : (
                           <div className="w-4 h-4 rounded-full border border-zinc-700 flex items-center justify-center text-[10px] text-zinc-500">
-                            {idx}
+                            {idx + 1}
                           </div>
                         )}
                       </div>
 
                       <div className="truncate">
                         <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-                          {step.code}
+                          STEP {step.code}
                         </div>
                         <div className="truncate">{step.title}</div>
                       </div>
