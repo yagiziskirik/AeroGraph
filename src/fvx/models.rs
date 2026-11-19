@@ -102,6 +102,8 @@ pub struct GroupCommandDef {
 pub struct CommandDef {
     pub Name: Option<String>,
     #[serde(default)]
+    pub Disabled: Option<bool>,
+    #[serde(default)]
     pub VoiceCommandKeys: Option<Vec<VoiceCommandKeySegment>>,
     #[serde(default)]
     pub Conditions: Option<Vec<ConditionGroup>>,
@@ -234,6 +236,8 @@ pub struct KeyCommandGroup {
 #[serde(rename_all = "PascalCase")]
 pub struct VariableInit {
     pub Name: String,
+    #[serde(default)]
+    pub Value: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
