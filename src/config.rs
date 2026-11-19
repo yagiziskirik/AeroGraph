@@ -115,6 +115,12 @@ pub struct AppConfig {
 
     #[serde(default = "default_false")]
     pub invert_kneeboard_scroll: bool,
+
+    #[serde(default)]
+    pub drill_step_order: Option<Vec<String>>,
+
+    #[serde(default)]
+    pub disabled_drill_steps: Option<Vec<String>>,
 }
 
 fn default_github_repo() -> String {
@@ -207,6 +213,8 @@ impl Default for AppConfig {
             auto_engage_voice: default_true(),
             invert_wheel_brakes: default_true(),
             invert_kneeboard_scroll: default_false(),
+            drill_step_order: None,
+            disabled_drill_steps: None,
         }
     }
 }

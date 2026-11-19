@@ -244,6 +244,12 @@ export const Ipc = {
   setCockpitDrillActive(active: boolean) {
     this.send('SetCockpitDrillActive', { active });
   },
+  setDrillSequence(order: string[], disabled: string[]) {
+    this.send('SetDrillSequence', { order, disabled });
+  },
+  resetDrillSequence() {
+    this.send('ResetDrillSequence');
+  },
   playDrillSound(cue: string) {
     this.send('PlayDrillSound', { cue });
   },

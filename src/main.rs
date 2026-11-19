@@ -363,6 +363,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             match LoadedProfile::load_from_file(p) {
                 Ok(lp) => {
                     config.profile_path = Some(p.to_string_lossy().to_string());
+                    sync_profile_sequence_to_config(&lp, &mut config);
                     let _ = config.save();
                     Some(lp)
                 }
@@ -960,24 +961,64 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             log::info!("Selected new profile: {:?}", path);
                             if let Ok(new_lp) = LoadedProfile::load_from_file(&path) {
                                 tray.set_profile_name(&new_lp.profile.Name);
-                                let mut cfg = shared_config.lock().unwrap();
-                                cfg.profile_path = Some(path.to_string_lossy().to_string());
-                                let _ = cfg.save();
-                                let mut prof_guard = shared_profile.lock().unwrap();
-                                *prof_guard = Some(new_lp);
+                                let (active_order, active_disabled) = {
+                                    let mut cfg = shared_config.lock().unwrap();
+                                    cfg.profile_path = Some(path.to_string_lossy().to_string());
+                                    sync_profile_sequence_to_config(&new_lp, &mut cfg)
+                                };
+                                {
+                                    let mut prof_guard = shared_profile.lock().unwrap();
+                                    *prof_guard = Some(new_lp);
+                                }
                                 reload_trigger.store(true, Ordering::SeqCst);
+
+                                if let Some(win) = tactical_console.active_window() {
+                                    let cfg_clone = shared_config.lock().unwrap().clone();
+                                    push_snapshot_helper(win, &cfg_clone, &shared_profile, &mut main_bms_client);
+                                    win.send_event(
+                                        "DrillSequenceUpdated",
+                                        &serde_json::json!({
+                                            "success": true,
+                                            "order": active_order,
+                                            "disabled": active_disabled,
+                                        })
+                                        .to_string(),
+                                    );
+                                }
                             }
                         }
                     } else if menu_event.id == tray.item_reload.id() {
-                        let cfg = shared_config.lock().unwrap();
-                        let p_opt = cfg.resolve_profile();
+                        let p_opt = {
+                            let cfg = shared_config.lock().unwrap();
+                            cfg.resolve_profile()
+                        };
                         if let Some(p) = p_opt {
                             if let Ok(reloaded) = LoadedProfile::load_from_file(&p) {
                                 tray.set_profile_name(&reloaded.profile.Name);
-                                let mut prof_guard = shared_profile.lock().unwrap();
-                                *prof_guard = Some(reloaded);
+                                let (active_order, active_disabled) = {
+                                    let mut cfg = shared_config.lock().unwrap();
+                                    sync_profile_sequence_to_config(&reloaded, &mut cfg)
+                                };
+                                {
+                                    let mut prof_guard = shared_profile.lock().unwrap();
+                                    *prof_guard = Some(reloaded);
+                                }
                                 log::info!("Profile reloaded successfully: {:?}", p);
                                 reload_trigger.store(true, Ordering::SeqCst);
+
+                                if let Some(win) = tactical_console.active_window() {
+                                    let cfg_clone = shared_config.lock().unwrap().clone();
+                                    push_snapshot_helper(win, &cfg_clone, &shared_profile, &mut main_bms_client);
+                                    win.send_event(
+                                        "DrillSequenceUpdated",
+                                        &serde_json::json!({
+                                            "success": true,
+                                            "order": active_order,
+                                            "disabled": active_disabled,
+                                        })
+                                        .to_string(),
+                                    );
+                                }
                             }
                         }
                     }
@@ -1792,11 +1833,11 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
             if let Some(path) = AppTray::prompt_select_profile() {
                 if let Ok(new_lp) = LoadedProfile::load_from_file(&path) {
                     ctx.tray.set_profile_name(&new_lp.profile.Name);
-                    {
+                    let (active_order, active_disabled) = {
                         let mut cfg = ctx.shared_config.lock().unwrap();
                         cfg.profile_path = Some(path.to_string_lossy().to_string());
-                        let _ = cfg.save();
-                    }
+                        sync_profile_sequence_to_config(&new_lp, &mut cfg)
+                    };
                     {
                         let mut prof_guard = ctx.shared_profile.lock().unwrap();
                         *prof_guard = Some(new_lp);
@@ -1806,6 +1847,15 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
                     if let Some(win) = ctx.tactical_console.active_window() {
                         let cfg = ctx.shared_config.lock().unwrap().clone();
                         push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+                        win.send_event(
+                            "DrillSequenceUpdated",
+                            &serde_json::json!({
+                                "success": true,
+                                "order": active_order,
+                                "disabled": active_disabled,
+                            })
+                            .to_string(),
+                        );
                     }
                 }
             }
@@ -1815,9 +1865,15 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
                 let cfg = ctx.shared_config.lock().unwrap();
                 cfg.resolve_profile()
             };
+            let mut updated_sequence = None;
             if let Some(p) = p_opt {
                 if let Ok(reloaded) = LoadedProfile::load_from_file(&p) {
                     ctx.tray.set_profile_name(&reloaded.profile.Name);
+                    let (active_order, active_disabled) = {
+                        let mut cfg = ctx.shared_config.lock().unwrap();
+                        sync_profile_sequence_to_config(&reloaded, &mut cfg)
+                    };
+                    updated_sequence = Some((active_order, active_disabled));
                     {
                         let mut prof_guard = ctx.shared_profile.lock().unwrap();
                         *prof_guard = Some(reloaded);
@@ -1829,6 +1885,17 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
             if let Some(win) = ctx.tactical_console.active_window() {
                 let cfg = ctx.shared_config.lock().unwrap().clone();
                 push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+                if let Some((order, disabled)) = updated_sequence {
+                    win.send_event(
+                        "DrillSequenceUpdated",
+                        &serde_json::json!({
+                            "success": true,
+                            "order": order,
+                            "disabled": disabled,
+                        })
+                        .to_string(),
+                    );
+                }
             }
         }
         IpcRequest::ResetDefaultProfile => {
@@ -1841,9 +1908,15 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
                 let cfg = ctx.shared_config.lock().unwrap();
                 cfg.resolve_profile()
             };
+            let mut updated_sequence = None;
             if let Some(p) = p_opt {
                 if let Ok(reloaded) = LoadedProfile::load_from_file(&p) {
                     ctx.tray.set_profile_name(&reloaded.profile.Name);
+                    let (active_order, active_disabled) = {
+                        let mut cfg = ctx.shared_config.lock().unwrap();
+                        sync_profile_sequence_to_config(&reloaded, &mut cfg)
+                    };
+                    updated_sequence = Some((active_order, active_disabled));
                     {
                         let mut prof_guard = ctx.shared_profile.lock().unwrap();
                         *prof_guard = Some(reloaded);
@@ -1855,6 +1928,17 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
             if let Some(win) = ctx.tactical_console.active_window() {
                 let cfg = ctx.shared_config.lock().unwrap().clone();
                 push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+                if let Some((order, disabled)) = updated_sequence {
+                    win.send_event(
+                        "DrillSequenceUpdated",
+                        &serde_json::json!({
+                            "success": true,
+                            "order": order,
+                            "disabled": disabled,
+                        })
+                        .to_string(),
+                    );
+                }
             }
         }
         IpcRequest::LoadProfileByPath { path } => {
@@ -1862,11 +1946,11 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
             if p.exists() {
                 if let Ok(new_lp) = LoadedProfile::load_from_file(&p) {
                     ctx.tray.set_profile_name(&new_lp.profile.Name);
-                    {
+                    let (active_order, active_disabled) = {
                         let mut cfg = ctx.shared_config.lock().unwrap();
                         cfg.profile_path = Some(p.to_string_lossy().to_string());
-                        let _ = cfg.save();
-                    }
+                        sync_profile_sequence_to_config(&new_lp, &mut cfg)
+                    };
                     {
                         let mut prof_guard = ctx.shared_profile.lock().unwrap();
                         *prof_guard = Some(new_lp);
@@ -1876,6 +1960,15 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
                     if let Some(win) = ctx.tactical_console.active_window() {
                         let cfg = ctx.shared_config.lock().unwrap().clone();
                         push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+                        win.send_event(
+                            "DrillSequenceUpdated",
+                            &serde_json::json!({
+                                "success": true,
+                                "order": active_order,
+                                "disabled": active_disabled,
+                            })
+                            .to_string(),
+                        );
                     }
                 }
             }
@@ -2085,6 +2178,234 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
                 );
             }
         }
+        IpcRequest::SetDrillSequence { order, disabled } => {
+            // Enforce anchors & fixed prefixes:
+            // First three steps (ENGAGE_CHIEF, ELEC_POWER, JFS_START) are fixed at the beginning.
+            // FINALE_SALUTE is fixed at the end.
+            // ENGAGE_CHIEF, JFS_START, and FINALE_SALUTE cannot be disabled.
+            // ELEC_POWER CAN be disabled.
+            let raw_middle: Vec<String> = order
+                .into_iter()
+                .filter(|s| {
+                    s != "ENGAGE_CHIEF"
+                        && s != "ELEC_POWER"
+                        && s != "JFS_START"
+                        && s != "FINALE_SALUTE"
+                })
+                .collect();
+
+            // Reconstruct middle order preserving block coupling:
+            // SEC (SEC_CHECK, PRI_VERIFY)
+            // EPU (EPU_PIN, EPU_FLOW)
+            // TRIM (TRIM_VERIFY, TRIM_DISC, TRIM_CONN)
+            // BRAKES (LEFT_BRAKE, RIGHT_BRAKE)
+            let mut cleaned_middle: Vec<String> = Vec::new();
+            for item in raw_middle {
+                match item.as_str() {
+                    "SEC_CHECK" | "PRI_VERIFY" => {
+                        if !cleaned_middle.contains(&"SEC_CHECK".to_string()) {
+                            cleaned_middle.push("SEC_CHECK".to_string());
+                            cleaned_middle.push("PRI_VERIFY".to_string());
+                        }
+                    }
+                    "EPU_PIN" | "EPU_FLOW" => {
+                        if !cleaned_middle.contains(&"EPU_PIN".to_string()) {
+                            cleaned_middle.push("EPU_PIN".to_string());
+                            cleaned_middle.push("EPU_FLOW".to_string());
+                        }
+                    }
+                    "TRIM_VERIFY" | "TRIM_DISC" | "TRIM_CONN" => {
+                        if !cleaned_middle.contains(&"TRIM_VERIFY".to_string()) {
+                            cleaned_middle.push("TRIM_VERIFY".to_string());
+                            cleaned_middle.push("TRIM_DISC".to_string());
+                            cleaned_middle.push("TRIM_CONN".to_string());
+                        }
+                    }
+                    "LEFT_BRAKE" | "RIGHT_BRAKE" => {
+                        if !cleaned_middle.contains(&"LEFT_BRAKE".to_string()) {
+                            cleaned_middle.push("LEFT_BRAKE".to_string());
+                            cleaned_middle.push("RIGHT_BRAKE".to_string());
+                        }
+                    }
+                    other => {
+                        if !cleaned_middle.contains(&other.to_string()) {
+                            cleaned_middle.push(other.to_string());
+                        }
+                    }
+                }
+            }
+
+            // Ensure any missing middle steps are appended in canonical order
+            let canonical_middle = [
+                "SEC_CHECK",
+                "PRI_VERIFY",
+                "EPU_PIN",
+                "EPU_FLOW",
+                "FLIGHT_CONTROLS_CLEAR",
+                "FLCS_BIT",
+                "TRIM_VERIFY",
+                "TRIM_DISC",
+                "TRIM_CONN",
+                "BIG_MOVEMENTS",
+                "DBU_CHECK",
+                "LEFT_BRAKE",
+                "RIGHT_BRAKE",
+                "AAR_DOOR",
+                "CHOCKS_REMOVAL",
+            ];
+            for step in &canonical_middle {
+                if !cleaned_middle.contains(&step.to_string()) {
+                    cleaned_middle.push(step.to_string());
+                }
+            }
+
+            let mut sanitized_order = Vec::with_capacity(cleaned_middle.len() + 4);
+            sanitized_order.push("ENGAGE_CHIEF".to_string());
+            sanitized_order.push("ELEC_POWER".to_string());
+            sanitized_order.push("JFS_START".to_string());
+            sanitized_order.append(&mut cleaned_middle);
+            sanitized_order.push("FINALE_SALUTE".to_string());
+
+            // Coupling rules for disabled steps:
+            let mut disabled_set: std::collections::HashSet<String> = disabled
+                .into_iter()
+                .filter(|s| s != "ENGAGE_CHIEF" && s != "JFS_START" && s != "FINALE_SALUTE")
+                .collect();
+
+            if disabled_set.contains("SEC_CHECK") || disabled_set.contains("PRI_VERIFY") {
+                disabled_set.insert("SEC_CHECK".to_string());
+                disabled_set.insert("PRI_VERIFY".to_string());
+            }
+
+            if disabled_set.contains("EPU_PIN") || disabled_set.contains("EPU_FLOW") {
+                disabled_set.insert("EPU_PIN".to_string());
+                disabled_set.insert("EPU_FLOW".to_string());
+            }
+
+            if disabled_set.contains("TRIM_VERIFY")
+                || disabled_set.contains("TRIM_DISC")
+                || disabled_set.contains("TRIM_CONN")
+            {
+                disabled_set.insert("TRIM_VERIFY".to_string());
+                disabled_set.insert("TRIM_DISC".to_string());
+                disabled_set.insert("TRIM_CONN".to_string());
+            }
+
+            if disabled_set.contains("LEFT_BRAKE") || disabled_set.contains("RIGHT_BRAKE") {
+                disabled_set.insert("LEFT_BRAKE".to_string());
+                disabled_set.insert("RIGHT_BRAKE".to_string());
+            }
+
+            let sanitized_disabled: Vec<String> = disabled_set.into_iter().collect();
+
+            log::info!(
+                "Updating Cockpit Drill sequence: {} steps, {} disabled",
+                sanitized_order.len(),
+                sanitized_disabled.len()
+            );
+            // 1. Update and save AppConfig
+            {
+                let mut cfg = ctx.shared_config.lock().unwrap();
+                cfg.drill_step_order = Some(sanitized_order.clone());
+                cfg.disabled_drill_steps = Some(sanitized_disabled.clone());
+                let _ = cfg.save();
+            }
+
+            // 2. If profile is managed, rewire and save profile
+            let mut sync_success = true;
+            {
+                let mut prof_guard = ctx.shared_profile.lock().unwrap();
+                if let Some(ref mut lp) = *prof_guard {
+                    if lp.is_managed() {
+                        let _ = lp.ensure_backup();
+                        let order_ids: Vec<crate::fvx::reorder::DrillStepId> = sanitized_order
+                            .iter()
+                            .filter_map(|s| s.parse().ok())
+                            .collect();
+                        let disabled_ids: std::collections::HashSet<
+                            crate::fvx::reorder::DrillStepId,
+                        > = sanitized_disabled
+                            .iter()
+                            .filter_map(|s| s.parse().ok())
+                            .collect();
+                        if let Err(e) = lp.reorder_crew_chief(&order_ids, &disabled_ids) {
+                            log::error!("Failed to rewire Crew Chief state machine: {}", e);
+                            sync_success = false;
+                        } else if let Err(e) = lp.save_to_file(&lp.profile_path) {
+                            log::error!("Failed to save profile after reordering: {:?}", e);
+                            sync_success = false;
+                        } else {
+                            log::info!(
+                                "Successfully synchronized reordered Crew Chief steps to .fvx file"
+                            );
+                        }
+                    } else {
+                        log::warn!("Profile is custom; skipping .fvx state machine modification");
+                    }
+                }
+            }
+
+            if sync_success {
+                ctx.reload_trigger.store(true, Ordering::SeqCst);
+            }
+
+            if let Some(win) = ctx.tactical_console.active_window() {
+                let cfg = ctx.shared_config.lock().unwrap().clone();
+                push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+                win.send_event(
+                    "DrillSequenceUpdated",
+                    &serde_json::json!({
+                        "success": sync_success,
+                        "order": sanitized_order,
+                        "disabled": sanitized_disabled,
+                    })
+                    .to_string(),
+                );
+            }
+        }
+        IpcRequest::ResetDrillSequence => {
+            log::info!("Resetting Cockpit Drill sequence to default");
+            let default_order: Vec<String> = crate::fvx::reorder::DrillStepId::default_order()
+                .iter()
+                .map(|s| s.as_str().to_string())
+                .collect();
+            let default_disabled: Vec<String> = Vec::new();
+
+            // 1. Update and save AppConfig
+            {
+                let mut cfg = ctx.shared_config.lock().unwrap();
+                cfg.drill_step_order = None;
+                cfg.disabled_drill_steps = None;
+                let _ = cfg.save();
+            }
+
+            // 2. If profile is managed, rewire and save profile to default order
+            {
+                let mut prof_guard = ctx.shared_profile.lock().unwrap();
+                if let Some(ref mut lp) = *prof_guard {
+                    if lp.is_managed() {
+                        let _ = lp.reset_crew_chief_sequence();
+                        let _ = lp.save_to_file(&lp.profile_path);
+                    }
+                }
+            }
+
+            ctx.reload_trigger.store(true, Ordering::SeqCst);
+
+            if let Some(win) = ctx.tactical_console.active_window() {
+                let cfg = ctx.shared_config.lock().unwrap().clone();
+                push_snapshot_helper(win, &cfg, ctx.shared_profile, ctx.main_bms_client);
+                win.send_event(
+                    "DrillSequenceUpdated",
+                    &serde_json::json!({
+                        "success": true,
+                        "order": default_order,
+                        "disabled": default_disabled,
+                    })
+                    .to_string(),
+                );
+            }
+        }
         IpcRequest::OpenLogFile => {
             let log_p = AppConfig::log_file_path();
             let _ = std::process::Command::new("notepad.exe")
@@ -2143,26 +2464,91 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
     }
 }
 
+pub fn sync_profile_sequence_to_config(
+    lp: &LoadedProfile,
+    cfg: &mut AppConfig,
+) -> (Vec<String>, Vec<String>) {
+    if lp.is_managed() {
+        if let Some((embedded_order, embedded_disabled)) = lp.get_embedded_sequence() {
+            cfg.drill_step_order = Some(embedded_order.clone());
+            cfg.disabled_drill_steps = Some(embedded_disabled.clone());
+            let _ = cfg.save();
+            (embedded_order, embedded_disabled)
+        } else {
+            // Pristine default managed profile
+            cfg.drill_step_order = None;
+            cfg.disabled_drill_steps = None;
+            let _ = cfg.save();
+            let default_order = crate::fvx::reorder::DrillStepId::default_order()
+                .iter()
+                .map(|s| s.as_str().to_string())
+                .collect();
+            (default_order, Vec::new())
+        }
+    } else {
+        // Custom unmanaged profile: keep drill order disabled/cleared
+        cfg.drill_step_order = None;
+        cfg.disabled_drill_steps = None;
+        let _ = cfg.save();
+        let default_order = crate::fvx::reorder::DrillStepId::default_order()
+            .iter()
+            .map(|s| s.as_str().to_string())
+            .collect();
+        (default_order, Vec::new())
+    }
+}
+
 fn push_snapshot_helper(
     win: &crate::gui::window::TacticalConsoleWindow,
     cfg: &AppConfig,
     shared_profile: &Arc<Mutex<Option<LoadedProfile>>>,
     bms_client: &mut BmsSharedMemoryClient,
 ) {
-    let (prof_name, prof_path) = {
+    let (prof_name, prof_path, is_profile_managed, profile_status) = {
         let guard = shared_profile.lock().unwrap();
         if let Some(ref p) = *guard {
+            let managed = p.is_managed();
+            let has_custom_order = cfg
+                .drill_step_order
+                .as_ref()
+                .map(|o| !o.is_empty())
+                .unwrap_or(false);
+            let has_disabled = cfg
+                .disabled_drill_steps
+                .as_ref()
+                .map(|d| !d.is_empty())
+                .unwrap_or(false);
+
+            let status = if !managed {
+                "CUSTOM".to_string()
+            } else if !has_custom_order && !has_disabled {
+                "DEFAULT".to_string()
+            } else {
+                "MODIFIED".to_string()
+            };
+
             (
                 p.profile.Name.clone(),
                 p.profile_path.to_string_lossy().to_string(),
+                managed,
+                Some(status),
             )
         } else {
             (
                 "Falcon BMS 4.38 Default".to_string(),
-                "Default Bundled Profile".to_string(),
+                "Default Profile".to_string(),
+                true,
+                Some("DEFAULT".to_string()),
             )
         }
     };
+    let drill_step_order = cfg.drill_step_order.clone().unwrap_or_else(|| {
+        crate::fvx::reorder::DrillStepId::default_order()
+            .iter()
+            .map(|s| s.as_str().to_string())
+            .collect()
+    });
+    let disabled_drill_steps = cfg.disabled_drill_steps.clone().unwrap_or_default();
     let (mpo_button, mpo_device, _mpo_guid, mpo_is_key) = {
         let guard = shared_profile.lock().unwrap();
         if let Some(ref lp) = *guard {
@@ -2210,6 +2596,10 @@ fn push_snapshot_helper(
         bms_mpo_binding,
         custom_presets: AppConfig::load_custom_presets(),
         generated_images,
+        drill_step_order,
+        disabled_drill_steps,
+        is_profile_managed,
+        profile_status,
     });
 }
 

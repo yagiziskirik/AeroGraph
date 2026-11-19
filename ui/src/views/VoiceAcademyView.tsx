@@ -19,8 +19,8 @@ import {
 } from 'lucide-react';
 import { Sound } from '../services/sound';
 import { Ipc } from '../services/ipc';
-import { TelemetryData, ProfileCategoryView, CrewChiefStateData } from '../types/ipc';
-import { RampStartStep, StepSubstep, RAMP_START_STEPS, RAMP_STEPS_BY_NAME } from '../services/voiceTrainingData';
+import { TelemetryData, ProfileCategoryView, CrewChiefStateData, StateSnapshot } from '../types/ipc';
+import { RampStartStep, StepSubstep, RAMP_START_STEPS, RAMP_STEPS_BY_NAME, DrillStepName } from '../services/voiceTrainingData';
 import { TacticalBrevityView } from './academy/TacticalBrevityView';
 import { Dash1ManualView } from './academy/Dash1ManualView';
 import { CockpitDrillStage, DRILL_STEP_ORDER, getOrderedDrillSteps } from './academy/CockpitDrillStage';
@@ -137,16 +137,53 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
   const [isLadderHovered, setIsLadderHovered] = useState(false);
   const [isLadderPinned, setIsLadderPinned] = useState(false);
 
-  // Ordered steps for Cockpit Voice Practice Drill (reorderable via DRILL_STEP_ORDER in CockpitDrillStage)
-  const orderedDrillSteps = useMemo(() => {
-    return getOrderedDrillSteps(DRILL_STEP_ORDER);
+  // Drill Step Reordering & Enabling State (synchronized with FoxVox)
+  const [drillOrder, setDrillOrder] = useState<string[]>(() => DRILL_STEP_ORDER as string[]);
+  const [disabledSteps, setDisabledSteps] = useState<string[]>([]);
+
+  useEffect(() => {
+    const unsubSnapshot = Ipc.on('StateSnapshot', (snapshot: StateSnapshot) => {
+      if (snapshot.drill_step_order && snapshot.drill_step_order.length > 0) {
+        setDrillOrder(snapshot.drill_step_order);
+      }
+      if (snapshot.disabled_drill_steps) {
+        setDisabledSteps(snapshot.disabled_drill_steps);
+      }
+    });
+
+    const unsubSeq = Ipc.on('DrillSequenceUpdated', (payload: { success: boolean; order: string[]; disabled: string[] }) => {
+      if (payload.order && payload.order.length > 0) {
+        setDrillOrder(payload.order);
+      }
+      if (payload.disabled) {
+        setDisabledSteps(payload.disabled);
+      }
+    });
+
+    return () => {
+      unsubSnapshot();
+      unsubSeq();
+    };
   }, []);
+
+  // Ordered steps for Cockpit Voice Practice Drill (filtered by active enabled steps)
+  const orderedDrillSteps = useMemo(() => {
+    return getOrderedDrillSteps(drillOrder as DrillStepName[], disabledSteps);
+  }, [drillOrder, disabledSteps]);
 
   const currentSteps = activeMode === 'practice' ? orderedDrillSteps : RAMP_START_STEPS;
 
+  // Safeguard step index within active currentSteps
+  useEffect(() => {
+    if (currentStepIndex >= currentSteps.length && currentSteps.length > 0) {
+      setCurrentStepIndex(Math.max(0, currentSteps.length - 1));
+      setCurrentSubstepIndex(0);
+    }
+  }, [currentSteps.length, currentStepIndex]);
+
   // Active Step & Substep
   const activeStep: RampStartStep = currentSteps[currentStepIndex] || currentSteps[0];
-  const activeSubstep: StepSubstep | undefined = activeStep.substeps[currentSubstepIndex];
+  const activeSubstep: StepSubstep | undefined = activeStep?.substeps?.[currentSubstepIndex];
 
   // Active Category in TBA
   const activeCategory = useMemo(() => {
@@ -594,15 +631,17 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
                 <span className="font-mono font-bold text-xs text-zinc-300 tracking-wider">
                   PROCEDURAL LADDER
                 </span>
-                <button
-                  onClick={() => setIsLadderPinned(!isLadderPinned)}
-                  className={`p-1 rounded text-xs transition-[color] cursor-pointer ${
-                    isLadderPinned ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                  title={isLadderPinned ? 'Unpin Ladder' : 'Pin Ladder Open'}
-                >
-                  <Pin className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={() => setIsLadderPinned(!isLadderPinned)}
+                    className={`p-1 rounded text-xs transition-[color] cursor-pointer ${
+                      isLadderPinned ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                    title={isLadderPinned ? 'Unpin Ladder' : 'Pin Ladder Open'}
+                  >
+                    <Pin className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
               {/* Ladder items with pb-36 for full bottom clearance */}

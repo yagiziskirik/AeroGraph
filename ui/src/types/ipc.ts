@@ -124,6 +124,10 @@ export interface StateSnapshot {
   mpo_is_key?: boolean;
   bms_mpo_binding?: string | null;
   generated_images?: string[];
+  drill_step_order?: string[];
+  disabled_drill_steps?: string[];
+  is_profile_managed?: boolean;
+  profile_status?: 'DEFAULT' | 'MODIFIED' | 'CUSTOM' | string;
 }
 
 export interface ProfileCategoryView {

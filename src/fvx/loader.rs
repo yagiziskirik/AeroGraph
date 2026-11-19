@@ -71,6 +71,205 @@ impl LoadedProfile {
         Ok(())
     }
 
+    /// Creates a safety backup of the original profile in AeroGraph's central config directory
+    /// (`%APPDATA%/AeroGraph/backups/`) if one does not exist yet. Never creates files in the profile directory.
+    pub fn ensure_backup(&self) -> std::io::Result<PathBuf> {
+        let backup_dir = crate::config::AppConfig::config_dir().join("backups");
+        let _ = std::fs::create_dir_all(&backup_dir);
+        let file_stem = self
+            .profile_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("profile");
+
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.profile_path.to_string_lossy().hash(&mut hasher);
+        let path_hash = format!("{:08x}", hasher.finish() as u32);
+
+        let bak_path = backup_dir.join(format!("{}_{}.orig.fvx", file_stem, path_hash));
+        if !bak_path.exists() && self.profile_path.exists() {
+            std::fs::copy(&self.profile_path, &bak_path)?;
+            log::info!("Created original profile backup at: {:?}", bak_path);
+        }
+        Ok(bak_path)
+    }
+
+    /// Reorders and/or enables/disables Crew Chief steps in the profile's raw_json,
+    /// and records the customized sequence into VariableInits for cross-session persistence.
+    pub fn reorder_crew_chief(
+        &mut self,
+        desired_order: &[crate::fvx::reorder::DrillStepId],
+        disabled_steps: &std::collections::HashSet<crate::fvx::reorder::DrillStepId>,
+    ) -> Result<(), String> {
+        crate::fvx::reorder::reorder_crew_chief_sequence(
+            &mut self.raw_json,
+            desired_order,
+            disabled_steps,
+        )?;
+
+        let order_str = desired_order
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+        let disabled_str = disabled_steps
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        if let Some(inits) = self
+            .raw_json
+            .get_mut("VariableInits")
+            .and_then(|v| v.as_array_mut())
+        {
+            set_or_insert_variable(inits, "AEROGRAPH_PROFILE_ID", "CANONICAL_V1");
+            set_or_insert_variable(inits, "AEROGRAPH_DRILL_ORDER", &order_str);
+            set_or_insert_variable(inits, "AEROGRAPH_DISABLED_STEPS", &disabled_str);
+        }
+
+        // Refresh typed profile struct from raw_json
+        if let Ok(p) = serde_json::from_value(self.raw_json.clone()) {
+            self.profile = p;
+        }
+        Ok(())
+    }
+
+    /// Resets the Crew Chief state machine back to standard default order
+    /// and removes custom sequence overrides from VariableInits.
+    pub fn reset_crew_chief_sequence(&mut self) -> Result<(), String> {
+        let default_order = crate::fvx::reorder::DrillStepId::default_order();
+        let disabled_steps = std::collections::HashSet::new();
+        crate::fvx::reorder::reorder_crew_chief_sequence(
+            &mut self.raw_json,
+            &default_order,
+            &disabled_steps,
+        )?;
+
+        if let Some(inits) = self
+            .raw_json
+            .get_mut("VariableInits")
+            .and_then(|v| v.as_array_mut())
+        {
+            inits.retain(|v| {
+                let name = v.get("Name").and_then(|n| n.as_str()).unwrap_or("");
+                !name.eq_ignore_ascii_case("AEROGRAPH_DRILL_ORDER")
+                    && !name.eq_ignore_ascii_case("AEROGRAPH_DISABLED_STEPS")
+            });
+            set_or_insert_variable(inits, "AEROGRAPH_PROFILE_ID", "CANONICAL_V1");
+        }
+
+        if let Ok(p) = serde_json::from_value(self.raw_json.clone()) {
+            self.profile = p;
+        }
+        Ok(())
+    }
+
+    /// Extracts embedded drill sequence and disabled steps if saved in the profile's VariableInits.
+    pub fn get_embedded_sequence(&self) -> Option<(Vec<String>, Vec<String>)> {
+        let inits = self.profile.VariableInits.as_ref()?;
+        let mut order: Option<Vec<String>> = None;
+        let mut disabled: Option<Vec<String>> = None;
+
+        for v in inits {
+            if v.Name.eq_ignore_ascii_case("AEROGRAPH_DRILL_ORDER") {
+                if let Some(ref val) = v.Value {
+                    if let Some(s) = val.as_str() {
+                        let list: Vec<String> = s
+                            .split(',')
+                            .map(|x| x.trim().to_string())
+                            .filter(|x| !x.is_empty())
+                            .collect();
+                        if !list.is_empty() {
+                            order = Some(list);
+                        }
+                    }
+                }
+            } else if v.Name.eq_ignore_ascii_case("AEROGRAPH_DISABLED_STEPS") {
+                if let Some(ref val) = v.Value {
+                    if let Some(s) = val.as_str() {
+                        let list: Vec<String> = s
+                            .split(',')
+                            .map(|x| x.trim().to_string())
+                            .filter(|x| !x.is_empty())
+                            .collect();
+                        disabled = Some(list);
+                    }
+                }
+            }
+        }
+
+        if order.is_some() || disabled.is_some() {
+            Some((
+                order.unwrap_or_else(|| {
+                    crate::fvx::reorder::DrillStepId::default_order()
+                        .iter()
+                        .map(|s| s.as_str().to_string())
+                        .collect()
+                }),
+                disabled.unwrap_or_default(),
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// Checks if this profile is signed by AeroGraph or is the canonical bundled profile,
+    /// AND matches the managed Crew Chief command structure.
+    pub fn is_managed(&self) -> bool {
+        (self.is_canonical_profile() || self.is_bundled_canonical_path())
+            && crate::fvx::reorder::detect_profile_compatibility(&self.profile)
+                == crate::fvx::reorder::ProfileCompatibility::Managed
+    }
+
+    pub fn is_bundled_canonical_path(&self) -> bool {
+        let path_str = self.profile_path.to_string_lossy().replace('\\', "/");
+        path_str.contains("assets/profiles/Falcon BMS 4.38 v1.3.1")
+    }
+
+    /// Checks if this profile carries the official AeroGraph canonical profile identifier.
+    pub fn is_canonical_profile(&self) -> bool {
+        if let Some(inits) = &self.profile.VariableInits {
+            for v in inits {
+                if v.Name.eq_ignore_ascii_case("AEROGRAPH_PROFILE_ID") {
+                    if let Some(ref val) = v.Value {
+                        let s = val.as_str().unwrap_or("");
+                        if s.contains("CANONICAL") {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Injects the official AeroGraph canonical profile identifier into `VariableInits`.
+    pub fn tag_canonical_profile(&mut self) {
+        if let Some(inits) = self
+            .raw_json
+            .get_mut("VariableInits")
+            .and_then(|v| v.as_array_mut())
+        {
+            let already_tagged = inits.iter().any(|v| {
+                v.get("Name")
+                    .and_then(|n| n.as_str())
+                    .map(|n| n.eq_ignore_ascii_case("AEROGRAPH_PROFILE_ID"))
+                    .unwrap_or(false)
+            });
+            if !already_tagged {
+                inits.push(serde_json::json!({
+                    "Name": "AEROGRAPH_PROFILE_ID",
+                    "Value": "CANONICAL_V1"
+                }));
+                if let Ok(p) = serde_json::from_value(self.raw_json.clone()) {
+                    self.profile = p;
+                }
+            }
+        }
+    }
+
     /// Dynamically harvests the complete set of unique variable names declared, queried, or updated in this profile.
     pub fn harvest_required_variables(&self) -> HashSet<String> {
         crate::fvx::harvester::harvest_profile_variables(&self.profile)
@@ -572,6 +771,21 @@ impl LoadedProfile {
     }
 }
 
+fn set_or_insert_variable(inits: &mut Vec<serde_json::Value>, name: &str, val: &str) {
+    for item in inits.iter_mut() {
+        if let Some(n) = item.get("Name").and_then(|n| n.as_str()) {
+            if n.eq_ignore_ascii_case(name) {
+                item["Value"] = serde_json::json!(val);
+                return;
+            }
+        }
+    }
+    inits.push(serde_json::json!({
+        "Name": name,
+        "Value": val
+    }));
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProfileCategoryView {
     pub name: String,
@@ -656,6 +870,75 @@ mod tests {
         assert!(
             total_phrases > 0,
             "Spoken callout phrases must be dynamically extracted from profile VoiceCommandKeys"
+        );
+    }
+
+    #[test]
+    fn test_tag_and_verify_canonical_profile() {
+        let path = "assets/profiles/Falcon BMS 4.38 v1.3.1/Falcon BMS 4.38 v1.3.1.fvx";
+        let mut lp = LoadedProfile::load_from_file(path).expect("Failed to load profile");
+        lp.tag_canonical_profile();
+        assert!(
+            lp.is_canonical_profile(),
+            "Profile must be canonical after tagging"
+        );
+        lp.save_to_file(path)
+            .expect("Failed to save tagged profile");
+
+        let reloaded = LoadedProfile::load_from_file(path).expect("Failed to reload profile");
+        assert!(
+            reloaded.is_canonical_profile(),
+            "Reloaded profile must be canonical"
+        );
+    }
+
+    #[test]
+    fn test_embedded_sequence_and_backup() {
+        let path = "assets/profiles/Falcon BMS 4.38 v1.3.1/Falcon BMS 4.38 v1.3.1.fvx";
+        let mut lp = LoadedProfile::load_from_file(path).expect("Failed to load profile");
+
+        // Verify backup is created in central directory, NOT beside profile
+        let bak_path = lp.ensure_backup().expect("Failed to create backup");
+        assert!(bak_path.exists(), "Backup must exist");
+        assert!(
+            bak_path.to_string_lossy().contains("backups"),
+            "Backup must be in central backups folder"
+        );
+        let adjacent_bak = std::path::PathBuf::from(format!("{}.bak", path));
+        assert!(
+            !adjacent_bak.exists(),
+            "Adjacent .bak file must NEVER be created beside profile"
+        );
+
+        // Test embedding custom sequence in memory
+        let custom_order = vec![
+            crate::fvx::reorder::DrillStepId::EngageChief,
+            crate::fvx::reorder::DrillStepId::ElecPower,
+            crate::fvx::reorder::DrillStepId::JfsStart,
+            crate::fvx::reorder::DrillStepId::BigMovements,
+            crate::fvx::reorder::DrillStepId::FinaleSalute,
+        ];
+        let mut disabled = std::collections::HashSet::new();
+        disabled.insert(crate::fvx::reorder::DrillStepId::SecCheck);
+
+        lp.reorder_crew_chief(&custom_order, &disabled)
+            .expect("Reorder failed");
+
+        let embedded = lp.get_embedded_sequence();
+        assert!(
+            embedded.is_some(),
+            "Embedded sequence must exist after reorder"
+        );
+        let (seq, dis) = embedded.unwrap();
+        assert_eq!(seq[3], "BIG_MOVEMENTS");
+        assert_eq!(dis, vec!["SEC_CHECK"]);
+
+        // Test reset removes embedded overrides
+        lp.reset_crew_chief_sequence().expect("Reset failed");
+        let reset_embedded = lp.get_embedded_sequence();
+        assert!(
+            reset_embedded.is_none(),
+            "Reset must clear custom embedded overrides"
         );
     }
 }

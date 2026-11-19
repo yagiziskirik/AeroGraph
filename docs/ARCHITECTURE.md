@@ -104,7 +104,11 @@ flowchart TD
 - **`updater.rs`**: Flight-safe background updater that queries GitHub Releases on startup without interrupting active 3D flights.
 
 ### `src/fvx/`: FoxVox Profile & Variable Harvesting
-- **`loader.rs` & `models.rs`**: Full Rust XML deserializer for FoxVox `.fvx` profiles without external runtime dependencies. Translates commands, groups, phrases, and key macros into memory.
+- **`loader.rs` & `models.rs`**: Full Rust deserializer for FoxVox `.fvx` profiles without external runtime dependencies. Translates commands, groups, phrases, and key macros into memory. Manages non-destructive profile serialization, canonical signature identification (`AEROGRAPH_PROFILE_ID`), embedded sequence roundtripping, and collision-proof disaster-recovery backups in `%APPDATA%/AeroGraph/backups/`.
+- **`reorder.rs`**: **Crew Chief Sequence & State Machine Rewiring Engine**:
+  - Dynamically reorders procedural checkpoints and enables/disables checkpoint blocks (SEC, EPU, Trim, Brakes).
+  - Recalculates `Completed >= X` milestone gates on flight surface checks and final salute based on active preceding increments.
+  - Automatically bridges mutual token progression (`EPU RDY` vs `RDY SEC`) and records active order definitions into profile `VariableInits`.
 - **`harvester.rs`**: **Profile Variable Harvester**:
   - Analyzes profile condition gates, variable initializers (`VariableInits`), and update actions (`VariableUpdates`).
   - Automatically derives the complete set of required telemetry variables for the sampling engine, eliminating inactive condition gate errors.
@@ -149,12 +153,14 @@ flowchart TD
   - **`BitView`**: Crew Chief BIT station with live DirectInput flight control surface gauges (Pitch, Roll, Yaw), differential toe brakes with one-click axis inversion toggle, and HOTAS switch diagnostics.
   - **`CommsView`**: FoxVox Communications Station:
     - Master voice recognition toggle, standby mute control, profile manager, and pilot voice selector.
+    - Live profile status badges (`DEFAULT`, `MANAGED • MODIFIED`, `CUSTOM PROFILE`) and native file dialog (`LOAD PROFILE...`).
+    - **Crew Chief Sequence & FoxVox State Manager**: Dedicated sequence manager featuring Framer Motion drag-and-drop reordering, coupled system checks, step skipping, and live state synchronization with Falcon BMS.
     - Continuous linear VU-meter ($-45\text{ dBFS}$ to $0\text{ dBFS}$) and live speech recognition terminal.
     - **SAPI & PTT Calibration Station**: $3 \times 2$ grid with 6 interactive sliders (Confidence Floor, PTT Min Hold, PTT Release Grace, End Silence, Ambiguous Silence, Initial Silence Timeout) featuring per-slider factory resets (`↺`), dirty state tracking, and live IPC configuration persistence.
     - **Academy Entry Hub**: Integrated launcher cards for Cockpit Voice Drill, Tactical Brevity Directory, and Dash-1 Manual with automated voice engine lifecycle branching.
   - **`VoiceAcademyView` (Crew Chief Academy)**:
-    - **`CockpitDrillStage`**: Sequential 18-step ground crew ramp start rehearsal, live Windows SAPI speech verification, integrated cockpit panel locator overlays, and real-time DirectInput FLCS/brake gauges.
-    - **`Dash1ManualView`**: USAF T.O. 1F-16CM-1 procedural checklist ledger table with phase badges, procedural cues, and cockpit panel coordinates.
+    - **`CockpitDrillStage`**: Sequential ground crew ramp start rehearsal, live Windows SAPI speech verification, integrated cockpit panel locator overlays, and real-time DirectInput FLCS/brake gauges, dynamically synchronized with the sequence configured in FoxVox Station.
+    - **`Dash1ManualView`**: T.O. 1F-16CM-1 procedural checklist ledger table with phase badges, procedural cues, and cockpit panel coordinates.
     - **`TacticalBrevityView`**: Real-time agency directory with live hot-mic speech recognition, prefix disambiguation, and automated scrolling to recognized commands.
     - **`AcademyDisclaimerModal`**: Hardware-accelerated Framer Motion modal featuring the signature `ShiningCheckbox`, providing operational context and two-way persistent `localStorage` synchronization.
   - **`SystemView`**: Avionics luminescence color themes (8 HUD palettes), mechanical acoustic relays, and simulation automation options.

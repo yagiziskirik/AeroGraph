@@ -40,6 +40,11 @@
   - [6. Mission Presets & `.aeropreset` Management](#6-mission-presets--aeropreset-management)
   - [7. Crew Chief Built-In Test (BIT) & Flight Controls (`[02] CREW CHIEF BIT`)](#7-crew-chief-built-in-test-bit--flight-controls-02-crew-chief-bit)
   - [8. FoxVox Communications Station & Voice Terminal (`[03] FOXVOX STATION`)](#8-foxvox-communications-station--voice-terminal-03-foxvox-station)
+    - [8.1 Profile Controller & Engine Management](#81-profile-controller--engine-management)
+    - [8.2 Crew Chief Procedural Sequence Manager](#82-crew-chief-procedural-sequence-manager)
+    - [8.3 Live Microphone VU-Meter & Recognition Terminal](#83-live-microphone-vu-meter--recognition-terminal)
+    - [8.4 SAPI Speech Recognition & PTT Timings Calibration](#84-sapi-speech-recognition--ptt-timings-calibration)
+    - [8.5 Crew Chief Academy & Procedural Voice Trainer](#85-crew-chief-academy--procedural-voice-trainer)
   - [9. Cockpit Settings & Flight Sim Automation (`[04] COCKPIT SETTINGS`)](#9-cockpit-settings--flight-sim-automation-04-cockpit-settings)
 - [Kneeboard Configuration (`kneeboards.json`)](#-kneeboard-configuration-kneeboardsjson)
   - [Available Page Types](#available-page-types)
@@ -602,11 +607,40 @@ The **FoxVox Station** is your comms center and real-time speech operations dash
 #### 8.1 Profile Controller & Engine Management
 - **Voice Recognition Master Toggle**: One-click switch to turn speech recognition and controller switch sampling `ON` or `OFF`.
 - **Microphone Listening State (`LISTENING` vs `STANDBY (MUTED)`)**: Quickly mute or unmute the microphone via the UI button or spoken commands (*"Stand by"* to mute, *"Radio check"* to unmute).
-- **Active Profile Banner**: Displays the currently loaded `.fvx` profile name, filepath, and quick-action buttons to **Reload Profile** or **Reset to Default**.
+- **Active Profile Banner**: Displays the currently loaded `.fvx` profile name, filepath, and live status badge:
+  - `DEFAULT`: The clean, unedited bundled profile.
+  - `MANAGED • MODIFIED`: A profile with your custom step order or skipped steps applied.
+  - `CUSTOM PROFILE`: An external profile created outside AeroGraph.
+- **Load Profile...**: Open any FoxVox profile (`.fvx`) directly from your disk using a native file picker dialog.
+- **Reload & Reset**: Quickly reload the active file from disk or reset back to default.
 - **Pilot Voice Gender**: Toggle between **♂ Male (Default)** and **♀ Female** callsign phrasing for ground crew and wingman acknowledgments.
 - **Telemetry Polling Rate**: Discrete frequency selectors (**20 Hz, 25 Hz, 30 Hz, 50 Hz, 60 Hz**) to balance DirectInput switch responsiveness with minimal CPU footprint.
 
-#### 8.2 Live Microphone VU-Meter & Recognition Terminal
+#### 8.2 Crew Chief Procedural Sequence Manager
+
+<p align="center">
+  <img src="docs/images/foxvox-sequence.webp" alt="Crew Chief Procedural Sequence Manager" width="950" /><br />
+  <em>Crew Chief Sequence Manager: Reorder checks with animated drag-and-drop, toggle optional steps, and keep FoxVox synchronized with your personal ramp start flow.</em>
+</p>
+
+> [!IMPORTANT]
+> The sequence manager only works for the default profile or alike (i.e. copied from the installed profile). The custom profiles won't have this feature, since I have no control between the custom substates (and the nature of the FoxVox itself) and it will break your profile, too. Your custom profiles, therefore kept untouched.
+
+Not every pilot or virtual squadron performs the ramp start in the exact same order. Whether you want to perform flight control surface checks before starting your engine tests, skip the EPU checks to scramble quickly, or rearrange your flow to match your squadron's SOP, the **Crew Chief Sequence Manager** puts you in full control:
+
+- **Animated Drag-and-Drop Reordering**: Grab any movable card using the grip handle (`⠿`) and drag it up or down to change its position in the checklist. Nearby cards smoothly slide out of the way, and you can also use the up/down arrow buttons for quick adjustments.
+- **Coupled Check Blocks**: Related checks are linked into single cards so they stay together logically:
+  - **SEC & PRI Check** (Steps 04 & 05)
+  - **EPU Pin & Flow Check** (Steps 06 & 07)
+  - **Trim System Verification & AP Disconnect** (Steps 10, 11 & 12)
+  - **Toe Brakes Check** (Steps 15 & 16)
+  Reordering or toggling these cards moves and enables/disables all their child steps at once.
+- **Skip Optional Steps**: Want a quicker startup? Uncheck any non-mandatory block to skip it. AeroGraph automatically re-chains the voice trigger gates in FoxVox so you won't get stuck waiting for skipped calls.
+- **Mandatory Safety Anchors**: The critical milestones—**Intercom Link (Step 01)**, **Engine Start Two (Step 03)**, and the **Final Salute (Step 19)**—are locked in place with green checkmarks so your startup always begins and finishes safely.
+- **Apply & Sync FoxVox**: Click **Apply & Sync FoxVox** to commit your changes. AeroGraph updates the profile live, meaning your spoken callouts will immediately work in the new order when flying in Falcon BMS.
+- **Reset Anytime**: Click **Reset to Default** at any time to return to the standard checklist order.
+
+#### 8.3 Live Microphone VU-Meter & Recognition Terminal
 - **High-Precision Microphone VU-Meter**:
   - Live CoreAudio continuous peak sampling measures your system microphone input level.
   - Perceptual logarithmic dBFS readout ($-45\text{ dB}$ to $0\text{ dB}$) and percentage gauge.
@@ -619,7 +653,7 @@ The **FoxVox Station** is your comms center and real-time speech operations dash
 
 ---
 
-#### 8.3 SAPI Speech Recognition & PTT Timings Calibration
+#### 8.4 SAPI Speech Recognition & PTT Timings Calibration
 
 <p align="center">
   <img src="docs/images/foxvox-sapi-settings.webp" alt="SAPI Speech Recognition and PTT Timings Calibration" width="950" /><br />
@@ -631,7 +665,7 @@ Different pilots fly with different microphones, headset background noise, and H
 #### The 6 Calibration Sliders Explained:
 
 > [!TIP] 
-> I found myself setting **Speech Confidence Floor** up to **80%**, since the confidence levels are too high most of the time. 80% gives a good middle ground.
+> I found myself setting **Speech Confidence Floor** up to **75%**, since the confidence levels are too high most of the time. 80% gives a good middle ground.
 
 1. **Speech Confidence Floor (`0%` – `100%`, Default: `50%`)**:
    - *What it does*: Sets how confident Windows SAPI must be before executing a voice command in the cockpit. Phrases scored below this floor are safely discarded.
@@ -660,11 +694,11 @@ Different pilots fly with different microphones, headset background noise, and H
 
 ---
 
-#### 8.4 Crew Chief Academy & Procedural Voice Trainer
+#### 8.5 Crew Chief Academy & Procedural Voice Trainer
 
 The **Crew Chief Academy** is an interactive procedural training and reference module built directly into the FoxVox Station. It allows virtual pilots to practice the complete ramp start sequence with real-time speech validation, study the flight manual checklist, and look up in-flight voice commands.
 
-##### 8.4.1 Interactive Cockpit Voice Drill (`[PRACTICE DRILL]`)
+##### 8.5.1 Interactive Cockpit Voice Drill
 
 <p align="center">
   <img src="docs/images/voice-drill.webp" alt="Cockpit Voice Drill Practice Stage" width="950" /><br />
@@ -672,13 +706,14 @@ The **Crew Chief Academy** is an interactive procedural training and reference m
 </p>
 
 The **Cockpit Voice Drill** walks you through the entire ramp start sequence step by step before jumping into the simulator:
-- **Sequential 18-Step Rehearsal**: Progresses through pre-start comms checks, JFS engagement, SEC checks, FLCS BIT clearance, manual trim checks, control surface movements, and wheel chock removal.
+- **Sequential Rehearsal**: Progresses through pre-start comms checks, JFS engagement, SEC checks, FLCS BIT clearance, manual trim checks, control surface movements, and wheel chock removal.
+- **Synchronized Flow**: Automatically tracks your customized step order and skipped steps configured in the Sequence Manager, so the drill matches your personal checklist perfectly.
 - **Live Speech Verification**: Listens for your authentic voice transmissions through your microphone and validates them against the active voice profile grammar before advancing to the next step.
 - **Cockpit Locator Guides**: Visual cues and locator overlays highlight the exact panel, switch position, and avionics indicators associated with each procedural check.
 - **Real-Time Control Surface Feedback**: Integrated live gauges for Elevator, Ailerons, Rudder, and Toe Brakes during control checks.
 - **Dedicated Ground Audio**: Automatically silences background profile triggers while in drill mode, playing authentic step-by-step ground crew feedback.
 
-##### 8.4.2 Tactical Brevity & Agencies Directory (`[TACTICAL BREVITY]`)
+##### 8.5.2 Tactical Brevity & Agencies Directory
 
 <p align="center">
   <img src="docs/images/brevity.webp" alt="Tactical Brevity and Agencies Directory" width="950" /><br />
@@ -690,7 +725,7 @@ The **Tactical Brevity Directory** acts as a live voice command reference across
 - **Live Voice Detection**: Speak any brevity phrase into your microphone; the directory automatically highlights the matching command card and scrolls it smoothly into view.
 - **In-Flight Safe**: Safe to open during active flights—it never reloads the voice profile or interrupts ongoing communications.
 
-##### 8.4.3 Dash-1 Procedural Checklist Manual (`[CHECKLIST MANUAL]`)
+##### 8.5.3 Dash-1 Procedural Checklist Manual
 
 <p align="center">
   <img src="docs/images/dash-1.webp" alt="Dash-1 Procedural Checklist Manual" width="950" /><br />
@@ -705,7 +740,7 @@ The **Dash-1 Checklist Manual** provides an authentic flight manual checklist or
   - **Verbal Callout**: The spoken pilot transmission or crew chief response.
   - **Panel Location**: Cockpit location coordinates for rapid switch acquisition.
 
-##### 8.4.4 Operational Familiarization Notice
+##### 8.5.4 Operational Familiarization Notice
 
 When entering the Cockpit Voice Drill or Dash-1 Checklist, an operational notice shares the my personal cockpit flow (integrating DTC loading, sensor power-up, and avionics setup between steps) and highlights the priority of the official Falcon BMS documentation. You can dismiss the notice permanently using the *"Do not show this notice again"* checkbox, or re-open it at any time using the `?` icon in the top header.
 
