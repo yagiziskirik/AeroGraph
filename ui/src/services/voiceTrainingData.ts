@@ -30,8 +30,30 @@ export interface CockpitVisualTarget {
   focalControls: string[];
 }
 
+export type DrillStepName =
+  | 'ENGAGE_CHIEF'
+  | 'ELEC_POWER'
+  | 'JFS_START'
+  | 'SEC_CHECK'
+  | 'PRI_VERIFY'
+  | 'EPU_PIN'
+  | 'EPU_FLOW'
+  | 'FLIGHT_CONTROLS_CLEAR'
+  | 'FLCS_BIT'
+  | 'TRIM_VERIFY'
+  | 'TRIM_DISC'
+  | 'TRIM_CONN'
+  | 'BIG_MOVEMENTS'
+  | 'DBU_CHECK'
+  | 'LEFT_BRAKE'
+  | 'RIGHT_BRAKE'
+  | 'AAR_DOOR'
+  | 'CHOCKS_REMOVAL'
+  | 'FINALE_SALUTE';
+
 export interface RampStartStep {
   id: number;
+  stepName?: DrillStepName;
   code: string;
   title: string;
   phase: 'PRE_START' | 'ENGINE_START' | 'SECONDARY_POWER' | 'FLIGHT_CONTROLS' | 'TAXI_CLEAR';
@@ -60,6 +82,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 0,
+    stepName: 'ENGAGE_CHIEF',
     code: 'STEP-00',
     title: 'Interphone Connection & Engage Crew Chief',
     phase: 'PRE_START',
@@ -102,6 +125,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 1,
+    stepName: 'ELEC_POWER',
     code: 'STEP-01',
     title: 'Comms & Audio Check',
     phase: 'PRE_START',
@@ -210,6 +234,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 2,
+    stepName: 'JFS_START',
     code: 'STEP-02',
     title: 'Ready Start Two (JFS Light-Off & Core Spool)',
     phase: 'ENGINE_START',
@@ -329,6 +354,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 3,
+    stepName: 'SEC_CHECK',
     code: 'STEP-03',
     title: 'Secondary Engine Control (SEC) Check & Spool',
     phase: 'ENGINE_START',
@@ -461,6 +487,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 4,
+    stepName: 'PRI_VERIFY',
     code: 'STEP-04',
     title: 'SEC Check Good & Primary (PRI) Recovery',
     phase: 'ENGINE_START',
@@ -559,6 +586,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 5,
+    stepName: 'EPU_PIN',
     code: 'STEP-05',
     title: 'Pre-EPU Ground Safety & Pin Removal',
     phase: 'SECONDARY_POWER',
@@ -660,6 +688,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 6,
+    stepName: 'EPU_FLOW',
     code: 'STEP-06',
     title: 'EPU Hydrazine Flow & Run-Up Check',
     phase: 'SECONDARY_POWER',
@@ -788,6 +817,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 7,
+    stepName: 'FLIGHT_CONTROLS_CLEAR',
     code: 'STEP-07',
     title: 'Flight Controls Clear',
     phase: 'FLIGHT_CONTROLS',
@@ -859,6 +889,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 8,
+    stepName: 'FLCS_BIT',
     code: 'STEP-08',
     title: 'Cleared for FLCS Built-In Test (BIT)',
     phase: 'FLIGHT_CONTROLS',
@@ -955,6 +986,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 9,
+    stepName: 'TRIM_VERIFY',
     code: 'STEP-09',
     title: 'Ready for Trim Check',
     phase: 'FLIGHT_CONTROLS',
@@ -1014,6 +1046,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 10,
+    stepName: 'TRIM_DISC',
     code: 'STEP-10',
     title: 'Trim Disconnected Check',
     phase: 'FLIGHT_CONTROLS',
@@ -1091,6 +1124,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 11,
+    stepName: 'TRIM_CONN',
     code: 'STEP-11',
     title: 'Trim Connected & Needle Movement Check',
     phase: 'FLIGHT_CONTROLS',
@@ -1193,6 +1227,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 12,
+    stepName: 'BIG_MOVEMENTS',
     code: 'STEP-12',
     title: 'Clear for Big Movements (Flight Controls Cycle)',
     phase: 'FLIGHT_CONTROLS',
@@ -1327,6 +1362,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 13,
+    stepName: 'DBU_CHECK',
     code: 'STEP-13',
     title: 'Digital Backup (DBU) Still Clear Check',
     phase: 'FLIGHT_CONTROLS',
@@ -1423,6 +1459,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 14,
+    stepName: 'LEFT_BRAKE',
     code: 'STEP-14',
     title: 'Ready Left Brake Check',
     phase: 'FLIGHT_CONTROLS',
@@ -1501,6 +1538,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 15,
+    stepName: 'RIGHT_BRAKE',
     code: 'STEP-15',
     title: 'Ready Right Brake Check',
     phase: 'FLIGHT_CONTROLS',
@@ -1579,6 +1617,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 16,
+    stepName: 'AAR_DOOR',
     code: 'STEP-16',
     title: 'Ready Air Refueling (AAR) Door Check',
     phase: 'SECONDARY_POWER',
@@ -1660,6 +1699,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 17,
+    stepName: 'CHOCKS_REMOVAL',
     code: 'STEP-17',
     title: 'Wheel Chocks Removal (Optional Ground Check)',
     phase: 'TAXI_CLEAR',
@@ -1725,6 +1765,7 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   // =========================================================================
   {
     id: 18,
+    stepName: 'FINALE_SALUTE',
     code: 'STEP-18',
     title: 'Cleared Off & Final Marshal Sign-Off',
     phase: 'TAXI_CLEAR',
@@ -1780,3 +1821,25 @@ export const RAMP_START_STEPS: RampStartStep[] = [
     ]
   }
 ];
+
+export const RAMP_STEPS_BY_NAME: Record<DrillStepName, RampStartStep> = {
+  ENGAGE_CHIEF: RAMP_START_STEPS[0],
+  ELEC_POWER: RAMP_START_STEPS[1],
+  JFS_START: RAMP_START_STEPS[2],
+  SEC_CHECK: RAMP_START_STEPS[3],
+  PRI_VERIFY: RAMP_START_STEPS[4],
+  EPU_PIN: RAMP_START_STEPS[5],
+  EPU_FLOW: RAMP_START_STEPS[6],
+  FLIGHT_CONTROLS_CLEAR: RAMP_START_STEPS[7],
+  FLCS_BIT: RAMP_START_STEPS[8],
+  TRIM_VERIFY: RAMP_START_STEPS[9],
+  TRIM_DISC: RAMP_START_STEPS[10],
+  TRIM_CONN: RAMP_START_STEPS[11],
+  BIG_MOVEMENTS: RAMP_START_STEPS[12],
+  DBU_CHECK: RAMP_START_STEPS[13],
+  LEFT_BRAKE: RAMP_START_STEPS[14],
+  RIGHT_BRAKE: RAMP_START_STEPS[15],
+  AAR_DOOR: RAMP_START_STEPS[16],
+  CHOCKS_REMOVAL: RAMP_START_STEPS[17],
+  FINALE_SALUTE: RAMP_START_STEPS[18],
+};

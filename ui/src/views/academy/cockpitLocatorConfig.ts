@@ -2,12 +2,14 @@ import {
   CockpitTargetArea,
   CockpitPin,
 } from '../../components/cockpit/CockpitLocatorOverlay';
+import { DrillStepName } from '../../services/voiceTrainingData';
 
 /**
  * Configuration schema for activating CockpitLocatorOverlay on specific drill steps and substeps.
  */
 export interface CockpitLocatorStepConfig {
-  stepId: number;
+  stepId?: number;
+  stepName?: DrillStepName;
   /**
    * - `[0]`: Active only on substep 1
    * - `[0, 1]`: Active on substeps 1 and 2
@@ -28,6 +30,7 @@ export interface CockpitLocatorStepConfig {
 export const COCKPIT_LOCATOR_CONFIGS: CockpitLocatorStepConfig[] = [
   {
     stepId: 1,
+    stepName: 'ELEC_POWER',
     substeps: [0],
     targetArea: {
       id: 'area-elec-panel',
@@ -44,6 +47,7 @@ export const COCKPIT_LOCATOR_CONFIGS: CockpitLocatorStepConfig[] = [
   },
   {
     stepId: 2,
+    stepName: 'JFS_START',
     substeps: [0, 1],
     targetArea: {
       id: 'area-jfs-panel',
@@ -70,6 +74,7 @@ export const COCKPIT_LOCATOR_CONFIGS: CockpitLocatorStepConfig[] = [
   },
   {
     stepId: 2,
+    stepName: 'JFS_START',
     substeps: [2],
     targetArea: {
       id: 'area-tachometer',
@@ -97,6 +102,7 @@ export const COCKPIT_LOCATOR_CONFIGS: CockpitLocatorStepConfig[] = [
   },
   {
     stepId: 3,
+    stepName: 'SEC_CHECK',
     substeps: [1],
     targetArea: {
       id: 'area-tachometer',
@@ -112,6 +118,7 @@ export const COCKPIT_LOCATOR_CONFIGS: CockpitLocatorStepConfig[] = [
   },
   {
     stepId: 5,
+    stepName: 'EPU_PIN',
     substeps: [0],
     targetArea: {
       id: 'area-epu',
@@ -127,6 +134,7 @@ export const COCKPIT_LOCATOR_CONFIGS: CockpitLocatorStepConfig[] = [
   },
   {
     stepId: 8,
+    stepName: 'FLCS_BIT',
     substeps: [0],
     targetArea: {
       id: 'area-flt-ctrl-panel',
@@ -142,6 +150,7 @@ export const COCKPIT_LOCATOR_CONFIGS: CockpitLocatorStepConfig[] = [
   },
   {
     stepId: 9,
+    stepName: 'TRIM_VERIFY',
     substeps: [0],
     targetArea: {
       id: 'area-trim-panel',
@@ -157,6 +166,7 @@ export const COCKPIT_LOCATOR_CONFIGS: CockpitLocatorStepConfig[] = [
   },
   {
     stepId: 12,
+    stepName: 'BIG_MOVEMENTS',
     substeps: [0],
     targetArea: {
       id: 'area-mpo',
@@ -183,6 +193,7 @@ export const COCKPIT_LOCATOR_CONFIGS: CockpitLocatorStepConfig[] = [
   },
   {
     stepId: 16,
+    stepName: 'AAR_DOOR',
     substeps: [0],
     targetArea: {
       id: 'area-fuel-panel',
@@ -200,14 +211,19 @@ export const COCKPIT_LOCATOR_CONFIGS: CockpitLocatorStepConfig[] = [
 
 /**
  * Lookup active locator overlay configuration for a given step and substep.
+ * Accepts either stepName (preferred) or legacy stepId.
  * Returns null if the locator should be disengaged/hidden.
  */
 export const getCockpitLocatorConfig = (
-  stepId: number,
+  step: DrillStepName | number,
   substepIndex: number
 ): CockpitLocatorStepConfig | null => {
   const match = COCKPIT_LOCATOR_CONFIGS.find((cfg) => {
-    if (cfg.stepId !== stepId) return false;
+    if (typeof step === 'string') {
+      if (cfg.stepName !== step) return false;
+    } else {
+      if (cfg.stepId !== step) return false;
+    }
     if (!cfg.substeps || cfg.substeps.length === 0) return true;
     return cfg.substeps.includes(substepIndex);
   });

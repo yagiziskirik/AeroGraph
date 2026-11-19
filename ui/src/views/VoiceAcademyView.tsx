@@ -20,10 +20,10 @@ import {
 import { Sound } from '../services/sound';
 import { Ipc } from '../services/ipc';
 import { TelemetryData, ProfileCategoryView, CrewChiefStateData } from '../types/ipc';
-import { RampStartStep, StepSubstep, RAMP_START_STEPS } from '../services/voiceTrainingData';
+import { RampStartStep, StepSubstep, RAMP_START_STEPS, RAMP_STEPS_BY_NAME } from '../services/voiceTrainingData';
 import { TacticalBrevityView } from './academy/TacticalBrevityView';
 import { Dash1ManualView } from './academy/Dash1ManualView';
-import { CockpitDrillStage } from './academy/CockpitDrillStage';
+import { CockpitDrillStage, DRILL_STEP_ORDER } from './academy/CockpitDrillStage';
 import { AcademyDisclaimerModal } from './academy/AcademyDisclaimerModal';
 
 interface VoiceAcademyViewProps {
@@ -137,8 +137,15 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
   const [isLadderHovered, setIsLadderHovered] = useState(false);
   const [isLadderPinned, setIsLadderPinned] = useState(false);
 
+  // Ordered steps for Cockpit Voice Practice Drill (reorderable via DRILL_STEP_ORDER in CockpitDrillStage)
+  const orderedDrillSteps = useMemo(() => {
+    return DRILL_STEP_ORDER.map((name) => RAMP_STEPS_BY_NAME[name]).filter(Boolean) as RampStartStep[];
+  }, []);
+
+  const currentSteps = activeMode === 'practice' ? orderedDrillSteps : RAMP_START_STEPS;
+
   // Active Step & Substep
-  const activeStep: RampStartStep = RAMP_START_STEPS[currentStepIndex] || RAMP_START_STEPS[0];
+  const activeStep: RampStartStep = currentSteps[currentStepIndex] || currentSteps[0];
   const activeSubstep: StepSubstep | undefined = activeStep.substeps[currentSubstepIndex];
 
   // Active Category in TBA
@@ -317,7 +324,7 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
       unsubSpeech();
       unsubState();
     };
-  }, [activeMode, activeStep.id, findMatchingBrevityCommand, selectedCategoryName]);
+  }, [activeMode, activeStep.stepName, activeStep.id, findMatchingBrevityCommand, selectedCategoryName]);
 
   // Step Navigation in Practice & Manual Views
   const handlePrevStep = () => {
@@ -328,7 +335,7 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
   };
 
   const handleNextStep = () => {
-    if (currentStepIndex < RAMP_START_STEPS.length - 1) {
+    if (currentStepIndex < currentSteps.length - 1) {
       Sound.playClick();
       handleAdvanceStep(currentStepIndex + 1);
     }
@@ -359,7 +366,7 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
     } else if (currentStepIndex > 0) {
       const prevStepIdx = currentStepIndex - 1;
       setCurrentStepIndex(prevStepIdx);
-      const prevSubsteps = RAMP_START_STEPS[prevStepIdx]?.substeps;
+      const prevSubsteps = currentSteps[prevStepIdx]?.substeps;
       setCurrentSubstepIndex(prevSubsteps ? prevSubsteps.length - 1 : 0);
       if (prevStepIdx === 0) {
         setChiefEngaged(false);
@@ -367,16 +374,16 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
         Ipc.resetCrewChief();
       }
     }
-  }, [currentStepIndex, currentSubstepIndex]);
+  }, [currentStepIndex, currentSubstepIndex, currentSteps]);
 
   const handleNextSubstep = useCallback(() => {
     Sound.playClick();
     if (currentSubstepIndex < activeStep.substeps.length - 1) {
       setCurrentSubstepIndex((prev) => prev + 1);
-    } else if (currentStepIndex < RAMP_START_STEPS.length - 1) {
+    } else if (currentStepIndex < currentSteps.length - 1) {
       handleAdvanceStep(currentStepIndex + 1);
     }
-  }, [activeStep.substeps.length, currentStepIndex, currentSubstepIndex, handleAdvanceStep]);
+  }, [activeStep.substeps.length, currentStepIndex, currentSubstepIndex, currentSteps.length, handleAdvanceStep]);
 
   const handleEngageChief = useCallback(() => {
     setChiefEngaged(true);
@@ -403,7 +410,7 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
     setAxisOverrides((prev) => ({ ...prev, [substepId]: true }));
     if (currentSubstepIndex < activeStep.substeps.length - 1) {
       setCurrentSubstepIndex(currentSubstepIndex + 1);
-    } else if (currentStepIndex < RAMP_START_STEPS.length - 1) {
+    } else if (currentStepIndex < currentSteps.length - 1) {
       setCurrentStepIndex(currentStepIndex + 1);
       setCurrentSubstepIndex(0);
     }
@@ -553,7 +560,7 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
               <button
                 onClick={handleNextSubstep}
                 disabled={
-                  currentStepIndex === RAMP_START_STEPS.length - 1 &&
+                  currentStepIndex === currentSteps.length - 1 &&
                   currentSubstepIndex === activeStep.substeps.length - 1
                 }
                 title="Next Substep (Skip)"
@@ -600,13 +607,13 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
 
               {/* Ladder items with pb-36 for full bottom clearance */}
               <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                {RAMP_START_STEPS.map((step, idx) => {
+                {currentSteps.map((step, idx) => {
                   const isCurrent = idx === currentStepIndex;
                   const isCompleted = idx < currentStepIndex;
 
                   return (
                     <button
-                      key={step.id}
+                      key={step.stepName || step.id}
                       onClick={() => {
                         Sound.playClick();
                         handleAdvanceStep(idx);
@@ -683,6 +690,8 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
             <CockpitDrillStage
               activeStep={activeStep}
               currentSubstepIndex={currentSubstepIndex}
+              currentStepIndex={currentStepIndex}
+              totalSteps={currentSteps.length}
               onAdvanceSubstep={handleAdvanceSubstep}
               onAdvanceStep={handleAdvanceStep}
               onRestartDrill={handleResetChief}
@@ -788,8 +797,8 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
                       <span className="text-zinc-500 italic">
                         {activeMode === 'brevity'
                           ? 'Hot-mic active • Speak any tactical brevity phrase or callsign...'
-                          : activeStep.id === 1 && currentSubstepIndex === 2
-                          ? 'Speak "Loud and clear" or click Continue to Step 02...'
+                          : (activeStep.stepName ? activeStep.stepName === 'ELEC_POWER' : activeStep.id === 1) && currentSubstepIndex === 2
+                          ? 'Speak "Loud and clear" or click Continue to next step...'
                           : chiefEngaged
                           ? 'Interphone active • Awaiting directive...'
                           : 'Speak "Engage Chief" to connect intercom...'}
