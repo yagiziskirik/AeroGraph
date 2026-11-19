@@ -124,6 +124,11 @@ pub enum IpcRequest {
     PlayDrillSound {
         cue: String,
     },
+    SetDrillSequence {
+        order: Vec<String>,
+        disabled: Vec<String>,
+    },
+    ResetDrillSequence,
     OpenLogFile,
     GetConsoleLogs,
     OpenImagesFolder,
@@ -194,6 +199,14 @@ pub struct StateSnapshot {
     pub custom_presets: Vec<crate::gui::preset::CustomPreset>,
     #[serde(default)]
     pub generated_images: Vec<String>,
+    #[serde(default)]
+    pub drill_step_order: Vec<String>,
+    #[serde(default)]
+    pub disabled_drill_steps: Vec<String>,
+    #[serde(default)]
+    pub is_profile_managed: bool,
+    #[serde(default)]
+    pub profile_status: Option<String>,
 }
 
 impl IpcRequest {
