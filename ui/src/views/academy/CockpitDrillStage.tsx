@@ -13,8 +13,55 @@ import {
 import { Sound } from '../../services/sound';
 import { Ipc } from '../../services/ipc';
 import { TelemetryData } from '../../types/ipc';
-import { RampStartStep, StepSubstep } from '../../services/voiceTrainingData';
+import { RampStartStep, StepSubstep, DrillStepName, RAMP_STEPS_BY_NAME } from '../../services/voiceTrainingData';
 import { getCockpitLocatorConfig } from './cockpitLocatorConfig';
+
+export type { DrillStepName };
+
+/**
+ * ============================================================================
+ * DRILL_STEP_ORDER: Procedural Sequence Configuration
+ * ============================================================================
+ * Defines the order of execution for all steps in the cockpit startup drill.
+ * Changing the order or names here alters the step sequence dynamically while
+ * keeping all switch logic, telemetry bindings, and skip routing intact.
+ */
+export const DRILL_STEP_ORDER: DrillStepName[] = [
+  'ENGAGE_CHIEF',
+  'ELEC_POWER',
+  'JFS_START',
+  'SEC_CHECK',
+  'PRI_VERIFY',
+  'EPU_PIN',
+  'EPU_FLOW',
+  'FLIGHT_CONTROLS_CLEAR',
+  'FLCS_BIT',
+  'TRIM_VERIFY',
+  'TRIM_DISC',
+  'TRIM_CONN',
+  'BIG_MOVEMENTS',
+  'DBU_CHECK',
+  'LEFT_BRAKE',
+  'RIGHT_BRAKE',
+  'AAR_DOOR',
+  'CHOCKS_REMOVAL',
+  'FINALE_SALUTE',
+];
+
+export const getOrderedDrillSteps = (order: DrillStepName[] = DRILL_STEP_ORDER): RampStartStep[] => {
+  return order
+    .map((name, idx) => {
+      const base = RAMP_STEPS_BY_NAME[name];
+      if (!base) return null;
+      return {
+        ...base,
+        order: idx,
+        code: String(idx + 1).padStart(2, '0'),
+      };
+    })
+    .filter(Boolean) as RampStartStep[];
+};
+
 import {
   TacticalDisplayCard,
   TacticalControlInputCard,
@@ -48,6 +95,8 @@ import {
 interface CockpitDrillStageProps {
   activeStep: RampStartStep;
   currentSubstepIndex: number;
+  currentStepIndex?: number;
+  totalSteps?: number;
   onAdvanceSubstep: (nextSubstepIndex: number) => void;
   onAdvanceStep: (nextStepIndex: number) => void;
   onRestartDrill: () => void;
@@ -69,7 +118,7 @@ interface CockpitDrillStageProps {
 
 // Deterministic phrase matcher per step and substep order
 const matchSubstepPhrase = (
-  stepId: number,
+  step: DrillStepName | number,
   substepOrder: number,
   rawPhrase: string,
   rawCmd?: string
@@ -77,8 +126,8 @@ const matchSubstepPhrase = (
   const phrase = rawPhrase.trim().toUpperCase();
   const cmd = (rawCmd || '').trim().toUpperCase();
 
-  // Step 0 Substep 1: Engage Chief
-  if (stepId === 0) {
+  // ENGAGE_CHIEF (Step 0) Substep 1: Engage Chief
+  if (step === 'ENGAGE_CHIEF' || step === 0) {
     const valid = [
       'ENGAGE CHIEF', 'ENGAGE CREW CHIEF', 'START CHIEF', 'START CREW CHIEF',
       'CHIEF', 'ENABLE CHIEF', 'BEGIN CHIEF', 'TURN ON CHIEF'
@@ -86,20 +135,20 @@ const matchSubstepPhrase = (
     return valid.includes(phrase) || cmd.includes('ENGAGE');
   }
 
-  // Step 1 Substep 3 (or 2): Comms Check
-  if (stepId === 1 && (substepOrder === 2 || substepOrder === 3)) {
+  // ELEC_POWER (Step 1) Substep 3 (or 2): Comms Check
+  if ((step === 'ELEC_POWER' || step === 1) && (substepOrder === 2 || substepOrder === 3)) {
     const valid = ['COMMS CHECK', 'RADIO CHECK', 'CHIEF COMMS CHECK', 'CREW CHIEF COMMS CHECK'];
     return valid.includes(phrase) || cmd.includes('COMMS');
   }
 
-  // Step 2 Substep 1: Start Two
-  if (stepId === 2 && substepOrder === 1) {
+  // JFS_START (Step 2) Substep 1: Start Two
+  if ((step === 'JFS_START' || step === 2) && substepOrder === 1) {
     const valid = ['START TWO', 'READY START TWO', 'CHIEF START TWO', 'CLEAR START TWO', 'START 2', 'READY START 2'];
     return valid.includes(phrase) || cmd.includes('START TWO') || cmd.includes('START_TWO');
   }
 
-  // Step 3 Substep 2: Clear SEC
-  if (stepId === 3 && substepOrder === 2) {
+  // SEC_CHECK (Step 3) Substep 2: Clear SEC
+  if ((step === 'SEC_CHECK' || step === 3) && substepOrder === 2) {
     const valid = [
       'CLEAR SEC', 'CLEAR S E C', 'READY SEC', 'READY S E C',
       'CLEAR FOR SEC', 'CLEAR FOR SEC CHECK', 'READY FOR SEC CHECK'
@@ -107,8 +156,8 @@ const matchSubstepPhrase = (
     return valid.includes(phrase) || cmd.includes('SEC');
   }
 
-  // Step 4 Substep 1: SEC Good
-  if (stepId === 4 && substepOrder === 1) {
+  // PRI_VERIFY (Step 4) Substep 1: SEC Good
+  if ((step === 'PRI_VERIFY' || step === 4) && substepOrder === 1) {
     const valid = [
       'SEC GOOD', 'S E C GOOD', 'SEC CHECK GOOD', 'CHIEF SEC GOOD',
       'SEC CHECK COMPLETE', 'SEC PASS', 'SEC OK'
@@ -116,8 +165,8 @@ const matchSubstepPhrase = (
     return valid.includes(phrase) || cmd.includes('SEC');
   }
 
-  // Step 5 Substep 3: Pull EPU Pin
-  if (stepId === 5 && substepOrder === 3) {
+  // EPU_PIN (Step 5) Substep 3: Pull EPU Pin
+  if ((step === 'EPU_PIN' || step === 5) && substepOrder === 3) {
     const valid = [
       'PULL EPU PIN', 'PULL PIN', 'REMOVE EPU PIN', 'REMOVE PIN',
       'PULL EPU SAFETY PIN', 'REMOVE EPU SAFETY PIN', 'CHIEF PULL EPU PIN'
@@ -125,8 +174,8 @@ const matchSubstepPhrase = (
     return valid.includes(phrase) || cmd.includes('PIN');
   }
 
-  // Step 6 Substep 1: Check Flow
-  if (stepId === 6 && substepOrder === 1) {
+  // EPU_FLOW (Step 6) Substep 1: Check Flow
+  if ((step === 'EPU_FLOW' || step === 6) && substepOrder === 1) {
     const valid = [
       'CHECK FLOW', 'FLOW CHECK', 'CLEARED TO CHECK FOR FLOW',
       'CHECK FOR FLOW', 'CHIEF CHECK FLOW', 'VERIFY FLOW'
@@ -134,8 +183,8 @@ const matchSubstepPhrase = (
     return valid.includes(phrase) || cmd.includes('FLOW');
   }
 
-  // Step 7 Substep 2: Flight Controls Clear
-  if (stepId === 7 && substepOrder === 2) {
+  // FLIGHT_CONTROLS_CLEAR (Step 7) Substep 2: Flight Controls Clear
+  if ((step === 'FLIGHT_CONTROLS_CLEAR' || step === 7) && substepOrder === 2) {
     const valid = [
       'FLIGHT CONTROLS CLEAR', 'CONTROLS CLEAR', 'CHIEF FLIGHT CONTROLS CLEAR',
       'CONFIRM FLIGHT CONTROLS CLEAR'
@@ -143,8 +192,8 @@ const matchSubstepPhrase = (
     return valid.includes(phrase) || cmd.includes('CONTROLS CLEAR');
   }
 
-  // Step 8 Substep 1: Clear BIT
-  if (stepId === 8 && substepOrder === 1) {
+  // FLCS_BIT (Step 8) Substep 1: Clear BIT
+  if ((step === 'FLCS_BIT' || step === 8) && substepOrder === 1) {
     const valid = [
       'CLEAR BIT', 'CLEARED FOR BIT', 'READY FOR BIT', 'CLEAR FOR FLCS BIT',
       'CHIEF CLEARED FOR BIT', 'BIT CHECK', 'CLEAR FOR BIT', 'READY BIT'
@@ -152,8 +201,8 @@ const matchSubstepPhrase = (
     return valid.includes(phrase) || cmd.includes('BIT');
   }
 
-  // Step 9 Substep 2: Ready Trim
-  if (stepId === 9 && substepOrder === 2) {
+  // TRIM_VERIFY (Step 9) Substep 2: Ready Trim
+  if ((step === 'TRIM_VERIFY' || step === 9) && substepOrder === 2) {
     const valid = [
       'READY TRIM', 'READY FOR TRIM CHECK', 'CHIEF READY TRIM',
       'READY FOR TRIM', 'TRIM CHECK READY'
@@ -161,24 +210,24 @@ const matchSubstepPhrase = (
     return valid.includes(phrase) || cmd.includes('TRIM');
   }
 
-  // Step 10 Substep 2: Trim Disconnected
-  if (stepId === 10 && substepOrder === 2) {
+  // TRIM_DISC (Step 10) Substep 2: Trim Disconnected
+  if ((step === 'TRIM_DISC' || step === 10) && substepOrder === 2) {
     const valid = [
       'TRIM DISCONNECTED', 'CHIEF TRIM DISCONNECTED', 'TRIM DISC', 'TRIM DISCONNECT'
     ];
     return valid.includes(phrase) || cmd.includes('TRIM DISC');
   }
 
-  // Step 11 Substep 2: Trim Connected
-  if (stepId === 11 && substepOrder === 2) {
+  // TRIM_CONN (Step 11) Substep 2: Trim Connected
+  if ((step === 'TRIM_CONN' || step === 11) && substepOrder === 2) {
     const valid = [
       'TRIM CONNECTED', 'CHIEF TRIM CONNECTED', 'TRIM NORMAL', 'TRIM IN NORM', 'TRIM CONNECT'
     ];
     return valid.includes(phrase) || cmd.includes('TRIM CONN');
   }
 
-  // Step 12 Substep 1: Clear Big Movements
-  if (stepId === 12 && substepOrder === 1) {
+  // BIG_MOVEMENTS (Step 12) Substep 1: Clear Big Movements
+  if ((step === 'BIG_MOVEMENTS' || step === 12) && substepOrder === 1) {
     const valid = [
       'CLEAR BIG MOVEMENTS', 'CLEAR FOR BIG MOVEMENTS', 'CHIEF CLEAR BIG MOVEMENTS',
       'BIG MOVEMENTS', 'CYCLE CONTROLS', 'WIGGLE SURFACES', 'READY BIG MOVEMENTS'
@@ -186,40 +235,40 @@ const matchSubstepPhrase = (
     return valid.includes(phrase) || cmd.includes('BIG MOVEMENTS');
   }
 
-  // Step 13 Substep 1: DBU Still Clear
-  if (stepId === 13 && substepOrder === 1) {
+  // DBU_CHECK (Step 13) Substep 1: DBU Still Clear
+  if ((step === 'DBU_CHECK' || step === 13) && substepOrder === 1) {
     const valid = [
       'DBU STILL CLEAR', 'CHIEF DBU STILL CLEAR', 'DBU CLEAR', 'DIGITAL BACKUP CLEAR'
     ];
     return valid.includes(phrase) || cmd.includes('DBU');
   }
 
-  // Step 14 Substep 1: Ready Left Brake
-  if (stepId === 14 && substepOrder === 1) {
+  // LEFT_BRAKE (Step 14) Substep 1: Ready Left Brake
+  if ((step === 'LEFT_BRAKE' || step === 14) && substepOrder === 1) {
     const valid = [
       'READY LEFT BRAKE', 'CHIEF READY LEFT BRAKE', 'LEFT BRAKE', 'READY ON THE LEFT BRAKE'
     ];
     return valid.includes(phrase) || cmd.includes('LEFT BRAKE');
   }
 
-  // Step 15 Substep 1: Ready Right Brake
-  if (stepId === 15 && substepOrder === 1) {
+  // RIGHT_BRAKE (Step 15) Substep 1: Ready Right Brake
+  if ((step === 'RIGHT_BRAKE' || step === 15) && substepOrder === 1) {
     const valid = [
       'READY RIGHT BRAKE', 'CHIEF READY RIGHT BRAKE', 'RIGHT BRAKE', 'READY ON THE RIGHT BRAKE'
     ];
     return valid.includes(phrase) || cmd.includes('RIGHT BRAKE');
   }
 
-  // Step 16 Substep 1: Ready AAR Door
-  if (stepId === 16 && substepOrder === 1) {
+  // AAR_DOOR (Step 16) Substep 1: Ready AAR Door
+  if ((step === 'AAR_DOOR' || step === 16) && substepOrder === 1) {
     const valid = [
       'READY AAR DOOR', 'CHIEF READY AAR DOOR', 'AAR DOOR CHECK', 'READY AIR REFUEL DOOR', 'AAR DOOR'
     ];
     return valid.includes(phrase) || cmd.includes('AAR');
   }
 
-  // Step 17 Substep 2: Remove Chocks
-  if (stepId === 17 && substepOrder === 2) {
+  // CHOCKS_REMOVAL (Step 17) Substep 2: Remove Chocks
+  if ((step === 'CHOCKS_REMOVAL' || step === 17) && substepOrder === 2) {
     const valid = [
       'REMOVE CHOCKS', 'WHEEL CHOCKS', 'REMOVE WHEEL CHOCKS', 'PULL CHOCKS',
       'PULL WHEEL CHOCKS', 'CHOCKS AWAY', 'CHIEF REMOVE CHOCKS'
@@ -227,8 +276,8 @@ const matchSubstepPhrase = (
     return valid.includes(phrase) || cmd.includes('CHOCKS');
   }
 
-  // Step 18 Substep 1: Cleared Off
-  if (stepId === 18 && substepOrder === 1) {
+  // FINALE_SALUTE (Step 18) Substep 1: Cleared Off
+  if ((step === 'FINALE_SALUTE' || step === 18) && substepOrder === 1) {
     const valid = [
       'CLEARED OFF', 'CLEAR GROUND', 'CHIEF CLEARED OFF', 'CLEAR OFF',
       'EVERYTHING OFF', 'ALL OFF'
@@ -242,6 +291,8 @@ const matchSubstepPhrase = (
 export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   activeStep,
   currentSubstepIndex,
+  currentStepIndex,
+  totalSteps,
   onAdvanceSubstep,
   onAdvanceStep,
   onRestartDrill,
@@ -255,6 +306,19 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
 }) => {
   const activeSubstep: StepSubstep | undefined = activeStep.substeps[currentSubstepIndex];
 
+  const resolvedStepIndex =
+    currentStepIndex ??
+    (activeStep.stepName ? DRILL_STEP_ORDER.indexOf(activeStep.stepName) : activeStep.id);
+  const stepCount = totalSteps ?? DRILL_STEP_ORDER.length;
+  const currentStepName: DrillStepName =
+    activeStep.stepName || DRILL_STEP_ORDER[resolvedStepIndex] || 'ENGAGE_CHIEF';
+
+  const advanceToNextStep = useCallback(() => {
+    if (resolvedStepIndex < stepCount - 1) {
+      onAdvanceStep(resolvedStepIndex + 1);
+    }
+  }, [resolvedStepIndex, stepCount, onAdvanceStep]);
+
   // =========================================================================
   // SIMULATION PROCEDURAL & MECHANICAL STATES
   // =========================================================================
@@ -262,10 +326,10 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   const [isChiefResponding, setIsChiefResponding] = useState(false);
   const [chiefDialogue, setChiefDialogue] = useState('');
 
-  // Manage Cockpit Drill Mode: Step 0 begins in default profile with Chief disengaged so "Engage Chief" is detectable.
+  // Manage Cockpit Drill Mode: ENGAGE_CHIEF begins in default profile with Chief disengaged so "Engage Chief" is detectable.
   // Silent drill mode and Chief mode are engaged upon speaking "Engage Chief" or when entering Step >= 1.
   useEffect(() => {
-    if (activeStep.id === 0) {
+    if (currentStepName === 'ENGAGE_CHIEF') {
       Ipc.setCockpitDrillActive(false);
       Ipc.resetCrewChief();
     } else {
@@ -275,7 +339,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     return () => {
       Ipc.setCockpitDrillActive(false);
     };
-  }, [activeStep.id]);
+  }, [currentStepName]);
 
   // Step 01: ELEC Panel & TEST Panel
   const [elecSwitchPos, setElecSwitchPos] = useState<MainPwrPosition>('OFF');
@@ -459,14 +523,14 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     clearMistakeWarning();
     clearMistakeRollback();
 
-    // 3. Step 0 & Step 1 switch and indicator state synchronization
-    if (activeStep.id === 0) {
+    // 3. ENGAGE_CHIEF & ELEC_POWER switch and indicator state synchronization
+    if (currentStepName === 'ENGAGE_CHIEF') {
       setElecSwitchPos('OFF');
       setFlcsPwrTestPassed(false);
       setFlcsPwrTestTriggered(false);
       setFlcsPwrTestPos('NORM');
       setIsFlcsPwrTestHeld(false);
-    } else if (activeStep.id === 1) {
+    } else if (currentStepName === 'ELEC_POWER') {
       if (currentSubstepIndex === 0) {
         setElecSwitchPos('OFF');
         setFlcsPwrTestPassed(false);
@@ -489,8 +553,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       }
     }
 
-    // 4. Step 02 JFS switch position reset when leaving Step 02 or entering Step 02 substep 0
-    if (activeStep.id === 2 && currentSubstepIndex === 0 || activeStep.id === 2 && currentSubstepIndex === 1) {
+    // 4. JFS_START switch position reset when leaving JFS_START or entering JFS_START substep 0/1
+    if ((currentStepName === 'JFS_START' && currentSubstepIndex === 0) || (currentStepName === 'JFS_START' && currentSubstepIndex === 1)) {
       setJfsPosition('OFF');
       setJfsRunLit(false);
       setEngContPosition('PRI');
@@ -502,7 +566,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       setStep2EngineStabilized(false);
     }
 
-    if (activeStep.id === 2 && currentSubstepIndex === 2) {
+    if (currentStepName === 'JFS_START' && currentSubstepIndex === 2) {
       setHydPressA(0);
       setHydPressB(0);
       setFtitDeg(100);
@@ -511,14 +575,14 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       setStep2EngineStabilized(false);
     }
 
-    if (activeStep.id === 2 && currentSubstepIndex === 3) {
+    if (currentStepName === 'JFS_START' && currentSubstepIndex === 3) {
       setTachRpm(25);
       setThrottlePosition('IDLE');
       setStep2EngineStabilized(false);
     }
 
-    // 5. Step 03 SEC Check & Throttle Spool (73% RPM)
-    if (activeStep.id === 3) {
+    // 5. SEC_CHECK & Throttle Spool (73% RPM)
+    if (currentStepName === 'SEC_CHECK') {
       setThrottlePosition('IDLE');
       if (currentSubstepIndex === 0) {
         setSecTimerRemaining(30);
@@ -552,8 +616,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       setStep4ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
     }
 
-    // 6. Step 04 SEC mode and closed nozzle when beginning Step 4
-    if (activeStep.id === 4) {
+    // 6. PRI_VERIFY: SEC mode and closed nozzle when beginning Step 4
+    if (currentStepName === 'PRI_VERIFY') {
       setThrottlePosition('IDLE');
       setStep4ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
       setStep6ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
@@ -568,12 +632,12 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       }
     }
 
-    // 7. Step 05 / 06 EPU switch position reset when leaving Step 05 or entering Step 05 substep 0
-    if ((activeStep.id !== 5 && activeStep.id !== 6) || (activeStep.id === 6 && currentSubstepIndex === 0)) {
+    // 7. EPU switch position reset when leaving EPU_PIN/EPU_FLOW or entering EPU_FLOW substep 0
+    if ((currentStepName !== 'EPU_PIN' && currentStepName !== 'EPU_FLOW') || (currentStepName === 'EPU_FLOW' && currentSubstepIndex === 0)) {
       setEpuSwitch('NORM');
     }
 
-    if (activeStep.id === 5) {
+    if (currentStepName === 'EPU_PIN') {
       setThrottlePosition('IDLE');
       if (currentSubstepIndex === 0 || currentSubstepIndex === 1) {
         setEpuSwitch('NORM');
@@ -587,8 +651,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       }
     }
 
-    // Step 06 EPU Flow & Run-Up Check Throttle Spool (80-85% RPM)
-    if (activeStep.id === 6) {
+    // EPU_FLOW Run-Up Check Throttle Spool (80-85% RPM)
+    if (currentStepName === 'EPU_FLOW') {
       setThrottlePosition('IDLE');
       if (currentSubstepIndex === 0 || currentSubstepIndex === 1) {
         setStep6ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
@@ -611,8 +675,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       setStep6ThrottleAngle(THROTTLE_DETENTS['IDLE'].angle);
     }
 
-    // Step 08 FLCS BIT switch and lamp state synchronization
-    if (activeStep.id !== 8) {
+    // FLCS_BIT switch and lamp state synchronization
+    if (currentStepName !== 'FLCS_BIT') {
       setFlcsBitSwitch(false);
       setFlcsBitActive(false);
       setFlcsBitElapsed(0);
@@ -642,23 +706,23 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       }
     }
 
-    if (activeStep.id === 10 && currentSubstepIndex === 0) {
+    if (currentStepName === 'TRIM_DISC' && currentSubstepIndex === 0) {
       setTrimDiscSwitch(true);
     }
 
-    if (activeStep.id === 10 && currentSubstepIndex === 1) {
+    if (currentStepName === 'TRIM_DISC' && currentSubstepIndex === 1) {
       setTrimDiscSwitch(false);
     }
 
-    if (activeStep.id === 11 && currentSubstepIndex === 0) {
+    if (currentStepName === 'TRIM_CONN' && currentSubstepIndex === 0) {
       setTrimDiscSwitch(false);
     }
 
-    if (activeStep.id === 11 && currentSubstepIndex === 1) {
+    if (currentStepName === 'TRIM_CONN' && currentSubstepIndex === 1) {
       setTrimDiscSwitch(true);
     }
 
-    if (activeStep.id === 11 && currentSubstepIndex === 2) {
+    if (currentStepName === 'TRIM_CONN' && currentSubstepIndex === 2) {
       setTrimPitchUpDone(false);
       setTrimPitchDownDone(false);
       setTrimRollLeftDone(false);
@@ -671,7 +735,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       hasAdvancedStep11Ref.current = false;
     }
 
-    if (activeStep.id == 12 && currentSubstepIndex === 0 || activeStep.id == 12 && currentSubstepIndex === 1) {
+    if ((currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 0) || (currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 1)) {
       setSpeedbrakesOpen(false);
       setSpeedbrakeCycleDone(false);
       setRollLeftDone(false);
@@ -687,25 +751,25 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       }
     }
 
-    if (activeStep.id == 12 && currentSubstepIndex === 2) {
+    if (currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 2) {
       setPitchNoseUpDone(false);
       setPitchNoseDownDone(false);
     }
 
-    if (activeStep.id == 12 && currentSubstepIndex === 3) {
+    if (currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 3) {
       if (mpoTimerRef.current) {
         clearTimeout(mpoTimerRef.current);
         mpoTimerRef.current = null;
       }
     }
 
-    if (activeStep.id == 12 && currentSubstepIndex === 4) {
+    if (currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 4) {
       setYawLeftDone(false);
       setYawRightDone(false);
     }
 
-    // Step 13 DBU switch state synchronization
-    if (activeStep.id !== 13) {
+    // DBU_CHECK switch state synchronization
+    if (currentStepName !== 'DBU_CHECK') {
       setDbuSwitchOn(false);
       dbuControlsCheckedRef.current = false;
     } else {
@@ -717,8 +781,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       }
     }
 
-    // 8. Step 12 speedbrake cycle, MPO kick, and axis detection states reset
-    if (activeStep.id !== 12) {
+    // 8. BIG_MOVEMENTS speedbrake cycle, MPO kick, and axis detection states reset
+    if (currentStepName !== 'BIG_MOVEMENTS') {
       setSpeedbrakeCycleDone(false);
       setSpeedbrakesOpen(false);
       setMpoKickActive(false);
@@ -748,15 +812,15 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       }
     }
 
-    // 9. Step 14 & 15 brake tracking timers & refs reset
-    if (activeStep.id !== 14 || currentSubstepIndex !== 1) {
+    // 9. Brake tracking timers & refs reset
+    if (currentStepName !== 'LEFT_BRAKE' || currentSubstepIndex !== 1) {
       leftBrakeMovedRef.current = false;
       if (leftBrakeIdleTimerRef.current) {
         clearTimeout(leftBrakeIdleTimerRef.current);
         leftBrakeIdleTimerRef.current = null;
       }
     }
-    if (activeStep.id !== 15 || currentSubstepIndex !== 1) {
+    if (currentStepName !== 'RIGHT_BRAKE' || currentSubstepIndex !== 1) {
       rightBrakeMovedRef.current = false;
       if (rightBrakeIdleTimerRef.current) {
         clearTimeout(rightBrakeIdleTimerRef.current);
@@ -764,30 +828,30 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       }
     }
 
-    // 10. Step 16 AAR door switch position reset when leaving Step 16 or entering Step 16 substep 0
-    if (activeStep.id !== 16 || currentSubstepIndex === 0) {
+    // 10. AAR_DOOR switch position reset
+    if (currentStepName !== 'AAR_DOOR' || currentSubstepIndex === 0) {
       setAirRefuelDoorPos('CLOSE');
     }
 
-    if (activeStep.id === 16 && currentSubstepIndex === 1) {
+    if (currentStepName === 'AAR_DOOR' && currentSubstepIndex === 1) {
       setAirRefuelDoorPos('CLOSE');
     }
 
-    if (activeStep.id === 16 && currentSubstepIndex === 2) {
+    if (currentStepName === 'AAR_DOOR' && currentSubstepIndex === 2) {
       setAirRefuelDoorPos('OPEN');
     }
 
-    // 11. Step 17 chocks state reset when entering Step 17
-    if (activeStep.id === 17 && currentSubstepIndex === 0) {
+    // 11. CHOCKS_REMOVAL state reset
+    if (currentStepName === 'CHOCKS_REMOVAL' && currentSubstepIndex === 0) {
       setChocksInPlace(true);
     }
-  }, [activeStep.id, currentSubstepIndex, clearMistakeWarning, clearMistakeRollback]);
+  }, [currentStepName, currentSubstepIndex, clearMistakeWarning, clearMistakeRollback]);
 
   const triggerVerbalAdvance = useCallback((expectedDialogue: string) => {
     Sound.playCommit();
     onConsumeSpeech();
 
-    if (activeStep.id === 0) {
+    if (currentStepName === 'ENGAGE_CHIEF') {
       onEngageChief();
       setInterphoneConnected(true);
       Ipc.engageCrewChief();
@@ -797,18 +861,18 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     setIsChiefResponding(true);
     setChiefDialogue(expectedDialogue);
 
-    // Step 17 Substep 2: Display chocks-off visual for 2.5s before advancing to Step 18
-    if (activeStep.id === 17 && currentSubstepIndex === 1) {
+    // CHOCKS_REMOVAL Substep 2: Display chocks-off visual for 2.5s before advancing
+    if (currentStepName === 'CHOCKS_REMOVAL' && currentSubstepIndex === 1) {
       setChocksInPlace(false);
       setTimeout(() => {
         setIsChiefResponding(false);
-        onAdvanceStep(18);
+        advanceToNextStep();
       }, 2500);
       return;
     }
 
-    // Step 05: Pull EPU Pin (Multi-sound: "Copy" -> 4000ms delay -> "Clear for run up")
-    if (activeStep.id === 5) {
+    // EPU_PIN: Pull EPU Pin (Multi-sound: "Copy" -> 4000ms delay -> "Clear for run up")
+    if (currentStepName === 'EPU_PIN') {
       Ipc.playDrillSound('copy');
       setTimeout(() => {
         Ipc.playDrillSound('epu-runup');
@@ -817,15 +881,15 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         setIsChiefResponding(false);
         if (currentSubstepIndex < activeStep.substeps.length - 1) {
           onAdvanceSubstep(currentSubstepIndex + 1);
-        } else if (activeStep.id < 18) {
-          onAdvanceStep(activeStep.id + 1);
+        } else {
+          advanceToNextStep();
         }
       }, 5800);
       return;
     }
 
-    // Step 10: Trim Disconnected (Multi-sound: "Copy" -> 4000ms observation delay -> "Trim no movement")
-    if (activeStep.id === 10) {
+    // TRIM_DISC: Trim Disconnected (Multi-sound: "Copy" -> 4000ms observation delay -> "Trim no movement")
+    if (currentStepName === 'TRIM_DISC') {
       Ipc.playDrillSound('copy');
       setTimeout(() => {
         Ipc.playDrillSound('trim-no-movement');
@@ -834,15 +898,15 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         setIsChiefResponding(false);
         if (currentSubstepIndex < activeStep.substeps.length - 1) {
           onAdvanceSubstep(currentSubstepIndex + 1);
-        } else if (activeStep.id < 18) {
-          onAdvanceStep(activeStep.id + 1);
+        } else {
+          advanceToNextStep();
         }
       }, 5800);
       return;
     }
 
-    // Step 14: Ready Left Brake (Multi-sound: "Copy" -> 2500ms walk delay -> "Ready left brake")
-    if (activeStep.id === 14) {
+    // LEFT_BRAKE: Ready Left Brake (Multi-sound: "Copy" -> 2500ms walk delay -> "Ready left brake")
+    if (currentStepName === 'LEFT_BRAKE') {
       Ipc.playDrillSound('copy');
       setTimeout(() => {
         Ipc.playDrillSound('ready-left-brake');
@@ -851,15 +915,15 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         setIsChiefResponding(false);
         if (currentSubstepIndex < activeStep.substeps.length - 1) {
           onAdvanceSubstep(currentSubstepIndex + 1);
-        } else if (activeStep.id < 18) {
-          onAdvanceStep(activeStep.id + 1);
+        } else {
+          advanceToNextStep();
         }
       }, 4200);
       return;
     }
 
-    // Step 15: Ready Right Brake (Multi-sound: "Copy" -> 2500ms walk delay -> "Ready right brake")
-    if (activeStep.id === 15) {
+    // RIGHT_BRAKE: Ready Right Brake (Multi-sound: "Copy" -> 2500ms walk delay -> "Ready right brake")
+    if (currentStepName === 'RIGHT_BRAKE') {
       Ipc.playDrillSound('copy');
       setTimeout(() => {
         Ipc.playDrillSound('ready-right-brake');
@@ -868,15 +932,15 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         setIsChiefResponding(false);
         if (currentSubstepIndex < activeStep.substeps.length - 1) {
           onAdvanceSubstep(currentSubstepIndex + 1);
-        } else if (activeStep.id < 18) {
-          onAdvanceStep(activeStep.id + 1);
+        } else {
+          advanceToNextStep();
         }
       }, 4200);
       return;
     }
 
-    // Step 16: Ready AAR Door (Multi-sound: "Copy standby" -> 4000ms walk delay -> "Refuel door check ready")
-    if (activeStep.id === 16) {
+    // AAR_DOOR: Ready AAR Door (Multi-sound: "Copy standby" -> 4000ms walk delay -> "Refuel door check ready")
+    if (currentStepName === 'AAR_DOOR') {
       Ipc.playDrillSound('copy-standby');
       setTimeout(() => {
         Ipc.playDrillSound('refuel-door-ready');
@@ -885,8 +949,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         setIsChiefResponding(false);
         if (currentSubstepIndex < activeStep.substeps.length - 1) {
           onAdvanceSubstep(currentSubstepIndex + 1);
-        } else if (activeStep.id < 18) {
-          onAdvanceStep(activeStep.id + 1);
+        } else {
+          advanceToNextStep();
         }
       }, 5800);
       return;
@@ -894,54 +958,54 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
 
     // Authentic FoxVox audio readback triggered in Rust for standard steps
     let advanceDelay = 1800;
-    switch (activeStep.id) {
-      case 0:
+    switch (currentStepName) {
+      case 'ENGAGE_CHIEF':
         // Native FoxVox profile execution plays start-beep.mp3 on "Engage Crew Chief" when transitioning
         advanceDelay = 1200;
         break;
-      case 1:
+      case 'ELEC_POWER':
         Ipc.playDrillSound('comms-check');
         advanceDelay = 2000;
         break;
-      case 2:
+      case 'JFS_START':
         Ipc.playDrillSound('clear-start-two');
         advanceDelay = 2000;
         break;
-      case 3:
+      case 'SEC_CHECK':
         Ipc.playDrillSound('clear-sec');
         advanceDelay = 2200;
         break;
-      case 4:
-      case 11:
+      case 'PRI_VERIFY':
+      case 'TRIM_CONN':
         Ipc.playDrillSound('copy');
         advanceDelay = 1800;
         break;
-      case 6:
+      case 'EPU_FLOW':
         Ipc.playDrillSound('no-flow');
         advanceDelay = 2000;
         break;
-      case 7:
+      case 'FLIGHT_CONTROLS_CLEAR':
         Ipc.playDrillSound('controls-clear');
         advanceDelay = 2200;
         break;
-      case 8:
+      case 'FLCS_BIT':
         Ipc.playDrillSound('cleared-for-bit');
         advanceDelay = 2000;
         break;
-      case 9:
+      case 'TRIM_VERIFY':
         Ipc.playDrillSound('ready-trim');
         advanceDelay = 2000;
         break;
-      case 12:
-      case 13:
+      case 'BIG_MOVEMENTS':
+      case 'DBU_CHECK':
         Ipc.playDrillSound('controls-still-clear');
         advanceDelay = 2200;
         break;
-      case 17:
+      case 'CHOCKS_REMOVAL':
         // Intentionally empty per user directive
         advanceDelay = 1200;
         break;
-      case 18:
+      case 'FINALE_SALUTE':
         Ipc.playDrillSound('cleared-off');
         advanceDelay = 3500;
         break;
@@ -951,18 +1015,18 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       setIsChiefResponding(false);
       if (currentSubstepIndex < activeStep.substeps.length - 1) {
         onAdvanceSubstep(currentSubstepIndex + 1);
-      } else if (activeStep.id < 18) {
-        onAdvanceStep(activeStep.id + 1);
+      } else {
+        advanceToNextStep();
       }
     }, advanceDelay);
-  }, [activeStep, currentSubstepIndex, onAdvanceSubstep, onAdvanceStep, onConsumeSpeech, onEngageChief]);
+  }, [currentStepName, activeStep, currentSubstepIndex, onAdvanceSubstep, advanceToNextStep, onConsumeSpeech, onEngageChief]);
 
   useEffect(() => {
     if (!lastSpeech.phrase || lastSpeech.status !== 'VERIFIED') return;
     if (lastSpeech.id === lastProcessedSpeechIdRef.current) return;
 
-    // Pilot acknowledgment: Step 01 Substep 4 ("Loud and clear" or continue)
-    if (activeStep.id === 1 && currentSubstepIndex === 3) {
+    // Pilot acknowledgment: ELEC_POWER Substep 4 ("Loud and clear" or continue)
+    if (currentStepName === 'ELEC_POWER' && currentSubstepIndex === 3) {
       const p = lastSpeech.phrase.toUpperCase();
       if (
         p.includes('LOUD AND CLEAR') ||
@@ -978,8 +1042,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       }
     }
 
-    // Step 01 Substep 5: How's Chief (phaseType: 'ACTION')
-    if (activeStep.id === 1 && currentSubstepIndex === 4) {
+    // ELEC_POWER Substep 5: How's Chief (phaseType: 'ACTION')
+    if (currentStepName === 'ELEC_POWER' && currentSubstepIndex === 4) {
       const p = lastSpeech.phrase.toUpperCase();
       const c = (lastSpeech.command || '').toUpperCase();
       const valid = [
@@ -1006,7 +1070,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         setChiefDialogue("Doin' good! How you doing?");
         setTimeout(() => {
           setIsChiefResponding(false);
-          onAdvanceStep(2);
+          advanceToNextStep();
         }, 2500);
         return;
       }
@@ -1018,7 +1082,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     }
 
     const isMatch = matchSubstepPhrase(
-      activeStep.id,
+      currentStepName,
       activeSubstep.order,
       lastSpeech.phrase,
       lastSpeech.command
@@ -1030,19 +1094,21 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     }
   }, [
     lastSpeech,
+    currentStepName,
     activeStep,
     activeSubstep,
     currentSubstepIndex,
-    onAdvanceStep,
+    advanceToNextStep,
     onConsumeSpeech,
     triggerVerbalAdvance,
+    onAdvanceSubstep,
   ]);
 
   // =========================================================================
   // STEP 01: ELEC PANEL LIGHT MATRIX & FLCS TEST HOLD
   // =========================================================================
   const elecPanelLights = useMemo<ElecPanelLights>(() => {
-    if (activeStep.id >= 2) {
+    if (currentStepName !== 'ENGAGE_CHIEF' && currentStepName !== 'ELEC_POWER') {
       // Once engine is running and generators come online, FLCS PMG, MAIN GEN, STBY GEN, and TO FLCS extinguish
       return {
         flcsPmg: false,
@@ -1083,7 +1149,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       };
     }
     return {};
-  }, [activeStep.id, elecSwitchPos, isFlcsPwrTestHeld, flcsPwrTestPassed, epuWarningLampsLit]);
+  }, [currentStepName, elecSwitchPos, isFlcsPwrTestHeld, flcsPwrTestPassed, epuWarningLampsLit]);
 
   const flcsTestLights = useMemo<FlcsPwrLights>(() => {
     if (flcsPwrTestPos === 'TEST' || isFlcsPwrTestHeld) {
@@ -1105,7 +1171,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         if (flcsPwrTestPassed) {
           setFlcsPwrTestTriggered(true); // Disable switch once let go back to NORM
           Sound.playCommit();
-          if (activeStep.id === 1 && currentSubstepIndex === 1) {
+          if (currentStepName === 'ELEC_POWER' && currentSubstepIndex === 1) {
             onAdvanceSubstep(2);
           }
         }
@@ -1127,7 +1193,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     setJfsPosition(pos);
 
     // Accidental selection of START 1 during Step 2 Substep 2 (currentSubstepIndex === 1)
-    if (pos === 'START 1' && activeStep.id === 2 && currentSubstepIndex === 1) {
+    if (pos === 'START 1' && currentStepName === 'JFS_START' && currentSubstepIndex === 1) {
       setIsMistakeRollingBack(true);
       clearMistakeWarning();
       if (mistakeTimeoutRef.current) clearTimeout(mistakeTimeoutRef.current);
@@ -1164,7 +1230,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             advanced = true;
             Sound.playCommit();
             // Automatically advance to Substep 3 (Fuel Introduction) when passing 20%
-            if (activeStep.id === 2 && currentSubstepIndex === 1) {
+            if (currentStepName === 'JFS_START' && currentSubstepIndex === 1) {
               onAdvanceSubstep(2);
             }
           }
@@ -1246,19 +1312,19 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     }, 100);
   };
 
-  // Step 3+: Ensure JFS switch is OFF and RUN light is dark
+  // Ensure JFS switch is OFF when not in JFS_START
   useEffect(() => {
-    if (activeStep.id >= 3) {
+    if (currentStepName !== 'JFS_START') {
       setJfsPosition('OFF');
       setJfsRunLit(false);
     }
-  }, [activeStep.id]);
+  }, [currentStepName]);
 
   // =========================================================================
   // STEP 03: 30-SECOND COUNTDOWN & SEC NOZZLE OVERLAY
   // =========================================================================
   useEffect(() => {
-    if (activeStep.id !== 3 || currentSubstepIndex !== 0) return;
+    if (currentStepName !== 'SEC_CHECK' || currentSubstepIndex !== 0) return;
     const timer = setInterval(() => {
       setSecTimerRemaining((prev) => {
         if (prev <= 1) {
@@ -1271,7 +1337,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [activeStep.id, currentSubstepIndex, onAdvanceSubstep]);
+  }, [currentStepName, currentSubstepIndex, onAdvanceSubstep]);
 
   const handleEngContChange = (pos: EngContSwitchPosition) => {
     Sound.playSwitch();
@@ -1285,7 +1351,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       // Keep FLIR overlay for 3s then close and proceed to Substep 3 (Spool to 73%)
       setTimeout(() => {
         setStep3FlirOpen(false);
-        if (activeStep.id === 3) {
+        if (currentStepName === 'SEC_CHECK') {
           onAdvanceSubstep(3);
         }
       }, 3000);
@@ -1298,7 +1364,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       // Hang for 3 seconds then close and proceed to Substep 2 (Nozzle 100% open verification)
       setTimeout(() => {
         setStep3FlirOpen(false);
-        if (activeStep.id === 4) {
+        if (currentStepName === 'PRI_VERIFY') {
           onAdvanceSubstep(2);
         }
       }, 3000);
@@ -1326,7 +1392,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     setEpuSwitch(pos);
 
     // Accidental selection of ON during Step 5 Substep 2 (currentSubstepIndex === 1)
-    if (pos === 'ON' && activeStep.id === 5 && currentSubstepIndex === 1) {
+    if (pos === 'ON' && currentStepName === 'EPU_PIN' && currentSubstepIndex === 1) {
       setIsMistakeRollingBack(true);
       clearMistakeWarning();
       if (mistakeTimeoutRef.current) clearTimeout(mistakeTimeoutRef.current);
@@ -1346,16 +1412,16 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       return;
     }
 
-    if (pos === 'OFF' && activeStep.id === 5 && currentSubstepIndex === 1) {
+    if (pos === 'OFF' && currentStepName === 'EPU_PIN' && currentSubstepIndex === 1) {
       clearMistakeWarning();
       clearMistakeRollback();
       Sound.playCommit();
       onAdvanceSubstep(2);
-    } else if (pos === 'NORM' && activeStep.id === 5 && currentSubstepIndex === 3) {
+    } else if (pos === 'NORM' && currentStepName === 'EPU_PIN' && currentSubstepIndex === 3) {
       clearMistakeWarning();
       clearMistakeRollback();
       Sound.playCommit();
-      onAdvanceStep(6);
+      advanceToNextStep();
     }
   };
 
@@ -1400,7 +1466,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
 
     // Only advance if the user held consecutively for 5 full seconds
     if (epuHoldCompletedRef.current) {
-      if (activeStep.id === 6 && currentSubstepIndex === 3) {
+      if (currentStepName === 'EPU_FLOW' && currentSubstepIndex === 3) {
         // EPU GEN and EPU PMG warning lights show up on release
         setStep6ThrottleAngle(2);
         setTachRpm(82);
@@ -1420,14 +1486,14 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   // STEP 07: FLIGHT CONTROL EXERCISE (20s WARM-UP)
   // =========================================================================
   useEffect(() => {
-    if (activeStep.id !== 7) {
+    if (currentStepName !== 'FLIGHT_CONTROLS_CLEAR') {
       setControlWarmupRemaining(20);
       setStep7CardVisible(true);
     }
-  }, [activeStep.id]);
+  }, [currentStepName]);
 
   useEffect(() => {
-    if (activeStep.id !== 7 || currentSubstepIndex !== 2) return;
+    if (currentStepName !== 'FLIGHT_CONTROLS_CLEAR' || currentSubstepIndex !== 2) return;
 
     const interval = setInterval(() => {
       setControlWarmupRemaining((prev) => {
@@ -1441,7 +1507,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [activeStep.id, currentSubstepIndex]);
+  }, [currentStepName, currentSubstepIndex]);
 
   // =========================================================================
   // STEP 08: FLCS BIT (15-SECOND VIDEO PLAYBACK IN FLIR OVERLAY)
@@ -1457,7 +1523,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
 
   // Step 08 Substep 3: 15-Second Hands-off BIT Surface Sweep Timer
   useEffect(() => {
-    if (activeStep.id !== 8 || currentSubstepIndex !== 2) {
+    if (currentStepName !== 'FLCS_BIT' || currentSubstepIndex !== 2) {
       if (bitTimerRef.current) {
         clearInterval(bitTimerRef.current);
         bitTimerRef.current = null;
@@ -1494,7 +1560,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         bitTimerRef.current = null;
       }
     };
-  }, [activeStep.id, currentSubstepIndex, onAdvanceSubstep]);
+  }, [currentStepName, currentSubstepIndex, onAdvanceSubstep]);
 
   // =========================================================================
   // STEP 09 - 11: MANUAL TRIM PANEL & WHEEL RE-CENTERING
@@ -1505,7 +1571,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
 
   // Reset Step 11 trim checks when leaving Step 11
   useEffect(() => {
-    if (activeStep.id !== 11) {
+    if (currentStepName !== 'TRIM_CONN') {
       setTrimPitchUpDone(false);
       setTrimPitchDownDone(false);
       setTrimRollLeftDone(false);
@@ -1513,11 +1579,11 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       setTrimYawLeftDone(false);
       setTrimYawRightDone(false);
     }
-  }, [activeStep.id]);
+  }, [currentStepName]);
 
   // Step 11 Substep 2: User-driven 6-Axis Trim Deflection Checks (Past 1.0 or -1.0)
   useEffect(() => {
-    if (activeStep.id !== 11 || currentSubstepIndex !== 2) return;
+    if (currentStepName !== 'TRIM_CONN' || currentSubstepIndex !== 2) return;
 
     if (pitchTrim <= -1.0 && !trimPitchUpDone) {
       setTrimPitchUpDone(true);
@@ -1544,7 +1610,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       Ipc.playDrillSound('trim-yaw-right');
     }
   }, [
-    activeStep.id,
+    currentStepName,
     currentSubstepIndex,
     pitchTrim,
     rollTrim,
@@ -1559,7 +1625,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
 
   // Step 11 Substep 2 Advance: When all 6 axes are verified, proceed directly to centering step
   useEffect(() => {
-    if (activeStep.id === 11 && currentSubstepIndex === 2) {
+    if (currentStepName === 'TRIM_CONN' && currentSubstepIndex === 2) {
       if (
         trimPitchUpDone &&
         trimPitchDownDone &&
@@ -1575,7 +1641,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       }
     }
   }, [
-    activeStep.id,
+    currentStepName,
     currentSubstepIndex,
     trimPitchUpDone,
     trimPitchDownDone,
@@ -1586,25 +1652,25 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     onAdvanceSubstep,
   ]);
 
-  // Advance to Step 12 when all trims re-centered
+  // Advance to next step when all trims re-centered
   useEffect(() => {
-    if (activeStep.id === 11 && currentSubstepIndex === 3) {
+    if (currentStepName === 'TRIM_CONN' && currentSubstepIndex === 3) {
       if (isTrimsCentered && !hasAdvancedStep11Ref.current) {
         hasAdvancedStep11Ref.current = true;
         Sound.playCommit();
         const t = setTimeout(() => {
-          onAdvanceStep(12);
+          advanceToNextStep();
         }, 500);
         return () => clearTimeout(t);
       }
     } else {
       hasAdvancedStep11Ref.current = false;
     }
-  }, [activeStep.id, currentSubstepIndex, isTrimsCentered, onAdvanceStep]);
+  }, [currentStepName, currentSubstepIndex, isTrimsCentered, advanceToNextStep]);
 
   // Step 12 Substep 2: Roll Axis Detection (20% deflection from neutral: <0.40 or >0.60; order does not matter)
   useEffect(() => {
-    if (activeStep.id === 12 && currentSubstepIndex === 1) {
+    if (currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 1) {
       if (rollDisplay < 0.40 && !rollLeftDone) {
         setRollLeftDone(true);
         Ipc.playDrillSound('big-roll-left');
@@ -1614,11 +1680,11 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         Ipc.playDrillSound('big-roll-right');
       }
     }
-  }, [activeStep.id, currentSubstepIndex, rollDisplay, rollLeftDone, rollRightDone]);
+  }, [currentStepName, currentSubstepIndex, rollDisplay, rollLeftDone, rollRightDone]);
 
   // Step 12 Substep 2 Advance: Trigger when both roll directions completed
   useEffect(() => {
-    if (activeStep.id === 12 && currentSubstepIndex === 1 && rollLeftDone && rollRightDone) {
+    if (currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 1 && rollLeftDone && rollRightDone) {
       if (!hasAdvancedStep12SubstepRef.current) {
         hasAdvancedStep12SubstepRef.current = true;
         Sound.playCommit();
@@ -1628,11 +1694,11 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         return () => clearTimeout(t);
       }
     }
-  }, [activeStep.id, currentSubstepIndex, rollLeftDone, rollRightDone, onAdvanceSubstep]);
+  }, [currentStepName, currentSubstepIndex, rollLeftDone, rollRightDone, onAdvanceSubstep]);
 
   // Step 12 Substep 3: Pitch Axis Detection (20% deflection: Strict order: Nose Up >0.60 first, then Nose Down <0.40)
   useEffect(() => {
-    if (activeStep.id === 12 && currentSubstepIndex === 2) {
+    if (currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 2) {
       if (pitchDisplay > 0.60 && !pitchNoseUpDone) {
         setPitchNoseUpDone(true);
         Ipc.playDrillSound('big-nose-up');
@@ -1642,11 +1708,11 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         Ipc.playDrillSound('big-nose-down');
       }
     }
-  }, [activeStep.id, currentSubstepIndex, pitchDisplay, pitchNoseUpDone, pitchNoseDownDone]);
+  }, [currentStepName, currentSubstepIndex, pitchDisplay, pitchNoseUpDone, pitchNoseDownDone]);
 
   // Step 12 Substep 3 Advance: Trigger when Nose Down reached after Nose Up
   useEffect(() => {
-    if (activeStep.id === 12 && currentSubstepIndex === 2 && pitchNoseUpDone && pitchNoseDownDone) {
+    if (currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 2 && pitchNoseUpDone && pitchNoseDownDone) {
       if (!hasAdvancedStep12SubstepRef.current) {
         hasAdvancedStep12SubstepRef.current = true;
         Sound.playCommit();
@@ -1656,11 +1722,11 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         return () => clearTimeout(t);
       }
     }
-  }, [activeStep.id, currentSubstepIndex, pitchNoseUpDone, pitchNoseDownDone, onAdvanceSubstep]);
+  }, [currentStepName, currentSubstepIndex, pitchNoseUpDone, pitchNoseDownDone, onAdvanceSubstep]);
 
   // Step 12 Substep 4: MPO Detection (DirectInput hardware binding or simulate)
   useEffect(() => {
-    if (activeStep.id === 12 && currentSubstepIndex === 3) {
+    if (currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 3) {
       if (telemetry.mpo_active && !hasAdvancedStep12SubstepRef.current) {
         hasAdvancedStep12SubstepRef.current = true;
         Sound.playCommit();
@@ -1674,11 +1740,11 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         }, 600);
       }
     }
-  }, [activeStep.id, currentSubstepIndex, telemetry.mpo_active, onAdvanceSubstep]);
+  }, [currentStepName, currentSubstepIndex, telemetry.mpo_active, onAdvanceSubstep]);
 
   // Step 12 Substep 5: Yaw Axis Detection (20% deflection from neutral: <0.40 or >0.60; order does not matter)
   useEffect(() => {
-    if (activeStep.id === 12 && currentSubstepIndex === 4) {
+    if (currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 4) {
       if (yawDisplay < 0.40 && !yawLeftDone) {
         setYawLeftDone(true);
         Ipc.playDrillSound('big-yaw-left');
@@ -1688,11 +1754,11 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         Ipc.playDrillSound('big-yaw-right');
       }
     }
-  }, [activeStep.id, currentSubstepIndex, yawDisplay, yawLeftDone, yawRightDone]);
+  }, [currentStepName, currentSubstepIndex, yawDisplay, yawLeftDone, yawRightDone]);
 
   // Step 12 Substep 5 Advance: Trigger when both rudder directions completed
   useEffect(() => {
-    if (activeStep.id === 12 && currentSubstepIndex === 4 && yawLeftDone && yawRightDone) {
+    if (currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 4 && yawLeftDone && yawRightDone) {
       if (!hasAdvancedStep12SubstepRef.current) {
         hasAdvancedStep12SubstepRef.current = true;
         Sound.playCommit();
@@ -1702,7 +1768,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         return () => clearTimeout(t);
       }
     }
-  }, [activeStep.id, currentSubstepIndex, yawLeftDone, yawRightDone, onAdvanceSubstep]);
+  }, [currentStepName, currentSubstepIndex, yawLeftDone, yawRightDone, onAdvanceSubstep]);
 
   // =========================================================================
   // STEP 12 & 13: DYNAMIC FLIR SURFACE RESPONSE & SPEEDBRAKES & DBU
@@ -1711,7 +1777,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     if (speedbrakesOpen) {
       return { src: '/crewchief/FLCS/spdBrakes.webp', label: 'SPEEDBRAKES OPEN' };
     }
-    if ((activeStep.id === 12 && currentSubstepIndex === 3 && telemetry.mpo_active) || mpoKickActive) {
+    if ((currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 3 && telemetry.mpo_active) || mpoKickActive) {
       return { src: '/crewchief/FLCS/mpoKick.webp', label: 'MPO ACTIVE' };
     }
     if (rollDisplay < 0.38) {
@@ -1733,11 +1799,11 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       return { src: '/crewchief/FLCS/rudderRight.webp', label: 'FLCS RUDDER RIGHT' };
     }
     return { src: '/crewchief/FLCS/neutral.webp', label: 'FLCS NEUTRAL' };
-  }, [activeStep.id, currentSubstepIndex, speedbrakesOpen, telemetry.mpo_active, mpoKickActive, rollDisplay, pitchDisplay, yawDisplay]);
+  }, [currentStepName, currentSubstepIndex, speedbrakesOpen, telemetry.mpo_active, mpoKickActive, rollDisplay, pitchDisplay, yawDisplay]);
 
   // Unified FLIR overlay state across all training scenes
   const flirOverlayState = useMemo(() => {
-    if (activeStep.id === 3 || activeStep.id === 4) {
+    if (currentStepName === 'SEC_CHECK' || currentStepName === 'PRI_VERIFY') {
       return {
         isOpen: step3FlirOpen,
         src: step3FlirSrc,
@@ -1745,7 +1811,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         alt: 'Engine Nozzle Petals',
       };
     }
-    if (activeStep.id === 8) {
+    if (currentStepName === 'FLCS_BIT') {
       return {
         isOpen: flcsBitActive,
         src: '/crewchief/BIT.mp4',
@@ -1753,7 +1819,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         alt: 'FLCS BIT Automated Surface Sweep',
       };
     }
-    if (activeStep.id === 12 || activeStep.id === 13) {
+    if (currentStepName === 'BIG_MOVEMENTS' || currentStepName === 'DBU_CHECK') {
       return {
         isOpen: true,
         src: dynamicFlirInfo.src,
@@ -1767,12 +1833,12 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       targetLabel: '',
       alt: '',
     };
-  }, [activeStep.id, step3FlirOpen, step3FlirSrc, flcsBitActive, dynamicFlirInfo]);
+  }, [currentStepName, step3FlirOpen, step3FlirSrc, flcsBitActive, dynamicFlirInfo]);
 
   // Top-Right Cockpit Locator Overlay: Programmatically driven by cockpitLocatorConfig
   const locatorConfig = useMemo(() => {
-    return getCockpitLocatorConfig(activeStep.id, currentSubstepIndex);
-  }, [activeStep.id, currentSubstepIndex]);
+    return getCockpitLocatorConfig(currentStepName, currentSubstepIndex);
+  }, [currentStepName, currentSubstepIndex]);
 
   // Toggle speedbrakes in Step 12 Substep 6
   const handleToggleSpeedbrakes = () => {
@@ -1787,7 +1853,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       Sound.playCommit();
       Ipc.playDrillSound('speedbrakes-closed');
       setTimeout(() => {
-        onAdvanceStep(13); // Proceed to Step 13 (DBU)
+        advanceToNextStep(); // Proceed to next step (DBU)
       }, 800);
     }
   };
@@ -1796,16 +1862,16 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   const handleToggleDbu = (val: boolean) => {
     Sound.playSwitch();
     setDbuSwitchOn(val);
-    if (activeStep.id === 13) {
+    if (currentStepName === 'DBU_CHECK') {
       if (currentSubstepIndex === 1 && val) {
         // Substep 13-2: Switched to ON -> advance to Substep 13-3
         Sound.playCommit();
         onAdvanceSubstep(2);
       } else if (currentSubstepIndex === 3 && !val) {
-        // Substep 13-4: Switched to OFF -> advance to Step 14
+        // Substep 13-4: Switched to OFF -> advance to next step
         Sound.playCommit();
         setTimeout(() => {
-          onAdvanceStep(14);
+          advanceToNextStep();
         }, 800);
       }
     }
@@ -1813,7 +1879,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
 
   // Step 13: Flight stick & rudder movement audio callouts during Digital Backup Check
   useEffect(() => {
-    if (activeStep.id !== 13 || !dbuSwitchOn) {
+    if (currentStepName !== 'DBU_CHECK' || !dbuSwitchOn) {
       dbuRollAnnouncedRef.current = null;
       dbuPitchAnnouncedRef.current = null;
       dbuYawAnnouncedRef.current = null;
@@ -1882,13 +1948,13 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         }, 1200);
       }
     }
-  }, [activeStep.id, currentSubstepIndex, dbuSwitchOn, rollDisplay, pitchDisplay, yawDisplay, onAdvanceSubstep]);
+  }, [currentStepName, currentSubstepIndex, dbuSwitchOn, rollDisplay, pitchDisplay, yawDisplay, onAdvanceSubstep]);
 
   // =========================================================================
   // STEP 14 & 15: PHYSICAL BRAKE PEDAL INTEGRATION (MOVEMENT & IDLE DETECTION)
   // =========================================================================
   useEffect(() => {
-    if (activeStep.id === 14 && currentSubstepIndex === 1) {
+    if (currentStepName === 'LEFT_BRAKE' && currentSubstepIndex === 1) {
       if (leftBrakeDeflection >= 0.20) {
         if (leftBrakeIdleTimerRef.current) {
           clearTimeout(leftBrakeIdleTimerRef.current);
@@ -1914,7 +1980,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       }
     }
 
-    if (activeStep.id === 15 && currentSubstepIndex === 1) {
+    if (currentStepName === 'RIGHT_BRAKE' && currentSubstepIndex === 1) {
       if (rightBrakeDeflection >= 0.20) {
         if (rightBrakeIdleTimerRef.current) {
           clearTimeout(rightBrakeIdleTimerRef.current);
@@ -1939,37 +2005,37 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         }
       }
     }
-    if (activeStep.id === 3 && currentSubstepIndex === 3) {
+    if (currentStepName === 'SEC_CHECK' && currentSubstepIndex === 3) {
       if (leftBrakeDeflection >= 0.15 && rightBrakeDeflection >= 0.15) {
         Sound.playCommit();
         onAdvanceSubstep(4);
       }
     }
-    if (activeStep.id === 4 && currentSubstepIndex === 3) {
+    if (currentStepName === 'PRI_VERIFY' && currentSubstepIndex === 3) {
       if (leftBrakeDeflection <= 0.15 && rightBrakeDeflection <= 0.15) {
         Sound.playCommit();
-        onAdvanceStep(5);
+        advanceToNextStep();
       }
     }
-    if (activeStep.id === 6 && currentSubstepIndex === 1) {
+    if (currentStepName === 'EPU_FLOW' && currentSubstepIndex === 1) {
       if (leftBrakeDeflection >= 0.15 && rightBrakeDeflection >= 0.15) {
         Sound.playCommit();
         onAdvanceSubstep(2);
       }
     }
-    if (activeStep.id === 6 && currentSubstepIndex === 5) {
+    if (currentStepName === 'EPU_FLOW' && currentSubstepIndex === 5) {
       if (leftBrakeDeflection <= 0.15 && rightBrakeDeflection <= 0.15) {
         Sound.playCommit();
-        onAdvanceStep(7);
+        advanceToNextStep();
       }
     }
-    if (activeStep.id === 17 && currentSubstepIndex === 0) {
+    if (currentStepName === 'CHOCKS_REMOVAL' && currentSubstepIndex === 0) {
       if (leftBrakeDeflection >= 0.15 && rightBrakeDeflection >= 0.15) {
         Sound.playCommit();
         onAdvanceSubstep(1);
       }
     }
-  }, [activeStep.id, currentSubstepIndex, leftBrakeDeflection, rightBrakeDeflection, onAdvanceSubstep]);
+  }, [currentStepName, currentSubstepIndex, leftBrakeDeflection, rightBrakeDeflection, onAdvanceSubstep, advanceToNextStep]);
 
   // =========================================================================
   // STEP 16: FUEL PANEL / AAR DOOR CYCLE
@@ -1977,7 +2043,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   const handleAarSwitchChange = (pos: any) => {
     Sound.playSwitch();
     setAirRefuelDoorPos(pos);
-    if (activeStep.id === 16) {
+    if (currentStepName === 'AAR_DOOR') {
       if (pos === 'OPEN' && currentSubstepIndex === 1) {
         Sound.playCommit();
         Ipc.playDrillSound('aar-door-open');
@@ -1986,7 +2052,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         Sound.playCommit();
         Ipc.playDrillSound('aar-door-closed');
         setTimeout(() => {
-          onAdvanceStep(17);
+          advanceToNextStep();
         }, 1000);
       }
     }
@@ -2015,7 +2081,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* CARD: Welcome & Interphone (Step 0)                     */}
             {/* -------------------------------------------------------- */}
-            {activeStep.id === 0 && (
+            {currentStepName === 'ENGAGE_CHIEF' && (
               <motion.div
                 key="card-welcome"
                 layout
@@ -2057,7 +2123,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* PANEL: Solotürk Crew Chief Interphone (Step 1 Substep 5) */}
             {/* -------------------------------------------------------- */}
-            {activeStep.id === 1 && currentSubstepIndex === 4 && (
+            {currentStepName === 'ELEC_POWER' && currentSubstepIndex === 4 && (
               <motion.div
                 key="panel-crew-chief-soloturk"
                 layout
@@ -2099,7 +2165,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* PANEL: TEST Panel (Step 1, Step 6-3)                     */}
             {/* -------------------------------------------------------- */}
-            {((activeStep.id === 1 && currentSubstepIndex < 4) || (activeStep.id === 6 && currentSubstepIndex === 3)) && (
+            {((currentStepName === 'ELEC_POWER' && currentSubstepIndex < 4) || (currentStepName === 'EPU_FLOW' && currentSubstepIndex === 3)) && (
               <motion.div
                 key="panel-test"
                 layout
@@ -2116,22 +2182,22 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 className="flex flex-col items-center gap-2"
               >
                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                  {activeStep.id === 6 ? 'TEST PANEL (HOLD EPU/GEN)' : 'TEST PANEL (LEFT CONSOLE)'}
+                  {currentStepName === 'EPU_FLOW' ? 'TEST PANEL (HOLD EPU/GEN)' : 'TEST PANEL (LEFT CONSOLE)'}
                 </span>
                 <TestPanel
                   switches={
-                    activeStep.id === 6
+                    currentStepName === 'EPU_FLOW'
                       ? { epuGen: epuGenSwitchHeld }
                       : { flcsPwrTest: flcsPwrTestPos }
                   }
                   onSwitchChange={handleTestPanelSwitchChange}
                   lights={
-                    activeStep.id === 6
+                    currentStepName === 'EPU_FLOW'
                       ? epuAirLightLit ? { a: true, b: true, c: true, d: true } : {}
                       : flcsTestLights
                   }
                   allowSwitchClick={
-                    activeStep.id === 6
+                    currentStepName === 'EPU_FLOW'
                       ? { epuGen: true }
                       : { flcsPwrTest: currentSubstepIndex === 1 && !flcsPwrTestTriggered }
                   }
@@ -2143,7 +2209,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* PANEL: ELEC Power Panel (Step 1, Step 6-3 & 6-4)         */}
             {/* -------------------------------------------------------- */}
-            {((activeStep.id === 1 && currentSubstepIndex < 4) || (activeStep.id === 6 && (currentSubstepIndex === 3 || currentSubstepIndex === 4))) && (
+            {((currentStepName === 'ELEC_POWER' && currentSubstepIndex < 4) || (currentStepName === 'EPU_FLOW' && (currentSubstepIndex === 3 || currentSubstepIndex === 4))) && (
               <motion.div
                 key="panel-elec-power"
                 layout
@@ -2160,12 +2226,12 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 className="flex flex-col items-center gap-2"
               >
                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                  {activeStep.id === 6 ? 'ELEC POWER PANEL (EPU GEN & PMG LAMPS)' : 'ELEC POWER PANEL (RIGHT CONSOLE)'}
+                  {currentStepName === 'EPU_FLOW' ? 'ELEC POWER PANEL (EPU GEN & PMG LAMPS)' : 'ELEC POWER PANEL (RIGHT CONSOLE)'}
                 </span>
                 <ElecPowerPanel
-                  switchPosition={activeStep.id === 6 ? 'MAIN_PWR' : elecSwitchPos}
+                  switchPosition={currentStepName === 'EPU_FLOW' ? 'MAIN_PWR' : elecSwitchPos}
                   onSwitchChange={(pos) => {
-                    if (activeStep.id === 1 && currentSubstepIndex === 0) {
+                    if (currentStepName === 'ELEC_POWER' && currentSubstepIndex === 0) {
                       Sound.playSwitch();
                       setElecSwitchPos(pos);
                       if (pos === 'MAIN_PWR') {
@@ -2175,7 +2241,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     }
                   }}
                   lights={elecPanelLights}
-                  allowSwitchClick={activeStep.id === 1 ? { mainPwr: currentSubstepIndex === 0 } : false}
+                  allowSwitchClick={currentStepName === 'ELEC_POWER' ? { mainPwr: currentSubstepIndex === 0 } : false}
                   className="scale-95"
                 />
               </motion.div>
@@ -2184,7 +2250,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* PANEL: ENG & JET START Panel (Step 2 Substeps 0 & 1, Step 3, Step 4) */}
             {/* -------------------------------------------------------- */}
-            {((activeStep.id === 2 && currentSubstepIndex < 2) || activeStep.id === 3 || activeStep.id === 4) && (
+            {((currentStepName === 'JFS_START' && currentSubstepIndex < 2) || currentStepName === 'SEC_CHECK' || currentStepName === 'PRI_VERIFY') && (
               <motion.div
                 key="panel-eng-jet-start"
                 layout
@@ -2211,13 +2277,13 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   onEngContChange={handleEngContChange}
                   allowSwitchClick={{
                     jfsSwitch:
-                      activeStep.id === 2 &&
+                      currentStepName === 'JFS_START' &&
                       currentSubstepIndex === 1 &&
                       jfsPosition === 'OFF' &&
                       !isMistakeRollingBack,
                     engContSwitch:
-                      (activeStep.id === 3 && currentSubstepIndex === 2 && engContPosition === 'PRI') ||
-                      (activeStep.id === 4 && currentSubstepIndex === 1 && engContPosition === 'SEC'),
+                      (currentStepName === 'SEC_CHECK' && currentSubstepIndex === 2 && engContPosition === 'PRI') ||
+                      (currentStepName === 'PRI_VERIFY' && currentSubstepIndex === 1 && engContPosition === 'SEC'),
                   }}
                   className="scale-95"
                 />
@@ -2227,9 +2293,9 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* PANEL: Throttle Quadrant (Step 2-3+, Step 3-4+, Step 6-2 & 6-4) */}
             {/* -------------------------------------------------------- */}
-            {((activeStep.id === 2 && currentSubstepIndex >= 2) ||
-              (activeStep.id === 3 && currentSubstepIndex >= 4) ||
-              (activeStep.id === 6 && (currentSubstepIndex === 2 || currentSubstepIndex === 4))) && (
+            {((currentStepName === 'JFS_START' && currentSubstepIndex >= 2) ||
+              (currentStepName === 'SEC_CHECK' && currentSubstepIndex >= 4) ||
+              (currentStepName === 'EPU_FLOW' && (currentSubstepIndex === 2 || currentSubstepIndex === 4))) && (
               <motion.div
                 key="panel-throttle"
                 layout
@@ -2246,9 +2312,9 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 className="flex flex-col items-center gap-2"
               >
                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                  {activeStep.id === 2
+                  {currentStepName === 'JFS_START'
                     ? 'THROTTLE (CUTOFF ➔ IDLE)'
-                    : activeStep.id === 3
+                    : currentStepName === 'SEC_CHECK'
                     ? currentSubstepIndex === 5
                       ? 'THROTTLE (RETARD TO IDLE)'
                       : 'THROTTLE (SPOOL TO 73% RPM)'
@@ -2256,7 +2322,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     ? 'THROTTLE (RETARD TO IDLE)'
                     : 'THROTTLE (SPOOL TO 82% RPM)'}
                 </span>
-                {activeStep.id === 2 ? (
+                {currentStepName === 'JFS_START' ? (
                   <ThrottleQuadrant
                     position={throttlePosition}
                     pointA="CUTOFF"
@@ -2269,7 +2335,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                       }
                     }}
                   />
-                ) : activeStep.id === 3 ? (
+                ) : currentStepName === 'SEC_CHECK' ? (
                   <ThrottleQuadrant
                     position={step4ThrottleAngle >= -3 ? 'MIL' : 'IDLE'}
                     angle={step4ThrottleAngle}
@@ -2293,7 +2359,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                         setTachRpm(63);
                         Sound.playCommit();
                         setTimeout(() => {
-                          onAdvanceStep(4);
+                          advanceToNextStep();
                         }, 500);
                       }
                     }}
@@ -2309,7 +2375,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                       } else if (currentSubstepIndex === 5 && computedRpm <= 65) {
                         Sound.playCommit();
                         setTimeout(() => {
-                          onAdvanceStep(4);
+                          advanceToNextStep();
                         }, 500);
                       }
                     }}
@@ -2355,7 +2421,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* GAUGE: Tachometer % RPM (Step 2, 3, 4, 6)                */}
             {/* -------------------------------------------------------- */}
-            {(activeStep.id === 2 || activeStep.id === 3 || activeStep.id === 4 || (activeStep.id === 6 && currentSubstepIndex >= 2)) && (
+            {(currentStepName === 'JFS_START' || currentStepName === 'SEC_CHECK' || currentStepName === 'PRI_VERIFY' || (currentStepName === 'EPU_FLOW' && currentSubstepIndex >= 2)) && (
               <motion.div
                 key="gauge-tach-rpm"
                 layout
@@ -2381,7 +2447,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* GAUGE: FTIT Indicator (Step 2, Substep 2+)               */}
             {/* -------------------------------------------------------- */}
-            {activeStep.id === 2 && currentSubstepIndex >= 2 && (
+            {currentStepName === 'JFS_START' && currentSubstepIndex >= 2 && (
               <motion.div
                 key="gauge-ftit"
                 layout
@@ -2407,7 +2473,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* GAUGE: Hydraulic Pressure (Step 2, Substep 2+)            */}
             {/* -------------------------------------------------------- */}
-            {activeStep.id === 2 && currentSubstepIndex >= 2 && (
+            {currentStepName === 'JFS_START' && currentSubstepIndex >= 2 && (
               <motion.div
                 key="gauge-hyd-press"
                 layout
@@ -2433,7 +2499,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* GAUGE: Exhaust Nozzle Position (Step 3 & Step 4)         */}
             {/* -------------------------------------------------------- */}
-            {(activeStep.id === 3 || activeStep.id === 4) && (
+            {(currentStepName === 'SEC_CHECK' || currentStepName === 'PRI_VERIFY') && (
               <motion.div
                 key="gauge-noz-pos"
                 layout
@@ -2459,7 +2525,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* PANEL: EPU Panel (Step 5, Step 6-0 to 6-3)               */}
             {/* -------------------------------------------------------- */}
-            {(activeStep.id === 5 || (activeStep.id === 6 && currentSubstepIndex <= 3)) && (
+            {(currentStepName === 'EPU_PIN' || (currentStepName === 'EPU_FLOW' && currentSubstepIndex <= 3)) && (
               <motion.div
                 key="panel-epu"
                 layout
@@ -2484,7 +2550,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                   lights={{ runLight: epuRunLightLit, air: epuAirLightLit }}
                   allowSwitchClick={{
                     epuSwitch:
-                      activeStep.id === 5 &&
+                      currentStepName === 'EPU_PIN' &&
                       !isMistakeRollingBack &&
                       ((currentSubstepIndex === 1 && epuSwitch === 'NORM') ||
                         (currentSubstepIndex === 3 && epuSwitch === 'OFF')),
@@ -2497,7 +2563,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* CARD: EPU Ground Safety Pin (Step 5, Substeps 0 & 1)     */}
             {/* -------------------------------------------------------- */}
-            {activeStep.id === 5 && currentSubstepIndex < 3 && (
+            {currentStepName === 'EPU_PIN' && currentSubstepIndex < 3 && (
               <motion.div
                 key="card-epu-pin"
                 layout
@@ -2534,7 +2600,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* CARD: 6-Ft Exclusion Zone (Step 7, Substeps 0 & 1)       */}
             {/* -------------------------------------------------------- */}
-            {activeStep.id === 7 && currentSubstepIndex < 2 && step7CardVisible && (
+            {currentStepName === 'FLIGHT_CONTROLS_CLEAR' && currentSubstepIndex < 2 && step7CardVisible && (
               <motion.div
                 key="card-6ft-exclusion"
                 layout
@@ -2569,7 +2635,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* CARD: Modernized FLCS Deflection Monitor (Step 7, 12, 13) */}
             {/* -------------------------------------------------------- */}
-            {(activeStep.id === 7 || activeStep.id === 12 || activeStep.id === 13) && (
+            {(currentStepName === 'FLIGHT_CONTROLS_CLEAR' || currentStepName === 'BIG_MOVEMENTS' || currentStepName === 'DBU_CHECK') && (
               <motion.div
                 key="card-flcs-deflection"
                 layout
@@ -2585,7 +2651,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 style={{ willChange: 'opacity, transform' }}
               >
                 <TacticalControlInputCard
-                  title={activeStep.id === 7 ? 'FLCS // SURFACE DEFLECTION' : 'FLCS // DEFLECTION MONITOR'}
+                  title={currentStepName === 'FLIGHT_CONTROLS_CLEAR' ? 'FLCS // SURFACE DEFLECTION' : 'FLCS // DEFLECTION MONITOR'}
                   roll={rollDisplay}
                   pitch={pitchDisplay}
                   yaw={yawDisplay}
@@ -2601,7 +2667,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* PANEL: FLT CONTROL Panel (Step 8: BIT, Step 13: DBU)     */}
             {/* -------------------------------------------------------- */}
-            {(activeStep.id === 8 || activeStep.id === 13) && (
+            {(currentStepName === 'FLCS_BIT' || currentStepName === 'DBU_CHECK') && (
               <motion.div
                 key="panel-flt-control"
                 layout
@@ -2618,25 +2684,25 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 className="flex flex-col items-center gap-2"
               >
                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                  {activeStep.id === 8 ? 'FLT CONTROL PANEL (FLCS BIT)' : 'FLT CONTROL PANEL (DBU)'}
+                  {currentStepName === 'FLCS_BIT' ? 'FLT CONTROL PANEL (FLCS BIT)' : 'FLT CONTROL PANEL (DBU)'}
                 </span>
                 <FltControlPanel
                   switches={
-                    activeStep.id === 8
+                    currentStepName === 'FLCS_BIT'
                       ? { bit: flcsBitSwitch }
                       : { digitalBackup: dbuSwitchOn }
                   }
                   onSwitchChange={(key, val) => {
-                    if (activeStep.id === 8 && key === 'bit' && !flcsBitActive) {
+                    if (currentStepName === 'FLCS_BIT' && key === 'bit' && !flcsBitActive) {
                       handleTriggerFlcsBit();
-                    } else if (activeStep.id === 13 && key === 'digitalBackup') {
+                    } else if (currentStepName === 'DBU_CHECK' && key === 'digitalBackup') {
                       handleToggleDbu(val);
                     }
                   }}
-                  lights={activeStep.id === 8 ? { run: flcsBitActive } : undefined}
+                  lights={currentStepName === 'FLCS_BIT' ? { run: flcsBitActive } : undefined}
                   allowSwitchClick={{
-                    bit: activeStep.id === 8 && currentSubstepIndex === 1 && !flcsBitActive,
-                    digitalBackup: activeStep.id === 13 && (currentSubstepIndex === 1 || currentSubstepIndex === 3),
+                    bit: currentStepName === 'FLCS_BIT' && currentSubstepIndex === 1 && !flcsBitActive,
+                    digitalBackup: currentStepName === 'DBU_CHECK' && (currentSubstepIndex === 1 || currentSubstepIndex === 3),
                   }}
                   className="scale-95"
                 />
@@ -2646,7 +2712,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* PANEL: MANUAL TRIM Panel (Step 9, 10, 11)                */}
             {/* -------------------------------------------------------- */}
-            {(activeStep.id === 9 || activeStep.id === 10 || activeStep.id === 11) && (
+            {(currentStepName === 'TRIM_VERIFY' || currentStepName === 'TRIM_DISC' || currentStepName === 'TRIM_CONN') && (
               <motion.div
                 key="panel-manual-trim"
                 layout
@@ -2676,10 +2742,10 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     Sound.playClick();
                     if (key === 'trimDisc') {
                       setTrimDiscSwitch(val as boolean);
-                      if (val === false && activeStep.id === 10 && currentSubstepIndex === 0) {
+                      if (val === false && currentStepName === 'TRIM_DISC' && currentSubstepIndex === 0) {
                         Sound.playCommit();
                         onAdvanceSubstep(1);
-                      } else if (val === true && activeStep.id === 11 && currentSubstepIndex === 0) {
+                      } else if (val === true && currentStepName === 'TRIM_CONN' && currentSubstepIndex === 0) {
                         Sound.playCommit();
                         onAdvanceSubstep(1);
                       }
@@ -2692,10 +2758,10 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     }
                   }}
                   allowSwitchClick={{
-                    trimDisc: (activeStep.id === 10 && currentSubstepIndex === 0) || (activeStep.id === 11 && currentSubstepIndex === 0),
-                    rollTrim: activeStep.id === 11 && (currentSubstepIndex === 2 || currentSubstepIndex === 3),
-                    pitchTrim: activeStep.id === 11 && (currentSubstepIndex === 2 || currentSubstepIndex === 3),
-                    yawTrim: activeStep.id === 11 && (currentSubstepIndex === 2 || currentSubstepIndex === 3),
+                    trimDisc: (currentStepName === 'TRIM_DISC' && currentSubstepIndex === 0) || (currentStepName === 'TRIM_CONN' && currentSubstepIndex === 0),
+                    rollTrim: currentStepName === 'TRIM_CONN' && (currentSubstepIndex === 2 || currentSubstepIndex === 3),
+                    pitchTrim: currentStepName === 'TRIM_CONN' && (currentSubstepIndex === 2 || currentSubstepIndex === 3),
+                    yawTrim: currentStepName === 'TRIM_CONN' && (currentSubstepIndex === 2 || currentSubstepIndex === 3),
                   }}
                   className="scale-95"
                 />
@@ -2705,7 +2771,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* PANEL: MANUAL PITCH OVRD (MPO) (Step 12)                 */}
             {/* -------------------------------------------------------- */}
-            {activeStep.id === 12 && (
+            {currentStepName === 'BIG_MOVEMENTS' && (
               <motion.div
                 key="panel-manual-pitch"
                 layout
@@ -2762,7 +2828,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* GAUGE: SPEEDBRAKES Indicator (Step 12 & Step 13)         */}
             {/* -------------------------------------------------------- */}
-            {(activeStep.id === 12 || activeStep.id === 13) && (
+            {(currentStepName === 'BIG_MOVEMENTS' || currentStepName === 'DBU_CHECK') && (
               <motion.div
                 key="gauge-speedbrakes"
                 layout
@@ -2783,7 +2849,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 </span>
                 <SpeedBrakeIndicator
                   isOpen={speedbrakesOpen}
-                  interactive={activeStep.id === 12 && currentSubstepIndex === 5 && !speedbrakeCycleDone}
+                  interactive={currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 5 && !speedbrakeCycleDone}
                   onToggle={handleToggleSpeedbrakes}
                 />
               </motion.div>
@@ -2792,7 +2858,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* CARD: Main Gear Brake Calipers & Deflection (Step 14 & 15) */}
             {/* -------------------------------------------------------- */}
-            {(activeStep.id === 14 || activeStep.id === 15) && (
+            {(currentStepName === 'LEFT_BRAKE' || currentStepName === 'RIGHT_BRAKE') && (
               <motion.div
                 key="card-brake-cluster"
                 layout
@@ -2809,9 +2875,9 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 className="flex flex-col lg:flex-row items-center justify-center gap-6"
               >
                 <TacticalDisplayCard
-                  src={activeStep.id === 14 ? '/crewchief/FLCS/leftBrake.webp' : '/crewchief/FLCS/rightBrake.webp'}
-                  alt={activeStep.id === 14 ? 'Left Main Gear Brake Caliper' : 'Right Main Gear Brake Caliper'}
-                  title={activeStep.id === 14 ? 'LEFT MAIN GEAR BRAKE CALIPER' : 'RIGHT MAIN GEAR BRAKE CALIPER'}
+                  src={currentStepName === 'LEFT_BRAKE' ? '/crewchief/FLCS/leftBrake.webp' : '/crewchief/FLCS/rightBrake.webp'}
+                  alt={currentStepName === 'LEFT_BRAKE' ? 'Left Main Gear Brake Caliper' : 'Right Main Gear Brake Caliper'}
+                  title={currentStepName === 'LEFT_BRAKE' ? 'LEFT MAIN GEAR BRAKE CALIPER' : 'RIGHT MAIN GEAR BRAKE CALIPER'}
                   badge="HYDRAULIC LINE"
                   badgeColor="#22c55e"
                   badgeBg="rgba(34, 197, 94, 0.15)"
@@ -2822,7 +2888,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 />
 
                 <TacticalControlInputCard
-                  title={activeStep.id === 14 ? 'BRAKES // LEFT BRAKE CHECK' : 'BRAKES // RIGHT BRAKE CHECK'}
+                  title={currentStepName === 'LEFT_BRAKE' ? 'BRAKES // LEFT BRAKE CHECK' : 'BRAKES // RIGHT BRAKE CHECK'}
                   roll={rollDisplay}
                   pitch={pitchDisplay}
                   yaw={yawDisplay}
@@ -2838,7 +2904,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* PANEL: FUEL SYSTEM Panel (Step 16)                       */}
             {/* -------------------------------------------------------- */}
-            {activeStep.id === 16 && (
+            {currentStepName === 'AAR_DOOR' && (
               <motion.div
                 key="panel-fuel"
                 layout
@@ -2873,7 +2939,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* CARD: Wheel Chocks (Step 17)                             */}
             {/* -------------------------------------------------------- */}
-            {activeStep.id === 17 && (
+            {currentStepName === 'CHOCKS_REMOVAL' && (
               <motion.div
                 key="card-chocks"
                 layout
@@ -2907,7 +2973,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* CARD: Chief Final Salute (Step 18, Substep 0)            */}
             {/* -------------------------------------------------------- */}
-            {activeStep.id === 18 && currentSubstepIndex === 0 && (
+            {currentStepName === 'FINALE_SALUTE' && currentSubstepIndex === 0 && (
               <motion.div
                 key="card-chief-salute"
                 layout
@@ -2941,7 +3007,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             {/* -------------------------------------------------------- */}
             {/* CARD: Grand Celebration View (Step 18, Substep >= 1)     */}
             {/* -------------------------------------------------------- */}
-            {activeStep.id === 18 && currentSubstepIndex >= 1 && (
+            {currentStepName === 'FINALE_SALUTE' && currentSubstepIndex >= 1 && (
               <motion.div
                 key="card-celebration"
                 layout
@@ -3006,7 +3072,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         {/* ACTIVE TIMERS & NOTICES PLACED CLEANLY UNDER PANELS          */}
         {/* ------------------------------------------------------------ */}
         {/* 30-Second Countdown Timer in Step 03 Substep 0 */}
-        {activeStep.id === 3 && currentSubstepIndex === 0 && (
+        {currentStepName === 'SEC_CHECK' && currentSubstepIndex === 0 && (
           <div className="w-full max-w-xl p-4 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-between mt-4">
             <div>
               <div className="text-xs font-bold text-amber-300">
@@ -3029,7 +3095,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         )}
 
         {/* EPU Hold Progress Indicator in Step 06 Substep 4 (Hold EPU/GEN Switch) */}
-        {activeStep.id === 6 && currentSubstepIndex === 3 && (
+        {currentStepName === 'EPU_FLOW' && currentSubstepIndex === 3 && (
           <div className="flex flex-col items-center gap-2 mt-4">
             <span className="text-xs font-bold text-amber-400">
               {epuGenSwitchHeld
@@ -3046,7 +3112,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         )}
 
         {/* Explanatory Note on Retard to Idle in Step 06 Substep 5 */}
-        {activeStep.id === 6 && currentSubstepIndex === 4 && (
+        {currentStepName === 'EPU_FLOW' && currentSubstepIndex === 4 && (
           <div className="w-full max-w-xl p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2 mt-4">
             <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">
               <AlertTriangle className="w-4 h-4 text-amber-400" />
@@ -3115,11 +3181,11 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         {/* ------------------------------------------------------------ */}
         {/* DYNAMIC STATUS / ACTION BANNER                               */}
         {/* ------------------------------------------------------------ */}
-        {!(activeStep.id === 18 && currentSubstepIndex >= 1) && (
+        {!(currentStepName === 'FINALE_SALUTE' && currentSubstepIndex >= 1) && (
           <div className="w-full max-w-3xl p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-center text-xs overflow-hidden mt-4">
             <AnimatePresence mode="wait">
               <motion.div
-                key={`banner-${activeStep.id}-${currentSubstepIndex}-${step2EngineStabilized}-${flcsBitActive}-${chocksInPlace}`}
+                key={`banner-${currentStepName}-${currentSubstepIndex}-${step2EngineStabilized}-${flcsBitActive}-${chocksInPlace}`}
                 initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -5 }}
@@ -3127,7 +3193,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 style={{ willChange: 'opacity, transform' }}
               >
                 {/* Step 0 Banner */}
-                {activeStep.id === 0 && (
+                {currentStepName === 'ENGAGE_CHIEF' && (
                   <span className="text-emerald-400 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                     <span>Verbal Required: Speak &quot;Engage Chief&quot; into microphone.</span>
@@ -3135,23 +3201,23 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 )}
 
                 {/* Step 1 Banner */}
-                {activeStep.id === 1 && currentSubstepIndex === 0 && (
+                {currentStepName === 'ELEC_POWER' && currentSubstepIndex === 0 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Set MAIN PWR switch to MAIN PWR position on the ELEC panel.
                   </span>
                 )}
-                {activeStep.id === 1 && currentSubstepIndex === 1 && (
+                {currentStepName === 'ELEC_POWER' && currentSubstepIndex === 1 && (
                   <span className="text-amber-300 font-bold">
                     ⚡ Action Required: Click and hold FLCS PWR TEST switch to TEST on the TEST panel.
                   </span>
                 )}
-                {activeStep.id === 1 && currentSubstepIndex === 2 && (
+                {currentStepName === 'ELEC_POWER' && currentSubstepIndex === 2 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;Comms Check&quot; over the ground interphone loop.</span>
                   </span>
                 )}
-                {activeStep.id === 1 && currentSubstepIndex === 3 && (
+                {currentStepName === 'ELEC_POWER' && currentSubstepIndex === 3 && (
                   <div className="flex items-center justify-between gap-4 w-full">
                     <span className="text-emerald-400 font-bold">
                       Chief Responded: &quot;Loud and clear, sir/ma&apos;am.&quot; Speak &quot;Loud and clear&quot; to acknowledge.
@@ -3168,7 +3234,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     </button>
                   </div>
                 )}
-                {activeStep.id === 1 && currentSubstepIndex === 4 && (
+                {currentStepName === 'ELEC_POWER' && currentSubstepIndex === 4 && (
                   <div className="flex items-center justify-between gap-4 w-full">
                     <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                       <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
@@ -3182,7 +3248,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                         setChiefDialogue("Oh, I'm alright, how you doin' sir?");
                         setTimeout(() => {
                           setIsChiefResponding(false);
-                          onAdvanceStep(2);
+                          advanceToNextStep();
                         }, 2500);
                       }}
                       className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
@@ -3194,29 +3260,29 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 )}
 
                 {/* Step 2 Banner */}
-                {activeStep.id === 2 && currentSubstepIndex === 0 && (
+                {currentStepName === 'JFS_START' && currentSubstepIndex === 0 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;Ready Start Two&quot; to clear ground personnel.</span>
                   </span>
                 )}
-                {activeStep.id === 2 && currentSubstepIndex === 1 && (
+                {currentStepName === 'JFS_START' && currentSubstepIndex === 1 && (
                   <span className="text-amber-300 font-bold">
                     ⚡ Action Required: Set JFS switch to START 2. Await JFS RUN light and spool past 20% RPM.
                   </span>
                 )}
-                {activeStep.id === 2 && currentSubstepIndex >= 2 && !step2EngineStabilized && (
+                {currentStepName === 'JFS_START' && currentSubstepIndex >= 2 && !step2EngineStabilized && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Advance throttle over cutoff detent to IDLE. Observe FTIT climb and HYD pressure.
                   </span>
                 )}
-                {activeStep.id === 2 && step2EngineStabilized && (
+                {currentStepName === 'JFS_START' && step2EngineStabilized && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-emerald-400 font-bold">
                       ✓ Engine stabilized at idle (63% RPM, 550°C FTIT, 3,000 PSI Hyd A/B).
                     </span>
                     <button
-                      onClick={() => onAdvanceStep(3)}
+                      onClick={() => advanceToNextStep()}
                       className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
                     >
                       <span>Continue</span>
@@ -3226,23 +3292,23 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 )}
 
                 {/* Step 3 Banner */}
-                {activeStep.id === 3 && currentSubstepIndex === 0 && (
+                {currentStepName === 'SEC_CHECK' && currentSubstepIndex === 0 && (
                   <span className="text-amber-300 font-bold">
                     ⏳ Engine warm-up in progress. Await stabilization timer or click Skip.
                   </span>
                 )}
-                {activeStep.id === 3 && currentSubstepIndex === 1 && (
+                {currentStepName === 'SEC_CHECK' && currentSubstepIndex === 1 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;Clear for SEC check&quot;.</span>
                   </span>
                 )}
-                {activeStep.id === 3 && currentSubstepIndex === 2 && (
+                {currentStepName === 'SEC_CHECK' && currentSubstepIndex === 2 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Flip ENG CONT switch to SEC. Observe nozzle close to 0%.
                   </span>
                 )}
-                {activeStep.id === 3 && currentSubstepIndex === 3 && (
+                {currentStepName === 'SEC_CHECK' && currentSubstepIndex === 3 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-amber-300 font-bold">
                       ⚡ Depress toe brakes firmly (or click simulate) to hold aircraft stationary prior to throttle spool.
@@ -3258,30 +3324,30 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     </button>
                   </div>
                 )}
-                {activeStep.id === 3 && currentSubstepIndex === 4 && (
+                {currentStepName === 'SEC_CHECK' && currentSubstepIndex === 4 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Click or advance throttle forward to spool engine to 73% RPM minimum.
                   </span>
                 )}
-                {activeStep.id === 3 && currentSubstepIndex === 5 && (
+                {currentStepName === 'SEC_CHECK' && currentSubstepIndex === 5 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Click or retard throttle back to IDLE. Observe nozzle remain closed (&lt; 5%).
                   </span>
                 )}
 
                 {/* Step 4 Banner */}
-                {activeStep.id === 4 && currentSubstepIndex === 0 && (
+                {currentStepName === 'PRI_VERIFY' && currentSubstepIndex === 0 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;SEC check good&quot; to coordinate with crew chief.</span>
                   </span>
                 )}
-                {activeStep.id === 4 && currentSubstepIndex === 1 && (
+                {currentStepName === 'PRI_VERIFY' && currentSubstepIndex === 1 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Snap ENG CONT switch back to PRI and seat red safety guard down.
                   </span>
                 )}
-                {activeStep.id === 4 && currentSubstepIndex === 2 && (
+                {currentStepName === 'PRI_VERIFY' && currentSubstepIndex === 2 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-emerald-400 font-bold">
                       ✓ Convergent nozzle opened to 100%. Engine electronic control restored to PRI.
@@ -3298,7 +3364,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     </button>
                   </div>
                 )}
-                {activeStep.id === 4 && currentSubstepIndex === 3 && (
+                {currentStepName === 'PRI_VERIFY' && currentSubstepIndex === 3 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-cyan-300 font-bold">
                       ⚡ Action Required: Release toe brakes.
@@ -3306,7 +3372,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     <button
                         onClick={() => {
                           Sound.playCommit();
-                          onAdvanceStep(5);
+                          advanceToNextStep();
                         }}
                         className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
                       >
@@ -3317,7 +3383,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 )}
 
                 {/* Step 5 Banner */}
-                {activeStep.id === 5 && currentSubstepIndex === 0 && (
+                {currentStepName === 'EPU_PIN' && currentSubstepIndex === 0 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-zinc-300 font-bold">
                       Observe EPU RUN &amp; AIR lights dark. Verify safety pin installed.
@@ -3334,31 +3400,31 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     </button>
                   </div>
                 )}
-                {activeStep.id === 5 && currentSubstepIndex === 1 && (
+                {currentStepName === 'EPU_PIN' && currentSubstepIndex === 1 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Set EPU switch to OFF on EPU panel.
                   </span>
                 )}
-                {activeStep.id === 5 && currentSubstepIndex === 2 && (
+                {currentStepName === 'EPU_PIN' && currentSubstepIndex === 2 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;Pull EPU safety pin&quot; to ground crew.</span>
                   </span>
                 )}
-                {activeStep.id === 5 && currentSubstepIndex === 3 && (
+                {currentStepName === 'EPU_PIN' && currentSubstepIndex === 3 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Set EPU switch back to NORM.
                   </span>
                 )}
 
                 {/* Step 6 Banner */}
-                {activeStep.id === 6 && currentSubstepIndex === 0 && (
+                {currentStepName === 'EPU_FLOW' && currentSubstepIndex === 0 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;Cleared to check for flow&quot;.</span>
                   </span>
                 )}
-                {activeStep.id === 6 && currentSubstepIndex === 1 && (
+                {currentStepName === 'EPU_FLOW' && currentSubstepIndex === 1 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-amber-300 font-bold">
                       ⚡ Depress toe brakes firmly (or click simulate) to hold aircraft stationary prior to engine run-up.
@@ -3374,17 +3440,17 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     </button>
                   </div>
                 )}
-                {activeStep.id === 6 && currentSubstepIndex === 2 && (
+                {currentStepName === 'EPU_FLOW' && currentSubstepIndex === 2 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Advance throttle forward to ~82% RPM to generate bleed air for EPU.
                   </span>
                 )}
-                {activeStep.id === 6 && currentSubstepIndex === 3 && (
+                {currentStepName === 'EPU_FLOW' && currentSubstepIndex === 3 && (
                   <span className="text-amber-300 font-bold">
                     ⚡ Action Required: Click and hold EPU/GEN switch on TEST panel for 5 seconds.
                   </span>
                 )}
-                {activeStep.id === 6 && currentSubstepIndex === 4 && (
+                {currentStepName === 'EPU_FLOW' && currentSubstepIndex === 4 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-cyan-300 font-bold">
                       ⚡ Action Required: Retard throttle back to IDLE. Observe EPU GEN and EPU PMG lamps.
@@ -3405,7 +3471,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     )}
                   </div>
                 )}
-                {activeStep.id === 6 && currentSubstepIndex === 5 && (
+                {currentStepName === 'EPU_FLOW' && currentSubstepIndex === 5 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-cyan-300 font-bold">
                       ⚡ Action Required: Release toe brakes.
@@ -3413,7 +3479,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     <button
                         onClick={() => {
                           Sound.playCommit();
-                          onAdvanceStep(7);
+                          advanceToNextStep();
                         }}
                         className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
                       >
@@ -3424,7 +3490,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 )}
 
                 {/* Step 7 Banner */}
-                {activeStep.id === 7 && currentSubstepIndex === 0 && (
+                {currentStepName === 'FLIGHT_CONTROLS_CLEAR' && currentSubstepIndex === 0 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-zinc-300 font-bold">
                       Observe ground crew outside 6-ft surface exclusion zone.
@@ -3441,13 +3507,13 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     </button>
                   </div>
                 )}
-                {activeStep.id === 7 && currentSubstepIndex === 1 && (
+                {currentStepName === 'FLIGHT_CONTROLS_CLEAR' && currentSubstepIndex === 1 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;Flight Controls Clear&quot; to ground crew.</span>
                   </span>
                 )}
-                {activeStep.id === 7 && currentSubstepIndex === 2 && (
+                {currentStepName === 'FLIGHT_CONTROLS_CLEAR' && currentSubstepIndex === 2 && (
                   <div className="flex items-center justify-between gap-4">
                     <div className="text-left">
                       <div className="text-xs font-bold text-emerald-300">
@@ -3458,7 +3524,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                       </div>
                     </div>
                     <button
-                      onClick={() => onAdvanceStep(8)}
+                      onClick={() => advanceToNextStep()}
                       className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
                     >
                       <span>Continue</span>
@@ -3468,23 +3534,23 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 )}
 
                 {/* Step 8 Banner */}
-                {activeStep.id === 8 && currentSubstepIndex === 0 && (
+                {currentStepName === 'FLCS_BIT' && currentSubstepIndex === 0 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;Clear BIT&quot;.</span>
                   </span>
                 )}
-                {activeStep.id === 8 && currentSubstepIndex === 1 && (
+                {currentStepName === 'FLCS_BIT' && currentSubstepIndex === 1 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Toggle BIT switch to initiate FLCS surface sweep (Note: In simulator/jet takes 45s; condensed to 15s in drill).
                   </span>
                 )}
-                {activeStep.id === 8 && currentSubstepIndex === 2 && (
+                {currentStepName === 'FLCS_BIT' && currentSubstepIndex === 2 && (
                   <span className="text-amber-400 font-bold animate-pulse">
                     FLCS BIT IN PROGRESS — SURFACE DEFLECTION RECORDING ({15 - flcsBitElapsed}s remaining • 45s on simulator/jet)
                   </span>
                 )}
-                {activeStep.id === 8 && currentSubstepIndex === 3 && (
+                {currentStepName === 'FLCS_BIT' && currentSubstepIndex === 3 && (
                   <div className="flex items-center justify-between gap-4 w-full">
                     <span className="text-zinc-300 font-bold text-xs">
                       ✓ FLCS BIT switch released to OFF • Green RUN light extinguished • Amber FAIL light remains dark.
@@ -3492,7 +3558,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     <button
                       onClick={() => {
                         Sound.playCommit();
-                        onAdvanceStep(9);
+                        advanceToNextStep();
                       }}
                       className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
                     >
@@ -3503,7 +3569,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 )}
 
                 {/* Step 9-11 Banners */}
-                {activeStep.id === 9 && currentSubstepIndex === 0 && (
+                {currentStepName === 'TRIM_VERIFY' && currentSubstepIndex === 0 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-zinc-300 font-bold">
                       Observe Manual Trim indicators (Roll, Pitch, Yaw) centered at neutral zero (0.0).
@@ -3520,24 +3586,24 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     </button>
                   </div>
                 )}
-                {activeStep.id === 9 && currentSubstepIndex === 1 && (
+                {currentStepName === 'TRIM_VERIFY' && currentSubstepIndex === 1 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;Ready for trim check&quot;.</span>
                   </span>
                 )}
-                {activeStep.id === 10 && currentSubstepIndex === 0 && (
+                {currentStepName === 'TRIM_DISC' && currentSubstepIndex === 0 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Set TRIM / AP DISC switch to DISC.
                   </span>
                 )}
-                {activeStep.id === 10 && currentSubstepIndex === 1 && (
+                {currentStepName === 'TRIM_DISC' && currentSubstepIndex === 1 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;Disconnected&quot;.</span>
                   </span>
                 )}
-                {activeStep.id === 10 && currentSubstepIndex >= 2 && (
+                {currentStepName === 'TRIM_DISC' && currentSubstepIndex >= 2 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-zinc-300 font-bold">
                       Chief confirmed: &quot;No trim movement observed, disconnect confirmed.&quot;
@@ -3545,7 +3611,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     <button
                       onClick={() => {
                         Sound.playCommit();
-                        onAdvanceStep(11);
+                        advanceToNextStep();
                       }}
                       className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
                     >
@@ -3554,18 +3620,18 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     </button>
                   </div>
                 )}
-                {activeStep.id === 11 && currentSubstepIndex === 0 && (
+                {currentStepName === 'TRIM_CONN' && currentSubstepIndex === 0 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Set TRIM / AP DISC switch back to NORM.
                   </span>
                 )}
-                {activeStep.id === 11 && currentSubstepIndex === 1 && (
+                {currentStepName === 'TRIM_CONN' && currentSubstepIndex === 1 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;Connected&quot;.</span>
                   </span>
                 )}
-                {activeStep.id === 11 && currentSubstepIndex === 2 && (
+                {currentStepName === 'TRIM_CONN' && currentSubstepIndex === 2 && (
                   <div className="flex flex-col items-center gap-1.5">
                     <span className="text-cyan-300 font-bold">
                       ⚡ Slew pitch, roll, and yaw trim dials past ±1.0 to verify each axis deflection.
@@ -3592,7 +3658,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     </div>
                   </div>
                 )}
-                {activeStep.id === 11 && currentSubstepIndex === 3 && (
+                {currentStepName === 'TRIM_CONN' && currentSubstepIndex === 3 && (
                   <div className="flex flex-col items-center gap-1">
                     <span className="text-amber-300 font-bold">
                       ⚡ Turn roll, pitch, and yaw trim wheels to re-center them.
@@ -3606,13 +3672,13 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 )}
 
                 {/* Step 12 Banner */}
-                {activeStep.id === 12 && currentSubstepIndex === 0 && (
+                {currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 0 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;Clear big movements&quot;.</span>
                   </span>
                 )}
-                {activeStep.id === 12 && currentSubstepIndex === 1 && (
+                {currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 1 && (
                   <div className="flex items-center justify-between gap-4 w-full">
                     <div className="flex items-center gap-3">
                       <span className="text-cyan-300 font-bold">
@@ -3636,7 +3702,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     </button>
                   </div>
                 )}
-                {activeStep.id === 12 && currentSubstepIndex === 2 && (
+                {currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 2 && (
                   <div className="flex items-center justify-between gap-4 w-full">
                     <div className="flex items-center gap-3">
                       <span className="text-cyan-300 font-bold">
@@ -3660,7 +3726,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     </button>
                   </div>
                 )}
-                {activeStep.id === 12 && currentSubstepIndex === 3 && (
+                {currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 3 && (
                   <div className="flex items-center justify-between gap-4 w-full">
                     <span className="text-cyan-300 font-bold">
                       ⚡ While holding Nose Down, actuate physical MPO switch on throttle (or simulate/skip):
@@ -3681,7 +3747,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     </button>
                   </div>
                 )}
-                {activeStep.id === 12 && currentSubstepIndex === 4 && (
+                {currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 4 && (
                   <div className="flex items-center justify-between gap-4 w-full">
                     <div className="flex items-center gap-3">
                       <span className="text-cyan-300 font-bold">
@@ -3705,25 +3771,25 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     </button>
                   </div>
                 )}
-                {activeStep.id === 12 && currentSubstepIndex === 5 && (
+                {currentStepName === 'BIG_MOVEMENTS' && currentSubstepIndex === 5 && (
                   <span className="text-amber-300 font-bold">
                     ⚡ Click Speedbrake indicator to cycle petals OPEN, then click again to CLOSE.
                   </span>
                 )}
 
                 {/* Step 13 Banner */}
-                {activeStep.id === 13 && currentSubstepIndex === 0 && (
+                {currentStepName === 'DBU_CHECK' && currentSubstepIndex === 0 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;DBU Still Clear&quot; to ground crew.</span>
                   </span>
                 )}
-                {activeStep.id === 13 && currentSubstepIndex === 1 && (
+                {currentStepName === 'DBU_CHECK' && currentSubstepIndex === 1 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Lift safety guard and flip DIGITAL BACKUP switch to ON.
                   </span>
                 )}
-                {activeStep.id === 13 && currentSubstepIndex === 2 && (
+                {currentStepName === 'DBU_CHECK' && currentSubstepIndex === 2 && (
                   <div className="flex items-center justify-between gap-4 w-full">
                     <span className="text-cyan-300 font-bold text-xs">
                       ⚡ Action Required: Deflect stick or rudder pedals to verify surface response in DBU law:
@@ -3745,39 +3811,39 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     </button>
                   </div>
                 )}
-                {activeStep.id === 13 && currentSubstepIndex === 3 && (
+                {currentStepName === 'DBU_CHECK' && currentSubstepIndex === 3 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Flip DIGITAL BACKUP switch to OFF and lower safety guard flush down.
                   </span>
                 )}
 
                 {/* Step 14 & 15 Banner */}
-                {(activeStep.id === 14 || activeStep.id === 15) && currentSubstepIndex === 0 && (
+                {(currentStepName === 'LEFT_BRAKE' || currentStepName === 'RIGHT_BRAKE') && currentSubstepIndex === 0 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
-                    <span>Verbal Required: Transmit &quot;{activeStep.id === 14 ? 'Ready on the left brake' : 'Ready on the right brake'}&quot;.</span>
+                    <span>Verbal Required: Transmit &quot;{currentStepName === 'LEFT_BRAKE' ? 'Ready on the left brake' : 'Ready on the right brake'}&quot;.</span>
                   </span>
                 )}
-                {(activeStep.id === 14 || activeStep.id === 15) && currentSubstepIndex === 1 && (
+                {(currentStepName === 'LEFT_BRAKE' || currentStepName === 'RIGHT_BRAKE') && currentSubstepIndex === 1 && (
                   <div className="flex items-center justify-between gap-4 w-full">
                     <span className="text-amber-300 font-bold text-xs">
-                      ⚡ Action Required: Press and release the {activeStep.id === 14 ? 'left' : 'right'} toe brake pedal.
+                      ⚡ Action Required: Press and release the {currentStepName === 'LEFT_BRAKE' ? 'left' : 'right'} toe brake pedal.
                     </span>
                     <button
-                      onClick={() => onAdvanceStep(activeStep.id === 14 ? 15 : 16)}
+                      onClick={() => advanceToNextStep()}
                       className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 font-bold text-xs cursor-pointer shadow transition-[background-color] shrink-0"
                     >
                       SKIP BRAKE
                     </button>
                   </div>
                 )}
-                {(activeStep.id === 14 || activeStep.id === 15) && currentSubstepIndex === 2 && (
+                {(currentStepName === 'LEFT_BRAKE' || currentStepName === 'RIGHT_BRAKE') && currentSubstepIndex === 2 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-emerald-400 font-bold">
                       ✓ Caliper clamping verified good.
                     </span>
                     <button
-                      onClick={() => onAdvanceStep(activeStep.id === 14 ? 15 : 16)}
+                      onClick={() => advanceToNextStep()}
                       className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
                     >
                       <span>Continue</span>
@@ -3787,25 +3853,25 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 )}
 
                 {/* Step 16 Banner */}
-                {activeStep.id === 16 && currentSubstepIndex === 0 && (
+                {currentStepName === 'AAR_DOOR' && currentSubstepIndex === 0 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;Ready for AAR door check&quot;.</span>
                   </span>
                 )}
-                {activeStep.id === 16 && currentSubstepIndex === 1 && (
+                {currentStepName === 'AAR_DOOR' && currentSubstepIndex === 1 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Set AIR REFUEL switch to OPEN on FUEL panel.
                   </span>
                 )}
-                {activeStep.id === 16 && currentSubstepIndex >= 2 && (
+                {currentStepName === 'AAR_DOOR' && currentSubstepIndex >= 2 && (
                   <span className="text-cyan-300 font-bold">
                     ⚡ Action Required: Return AIR REFUEL switch to CLOSE on FUEL panel.
                   </span>
                 )}
 
                 {/* Step 17 Banner */}
-                {activeStep.id === 17 && currentSubstepIndex === 0 && (
+                {currentStepName === 'CHOCKS_REMOVAL' && currentSubstepIndex === 0 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-amber-300 font-bold">
                       ⚡ Depress toe brakes firmly (or click simulate) to hold aircraft stationary.
@@ -3821,13 +3887,13 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                     </button>
                   </div>
                 )}
-                {activeStep.id === 17 && currentSubstepIndex === 1 && chocksInPlace && (
+                {currentStepName === 'CHOCKS_REMOVAL' && currentSubstepIndex === 1 && chocksInPlace && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;Remove Chocks&quot; (or &quot;Wheel Chocks&quot;).</span>
                   </span>
                 )}
-                {activeStep.id === 17 && !chocksInPlace && (
+                {currentStepName === 'CHOCKS_REMOVAL' && !chocksInPlace && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-emerald-400 font-bold">
                       ✓ Chocks removed and stowed in equipment bay. Proceeding to marshal salute...
@@ -3836,7 +3902,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 )}
 
                 {/* Step 18 Banner */}
-                {activeStep.id === 18 && currentSubstepIndex === 0 && (
+                {currentStepName === 'FINALE_SALUTE' && currentSubstepIndex === 0 && (
                   <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
                     <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Verbal Required: Transmit &quot;Cleared Off&quot; over the interphone loop.</span>
@@ -3854,7 +3920,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       <div className="w-full rounded-xl bg-zinc-900 border border-zinc-800 p-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
         <AnimatePresence mode="wait">
           <motion.div
-            key={`${activeStep.id}-${currentSubstepIndex}-dir`}
+            key={`${currentStepName}-${currentSubstepIndex}-dir`}
             initial={{ opacity: 0, y: 3 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -3 }}
@@ -3873,7 +3939,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         <AnimatePresence mode="wait">
           {activeSubstep?.phaseType === 'VERBAL' ? (
             <motion.div
-              key={`${activeStep.id}-${currentSubstepIndex}-callout`}
+              key={`${currentStepName}-${currentSubstepIndex}-callout`}
               initial={{ opacity: 0, y: 3 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -3 }}
@@ -3893,7 +3959,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             </motion.div>
           ) : activeSubstep?.phaseType === 'ACTION' ? (
             <motion.div
-              key={`${activeStep.id}-${currentSubstepIndex}-action`}
+              key={`${currentStepName}-${currentSubstepIndex}-action`}
               initial={{ opacity: 0, y: 3 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -3 }}
@@ -3912,7 +3978,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             </motion.div>
           ) : (
             <motion.div
-              key={`${activeStep.id}-${currentSubstepIndex}-verify`}
+              key={`${currentStepName}-${currentSubstepIndex}-verify`}
               initial={{ opacity: 0, y: 3 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -3 }}
@@ -3932,7 +3998,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
         <AnimatePresence mode="wait">
           {isChiefResponding || (activeSubstep?.expectedChiefResponse ? true : (activeSubstep?.rationale ? false : activeSubstep?.phaseType === 'VERBAL')) ? (
             <motion.div
-              key={`${activeStep.id}-${currentSubstepIndex}-rx`}
+              key={`${currentStepName}-${currentSubstepIndex}-rx`}
               initial={{ opacity: 0, y: 3 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -3 }}
@@ -3950,7 +4016,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             </motion.div>
           ) : (
             <motion.div
-              key={`${activeStep.id}-${currentSubstepIndex}-rationale`}
+              key={`${currentStepName}-${currentSubstepIndex}-rationale`}
               initial={{ opacity: 0, y: 3 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -3 }}
