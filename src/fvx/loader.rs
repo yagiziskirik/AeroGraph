@@ -81,7 +81,13 @@ impl LoadedProfile {
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("profile");
-        let bak_path = backup_dir.join(format!("{}.orig.fvx", file_stem));
+
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.profile_path.to_string_lossy().hash(&mut hasher);
+        let path_hash = format!("{:08x}", hasher.finish() as u32);
+
+        let bak_path = backup_dir.join(format!("{}_{}.orig.fvx", file_stem, path_hash));
         if !bak_path.exists() && self.profile_path.exists() {
             std::fs::copy(&self.profile_path, &bak_path)?;
             log::info!("Created original profile backup at: {:?}", bak_path);
