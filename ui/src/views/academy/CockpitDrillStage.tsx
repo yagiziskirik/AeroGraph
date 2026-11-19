@@ -48,8 +48,12 @@ export const DRILL_STEP_ORDER: DrillStepName[] = [
   'FINALE_SALUTE',
 ];
 
-export const getOrderedDrillSteps = (order: DrillStepName[] = DRILL_STEP_ORDER): RampStartStep[] => {
+export const getOrderedDrillSteps = (
+  order: DrillStepName[] = DRILL_STEP_ORDER,
+  disabledSteps: string[] = []
+): RampStartStep[] => {
   return order
+    .filter((name) => !disabledSteps.includes(name))
     .map((name, idx) => {
       const base = RAMP_STEPS_BY_NAME[name];
       if (!base) return null;
