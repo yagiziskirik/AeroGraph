@@ -3,10 +3,12 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Ipc, registerPreCloseHandler } from '../services/ipc';
 import { Sound } from '../services/sound';
-import { AppConfig, TelemetryData, ProfileCategoryView } from '../types/ipc';
+import { AppConfig, TelemetryData, ProfileCategoryView, StateSnapshot } from '../types/ipc';
 import { SpeakerToggle, MicrophoneToggle } from '../components/inputs';
-import { HelpCircle, RotateCcw, Check, SlidersHorizontal, Undo2, BookOpen, Radio, Target, ArrowRight } from 'lucide-react';
+import { HelpCircle, RotateCcw, Check, SlidersHorizontal, Undo2, BookOpen, Radio, Target, ArrowRight, FolderOpen } from 'lucide-react';
 import { VoiceAcademyView } from './VoiceAcademyView';
+import { DrillSequenceManagerModal } from './academy/DrillSequenceManagerModal';
+import { DRILL_STEP_ORDER } from './academy/CockpitDrillStage';
 
 const SAPI_PTT_DEFAULTS = {
   min_confidence: 50,
@@ -145,6 +147,47 @@ export const CommsView: React.FC<CommsViewProps> = ({
   const [targetAcademyMode, setTargetAcademyMode] = useState<'practice' | 'brevity' | 'manual'>('practice');
   const [profileCategories, setProfileCategories] = useState<ProfileCategoryView[]>([]);
   const preAcademyState = useRef<{ voice: boolean; listening: boolean } | null>(null);
+
+  // Crew Chief Sequence & FoxVox State Manager Modal
+  const [isSequenceModalOpen, setIsSequenceModalOpen] = useState(false);
+  const [drillOrder, setDrillOrder] = useState<string[]>(DRILL_STEP_ORDER as string[]);
+  const [disabledSteps, setDisabledSteps] = useState<string[]>([]);
+  const [isManagedProfile, setIsManagedProfile] = useState<boolean>(true);
+  const [profileStatus, setProfileStatus] = useState<string>('DEFAULT');
+
+  useEffect(() => {
+    const unsubSnapshot = Ipc.on('StateSnapshot', (snapshot: StateSnapshot) => {
+      if (snapshot.drill_step_order && snapshot.drill_step_order.length > 0) {
+        setDrillOrder(snapshot.drill_step_order);
+      }
+      if (snapshot.disabled_drill_steps) {
+        setDisabledSteps(snapshot.disabled_drill_steps);
+      }
+      if (snapshot.is_profile_managed !== undefined) {
+        setIsManagedProfile(snapshot.is_profile_managed);
+      }
+      if (snapshot.profile_status) {
+        setProfileStatus(snapshot.profile_status);
+      }
+    });
+
+    const unsubSeq = Ipc.on(
+      'DrillSequenceUpdated',
+      (payload: { success: boolean; order: string[]; disabled: string[] }) => {
+        if (payload.order && payload.order.length > 0) {
+          setDrillOrder(payload.order);
+        }
+        if (payload.disabled) {
+          setDisabledSteps(payload.disabled);
+        }
+      }
+    );
+
+    return () => {
+      unsubSnapshot();
+      unsubSeq();
+    };
+  }, []);
 
   // Load Profile Voice Categories for Academy
   useEffect(() => {
@@ -310,6 +353,11 @@ export const CommsView: React.FC<CommsViewProps> = ({
       });
       setTestActive(false);
     }, 700);
+  };
+
+  const handleSelectProfile = () => {
+    Sound.playSwitch();
+    Ipc.selectProfileFile();
   };
 
   const handleReloadProfile = () => {
@@ -530,20 +578,46 @@ export const CommsView: React.FC<CommsViewProps> = ({
         {/* Active Profile Banner & Actions */}
         <div className="p-3.5 rounded bg-[#18181B] border border-white/[0.06] flex items-center justify-between font-mono text-xs">
           <div className="min-w-0 pr-4">
-            <div className="text-[10px] text-zinc-500 tracking-wider">LOADED PROFILE:</div>
+            <div className="flex items-center space-x-2">
+              <span className="text-[10px] text-zinc-500 tracking-wider">LOADED PROFILE:</span>
+              {profileStatus === 'DEFAULT' ? (
+                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
+                  DEFAULT
+                </span>
+              ) : profileStatus === 'MODIFIED' ? (
+                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 font-semibold">
+                  MANAGED • MODIFIED
+                </span>
+              ) : (
+                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">
+                  CUSTOM PROFILE
+                </span>
+              )}
+            </div>
             <div className="text-white font-bold text-sm tracking-wide truncate mt-0.5">
               {profileName}
             </div>
             <div className="text-[10px] text-zinc-600 truncate mt-0.5">
-              {profilePath || 'Default Bundled Profile (FalconBMS.fvx)'}
+              {profilePath || 'Default Profile (Falcon BMS 4.38 v1.3.1.fvx)'}
             </div>
           </div>
 
           <div className="flex items-center space-x-2 shrink-0">
             <button
               type="button"
+              onClick={handleSelectProfile}
+              className="h-8 px-3 rounded bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/40 hover:border-emerald-500 text-emerald-300 font-mono text-xs transition-colors cursor-pointer flex items-center space-x-1.5"
+              title="Open Windows file picker to select an external FoxVox profile (.fvx)"
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-emerald-400" />
+              <span>LOAD PROFILE...</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleReloadProfile}
               className="h-8 px-3 rounded bg-[#1E1E22] hover:bg-[#27272A] border border-white/[0.08] text-white font-mono text-xs transition-colors cursor-pointer"
+              title="Reload the active profile from disk"
             >
               RELOAD PROFILE
             </button>
@@ -552,6 +626,7 @@ export const CommsView: React.FC<CommsViewProps> = ({
               type="button"
               onClick={handleResetProfile}
               className="h-8 px-3 rounded bg-[#18181B] hover:bg-[#1E1E22] border border-white/[0.08] text-zinc-400 hover:text-white font-mono text-xs transition-colors cursor-pointer"
+              title="Reset profile selection back to AeroGraph's default profile"
             >
               RESET TO DEFAULT
             </button>
@@ -853,7 +928,7 @@ export const CommsView: React.FC<CommsViewProps> = ({
       {/* 2. TRAINING & TACTICAL REFERENCE DECK                                     */}
       {/* ========================================================================= */}
       <div className="bg-[#121214] border border-white/[0.08] rounded p-4 shadow-xl">
-        <div className="flex items-center justify-between pb-3 border-b border-white/[0.08] mb-4">
+        <div className="flex items-center justify-between pb-3 border-b border-white/[0.08] mb-4 gap-4">
           <div>
             <h3 className="text-xs font-bold tracking-[0.2em] text-white uppercase font-mono flex items-center gap-2">
               <Radio className="w-4 h-4 text-emerald-400" />
@@ -863,6 +938,42 @@ export const CommsView: React.FC<CommsViewProps> = ({
               Practice procedural cold-and-dark voice drills, explore tactical brevities, or read the Dash-1 checklist.
             </p>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (isManagedProfile) {
+                Sound.playClick();
+                setIsSequenceModalOpen(true);
+              }
+            }}
+            disabled={!isManagedProfile}
+            title={
+              isManagedProfile
+                ? 'Configure Crew Chief sequence & FoxVox state machine'
+                : 'Locked: Custom FoxVox profile active'
+            }
+            className={`flex items-center gap-2.5 px-3 py-2 rounded border font-mono text-xs font-bold transition-[border-color,background-color,opacity] shrink-0 ${
+              isManagedProfile
+                ? 'bg-zinc-900/90 hover:bg-zinc-800 border-zinc-700/80 hover:border-emerald-500 text-zinc-200 hover:text-emerald-300 cursor-pointer shadow-md'
+                : 'bg-zinc-950/60 border-zinc-800/40 text-zinc-600 opacity-40 cursor-not-allowed'
+            }`}
+          >
+            <SlidersHorizontal className={`w-3.5 h-3.5 ${isManagedProfile ? 'text-emerald-400' : 'text-zinc-600'}`} />
+            <div className="flex flex-col text-left">
+              <span className="text-[11px] font-bold tracking-wider uppercase">
+                CREW CHIEF SEQUENCE
+              </span>
+              <span className="text-[9px] font-mono text-zinc-400">
+                {isManagedProfile ? 'FOXVOX SYNC ACTIVE' : 'LOCKED • CUSTOM PROFILE'}
+              </span>
+            </div>
+            {isManagedProfile && (
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 ml-1">
+                EDIT
+              </span>
+            )}
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1523,6 +1634,25 @@ export const CommsView: React.FC<CommsViewProps> = ({
           })()}
         </div>
       </div>
+
+      {/* Crew Chief Sequence & FoxVox State Manager Modal */}
+      <DrillSequenceManagerModal
+        isOpen={isSequenceModalOpen}
+        onClose={() => setIsSequenceModalOpen(false)}
+        currentOrder={drillOrder}
+        disabledSteps={disabledSteps}
+        isManagedProfile={isManagedProfile}
+        onSaveSequence={(newOrder, newDisabled) => {
+          setDrillOrder(newOrder);
+          setDisabledSteps(newDisabled);
+          Ipc.setDrillSequence(newOrder, newDisabled);
+        }}
+        onResetSequence={() => {
+          setDrillOrder(DRILL_STEP_ORDER as string[]);
+          setDisabledSteps([]);
+          Ipc.resetDrillSequence();
+        }}
+      />
     </div>
   );
 };
