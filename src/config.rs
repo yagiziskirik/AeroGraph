@@ -121,6 +121,17 @@ pub struct AppConfig {
 
     #[serde(default)]
     pub disabled_drill_steps: Option<Vec<String>>,
+
+    #[serde(default)]
+    pub mpo_binding: Option<MpoBindingConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MpoBindingConfig {
+    pub button: u32,
+    pub device: String,
+    pub guid: String,
+    pub is_key: bool,
 }
 
 fn default_github_repo() -> String {
@@ -215,6 +226,7 @@ impl Default for AppConfig {
             invert_kneeboard_scroll: default_false(),
             drill_step_order: None,
             disabled_drill_steps: None,
+            mpo_binding: None,
         }
     }
 }
@@ -423,6 +435,20 @@ impl AppConfig {
         PathBuf::from("assets")
     }
 
+    /// Locates the bundled canonical profile template (.canonical.fvx), if present.
+    pub fn canonical_default_profile_path() -> Option<PathBuf> {
+        let assets = Self::find_assets_dir();
+        let canonical = assets
+            .join("profiles")
+            .join("Falcon BMS 4.38 v1.3.1")
+            .join("Falcon BMS 4.38 v1.3.1.canonical.fvx");
+        if canonical.exists() {
+            Some(canonical)
+        } else {
+            None
+        }
+    }
+
     /// Resolves the default FoxVox profile (.fvx).
     pub fn resolve_profile(&self) -> Option<PathBuf> {
         if let Some(ref p_str) = self.profile_path {
@@ -434,12 +460,24 @@ impl AppConfig {
 
         // Check bundled default profile in assets/profiles/
         let assets = Self::find_assets_dir();
-        let bundled = assets
-            .join("profiles")
-            .join("Falcon BMS 4.38 v1.3.1")
-            .join("Falcon BMS 4.38 v1.3.1.fvx");
+        let profile_dir = assets.join("profiles").join("Falcon BMS 4.38 v1.3.1");
+        let bundled = profile_dir.join("Falcon BMS 4.38 v1.3.1.fvx");
         if bundled.exists() {
             return Some(bundled);
+        }
+
+        // If the working file does not exist, but canonical template exists, instantiate it
+        let canonical = profile_dir.join("Falcon BMS 4.38 v1.3.1.canonical.fvx");
+        if canonical.exists() {
+            if let Err(e) = fs::copy(&canonical, &bundled) {
+                log::warn!(
+                    "Failed to instantiate profile from canonical template: {:?}",
+                    e
+                );
+            } else {
+                log::info!("Initialized default working profile from canonical template");
+                return Some(bundled);
+            }
         }
 
         // Fallback to game directory FoxVox installation
@@ -642,5 +680,46 @@ impl AppConfig {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mpo_binding_serialization_roundtrip() {
+        let mut cfg = AppConfig::default();
+        assert!(cfg.mpo_binding.is_none());
+
+        cfg.mpo_binding = Some(MpoBindingConfig {
+            button: 12,
+            device: "Custom Viper Stick".into(),
+            guid: "STICK_GUID_456".into(),
+            is_key: false,
+        });
+
+        let serialized = toml::to_string(&cfg).expect("Serialization failed");
+        let deserialized: AppConfig = toml::from_str(&serialized).expect("Deserialization failed");
+
+        assert_eq!(cfg.mpo_binding, deserialized.mpo_binding);
+    }
+
+    #[test]
+    fn test_resolve_profile_and_canonical_path() {
+        let canonical = AppConfig::canonical_default_profile_path();
+        assert!(
+            canonical.is_some(),
+            "Canonical template profile should exist in assets"
+        );
+        assert!(canonical.unwrap().exists());
+
+        let cfg = AppConfig::default();
+        let resolved = cfg.resolve_profile();
+        assert!(
+            resolved.is_some(),
+            "Default profile should resolve to working file"
+        );
+        assert!(resolved.unwrap().exists());
     }
 }
