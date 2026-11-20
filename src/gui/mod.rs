@@ -51,8 +51,15 @@ impl TacticalConsoleManager {
         ipc_handler: impl Fn(IpcRequest, &Window) + Send + Sync + 'static,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if self.active_window.is_none() {
-            // Display instant native splash screen while WebView2 compiles and boots
-            self.splash = SplashWindow::show();
+            let target_mon = window::resolve_target_monitor(target, config);
+            let splash_rect = target_mon.as_ref().map(|m| {
+                let pos = m.position();
+                let size = m.size();
+                (pos.x, pos.y, size.width, size.height)
+            });
+
+            // Display instant native splash screen centered on the target monitor
+            self.splash = SplashWindow::show(splash_rect);
             let win = TacticalConsoleWindow::create(target, config, ipc_handler)?;
             self.active_window = Some(win);
         }
