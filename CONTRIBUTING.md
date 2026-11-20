@@ -39,7 +39,7 @@ Before building AeroGraph locally, ensure you have the following installed:
 > The `main` branch is protected and always reflects stable, tested releases. All work must follow a feature branch workflow and be submitted via Pull Requests. Every PR is personally tested on a live Falcon BMS setup before merging.
 
 ### Branch Naming Conventions:
-Name feature branches descriptively using standard prefixes:
+Name feature branches descriptively using [Conventional Branch](https://conventionalbranch.org/):
 - `feature/<name>` or `feat/<name>`: New capabilities or enhancements (e.g., `feature/mfd-threat-rings`)
 - `fix/<name>` or `bugfix/<name>`: Bug fixes (e.g., `fix/briefing-parser-date`)
 - `docs/<name>`: Documentation improvements (e.g., `docs/install-guide`)
