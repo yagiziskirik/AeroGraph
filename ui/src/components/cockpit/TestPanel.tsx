@@ -2,6 +2,7 @@
 
 import React, { useState, useId, useRef } from 'react';
 import { Sound } from '../../services/sound';
+import { CockpitTwoWaySwitch, CockpitThreeWaySwitch } from './CockpitSwitch';
 
 export interface TestPanelSwitches {
   fireOheatDetect?: boolean; // Push button (momentary)
@@ -350,7 +351,7 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                   title="OBOGS BIT (Momentary): Hold left-click up to test OBOGS"
                   className={`my-1 select-none ${isSwitchAllowed('obogsBit') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                 >
-                  <VerticalLeverToggle isUp={!!activeSwitches.obogsBit} />
+                  <CockpitTwoWaySwitch isUp={!!activeSwitches.obogsBit} />
                 </div>
 
                 <span
@@ -428,7 +429,7 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                     title={`PROBE HEAT: ${activeSwitches.probeHeat} (Left-click to step up, Right-click to step down)`}
                     className={isSwitchAllowed('probeHeat') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}
                   >
-                    <ThreeWayLeverToggle
+                    <CockpitThreeWaySwitch
                       position={
                         activeSwitches.probeHeat === 'PROBE_HEAT'
                           ? 'UP'
@@ -489,7 +490,7 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                   title="EPU/GEN (Momentary): Hold left-click up to test EPU/GEN"
                   className={`my-1 select-none ${isSwitchAllowed('epuGen') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                 >
-                  <VerticalLeverToggle isUp={!!activeSwitches.epuGen} />
+                  <CockpitTwoWaySwitch isUp={!!activeSwitches.epuGen} />
                 </div>
 
                 <span
@@ -706,7 +707,7 @@ export const TestPanel: React.FC<TestPanelProps> = ({
                     title={`FLCS PWR TEST: ${activeSwitches.flcsPwrTest} (Left-click & hold for TEST, Right-click for MAINT)`}
                     className={`select-none ${isSwitchAllowed('flcsPwrTest') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                   >
-                    <ThreeWayLeverToggle
+                    <CockpitThreeWaySwitch
                       position={
                         activeSwitches.flcsPwrTest === 'TEST'
                           ? 'UP'
@@ -743,149 +744,6 @@ export const TestPanel: React.FC<TestPanelProps> = ({
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  );
-};
-
-/* -------------------------------------------------------------------------- */
-/* Standard 2-Way Vertical Lever Switch Component                              */
-/* -------------------------------------------------------------------------- */
-
-interface VerticalLeverToggleProps {
-  isUp: boolean;
-}
-
-const VerticalLeverToggle: React.FC<VerticalLeverToggleProps> = ({ isUp }) => {
-  const shaftTransform = isUp
-    ? 'translate(-50%, -44px) scaleY(1.05)'
-    : 'translate(-50%, 4px) scaleY(1.05)';
-
-  const ballTransform = isUp
-    ? 'translate(-50%, -42px)'
-    : 'translate(-50%, 14px)';
-
-  const ballShadow = isUp
-    ? '0 10px 12px rgba(0,0,0,0.7), inset 0 2px 3px rgba(255,255,255,0.9)'
-    : '0 -10px 12px rgba(0,0,0,0.7), inset 0 -2px 3px rgba(255,255,255,0.9)';
-
-  return (
-    <div className="relative w-10 h-10 flex items-center justify-center select-none will-change-transform">
-      {/* Outer socket bezel ring */}
-      <div
-        className="w-9 h-9 rounded-full border border-black/50 shadow-inner z-0"
-        style={{
-          backgroundImage: `
-            radial-gradient(1em 1.5em at 50% 50%, rgb(204, 204, 204) 25%, rgb(170, 170, 170) 49%, rgba(170, 170, 170, 0) 50%),
-            radial-gradient(0.65em 1em at 50% 53%, rgb(68, 68, 68), rgba(68, 68, 68, 0)),
-            radial-gradient(0.75em 0.75em at 55% 45%, rgb(255, 255, 255), rgba(255, 255, 255, 0)),
-            radial-gradient(100% 100% at 50% 50%, rgb(238, 238, 238), rgb(170, 170, 170) 10%, rgb(0, 0, 0) 18%, rgb(0, 0, 0) 21%, rgb(153, 153, 153) 21.5%, rgb(153, 153, 153) 24%, rgba(153, 153, 153, 0) 24.5%, rgb(221, 221, 221) 30.5%, rgb(221, 221, 221) 33%, rgb(68, 68, 68) 33.5%, rgb(68, 68, 68) 35%, rgba(68, 68, 68) 0 35.5%, rgb(221, 221, 221) 41.5%, rgb(238, 238, 238) 45%, rgb(68, 68, 85) 45.5%, rgb(68, 68, 85) 49%, rgba(68, 68, 85) 0 50%),
-            radial-gradient(100% 100% at center, rgb(170, 170, 170) 49%, rgba(170, 170, 170) 0 50%)
-          `,
-          boxShadow: '0 3px 6px rgba(0,0,0,0.7)',
-        }}
-      />
-
-      {/* Lever Parts (Shaft & Ball) */}
-      <div className="absolute inset-0 pointer-events-none z-10">
-        <div
-          className="absolute left-1/2 top-1/2 w-3 h-9 rounded-full border border-[#444] transition-transform duration-150 ease-out will-change-transform"
-          style={{
-            backgroundColor: '#2b2b2b',
-            boxShadow: '0 0 5px #555 inset',
-            transform: shaftTransform,
-            transformOrigin: 'center bottom',
-          }}
-        />
-        <div
-          className="absolute left-1/2 top-1/2 w-4.5 h-4.5 rounded-full border border-zinc-400 transition-[transform,box-shadow] duration-150 ease-out will-change-transform z-10"
-          style={{
-            background: `
-              radial-gradient(35% 25% at 50% 25%, rgb(136, 136, 153) 20%, rgba(136, 136, 153, 0)),
-              radial-gradient(1em 0.75em at 32% 75%, rgb(102, 102, 102), rgba(102, 102, 102, 0)),
-              radial-gradient(1em 0.75em at 65% 78%, rgb(102, 102, 102), rgba(102, 102, 102, 0)),
-              radial-gradient(100% 100% at center, rgb(68, 68, 68) 49.5%, rgba(68, 68, 68, 0) 50%)
-            `,
-            transform: ballTransform,
-            boxShadow: ballShadow,
-          }}
-        />
-      </div>
-    </div>
-  );
-};
-
-/* -------------------------------------------------------------------------- */
-/* 3-Position Vertical Lever Switch Component                                 */
-/* -------------------------------------------------------------------------- */
-
-interface ThreeWayLeverToggleProps {
-  position: 'UP' | 'CENTER' | 'DOWN';
-}
-
-const ThreeWayLeverToggle: React.FC<ThreeWayLeverToggleProps> = ({ position }) => {
-  const isUp = position === 'UP';
-  const isDown = position === 'DOWN';
-
-  const shaftTransform = isUp
-    ? 'translate(-50%, -44px) scaleY(1.05)'
-    : isDown
-    ? 'translate(-50%, 4px) scaleY(1.05)'
-    : 'translate(-50%, -20px) scaleY(0.65)';
-
-  const ballTransform = isUp
-    ? 'translate(-50%, -42px)'
-    : isDown
-    ? 'translate(-50%, 14px)'
-    : 'translate(-50%, -14px)';
-
-  const ballShadow = isUp
-    ? '0 10px 12px rgba(0,0,0,0.7), inset 0 2px 3px rgba(255,255,255,0.9)'
-    : isDown
-    ? '0 -10px 12px rgba(0,0,0,0.7), inset 0 -2px 3px rgba(255,255,255,0.9)'
-    : '0 4px 8px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,255,255,0.9)';
-
-  return (
-    <div className="relative w-10 h-10 flex items-center justify-center select-none will-change-transform">
-      {/* Outer socket bezel ring */}
-      <div
-        className="w-9 h-9 rounded-full border border-black/50 shadow-inner z-0"
-        style={{
-          backgroundImage: `
-            radial-gradient(1em 1.5em at 50% 50%, rgb(204, 204, 204) 25%, rgb(170, 170, 170) 49%, rgba(170, 170, 170, 0) 50%),
-            radial-gradient(0.65em 1em at 50% 53%, rgb(68, 68, 68), rgba(68, 68, 68, 0)),
-            radial-gradient(0.75em 0.75em at 55% 45%, rgb(255, 255, 255), rgba(255, 255, 255, 0)),
-            radial-gradient(100% 100% at 50% 50%, rgb(238, 238, 238), rgb(170, 170, 170) 10%, rgb(0, 0, 0) 18%, rgb(0, 0, 0) 21%, rgb(153, 153, 153) 21.5%, rgb(153, 153, 153) 24%, rgba(153, 153, 153, 0) 24.5%, rgb(221, 221, 221) 30.5%, rgb(221, 221, 221) 33%, rgb(68, 68, 68) 33.5%, rgb(68, 68, 68) 35%, rgba(68, 68, 68) 0 35.5%, rgb(221, 221, 221) 41.5%, rgb(238, 238, 238) 45%, rgb(68, 68, 85) 45.5%, rgb(68, 68, 85) 49%, rgba(68, 68, 85) 0 50%),
-            radial-gradient(100% 100% at center, rgb(170, 170, 170) 49%, rgba(170, 170, 170) 0 50%)
-          `,
-          boxShadow: '0 3px 6px rgba(0,0,0,0.7)',
-        }}
-      />
-
-      {/* Lever Parts (Shaft & Ball) */}
-      <div className="absolute inset-0 pointer-events-none z-10">
-        <div
-          className="absolute left-1/2 top-1/2 w-3 h-9 rounded-full border border-[#444] transition-transform duration-150 ease-out will-change-transform"
-          style={{
-            backgroundColor: '#2b2b2b',
-            boxShadow: '0 0 5px #555 inset',
-            transform: shaftTransform,
-            transformOrigin: 'center bottom',
-          }}
-        />
-        <div
-          className="absolute left-1/2 top-1/2 w-4.5 h-4.5 rounded-full border border-zinc-400 transition-[transform,box-shadow] duration-150 ease-out will-change-transform z-10"
-          style={{
-            background: `
-              radial-gradient(35% 25% at 50% 25%, rgb(136, 136, 153) 20%, rgba(136, 136, 153, 0)),
-              radial-gradient(1em 0.75em at 32% 75%, rgb(102, 102, 102), rgba(102, 102, 102, 0)),
-              radial-gradient(1em 0.75em at 65% 78%, rgb(102, 102, 102), rgba(102, 102, 102, 0)),
-              radial-gradient(100% 100% at center, rgb(68, 68, 68) 49.5%, rgba(68, 68, 68, 0) 50%)
-            `,
-            transform: ballTransform,
-            boxShadow: ballShadow,
-          }}
-        />
       </div>
     </div>
   );

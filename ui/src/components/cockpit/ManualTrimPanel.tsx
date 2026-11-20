@@ -2,6 +2,8 @@
 
 import React, { useState, useId, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Sound } from '../../services/sound';
+import { CockpitTwoWaySwitch } from './CockpitSwitch';
+import { CockpitRoundKnob } from './CockpitRotary';
 
 export interface ManualTrimValues {
   rollTrim?: number; // -3.0 (L WING DN) to +3.0 (R WING DN), neutral: 0.0
@@ -302,7 +304,7 @@ export const ManualTrimPanel: React.FC<ManualTrimPanelProps> = ({
                 </div>
               </div>
 
-              {/* Top-Right: TRIM / AP DISC Switch (Close Stacking, Standard TwoWayToggle) */}
+              {/* Top-Right: TRIM / AP DISC Switch (Close Stacking, Standard CockpitTwoWaySwitch) */}
               <div className="flex flex-col items-center justify-center pl-1">
                 {/* Header and NORM stacked tightly together on two lines */}
                 <div className="flex flex-col items-center justify-center mb-0.5 select-none pointer-events-none">
@@ -320,14 +322,14 @@ export const ManualTrimPanel: React.FC<ManualTrimPanelProps> = ({
                   </span>
                 </div>
 
-                {/* Authentic VerticalLeverToggle Switch */}
+                {/* Authentic CockpitTwoWaySwitch */}
                 <div
                   onMouseDown={handleTrimDiscMouseDown}
                   onContextMenu={(e) => e.preventDefault()}
                   title={`TRIM / AP DISC: ${activeValues.trimDisc ? 'NORM' : 'DISC'} (Left-click for NORM, Right-click for DISC)`}
                   className={`my-0.5 ${isControlAllowed('trimDisc') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                 >
-                  <VerticalLeverToggle isUp={activeValues.trimDisc} />
+                  <CockpitTwoWaySwitch isUp={activeValues.trimDisc} />
                 </div>
 
                 <span
@@ -659,109 +661,8 @@ const YawTrimDial: React.FC<{ value: number }> = ({ value }) => {
         R
       </text>
 
-      {/* Rotating Large Whitish-Gray Knob with Clean Face & Black-Outlined White Pointer */}
-      <g
-        transform={`rotate(${rotation}, ${cx}, ${cy})`}
-        style={{ willChange: 'transform', transition: 'transform 70ms linear' }}
-      >
-        {/* Large Knob Body: 48px diameter (r = 24), clean whitish-gray metallic surface, NO center cap, NO perimeter grips */}
-        <circle
-          cx={cx}
-          cy={cy}
-          r="24"
-          fill="url(#yawKnobClean)"
-          stroke="#71717a"
-          strokeWidth="1.2"
-          style={{
-            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))',
-          }}
-        />
-
-        {/* Clean Inner Rim */}
-        <circle cx={cx} cy={cy} r="22.5" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
-
-        {/* Indicator Line: White with Black Border Running Across to the Edge */}
-        {/* Outer Black Border Line */}
-        <line x1={cx + 3} y1={cy} x2={cx + 23.5} y2={cy} stroke="#000000" strokeWidth="4.2" strokeLinecap="round" />
-        {/* Inner Solid White Line */}
-        <line x1={cx + 4} y1={cy} x2={cx + 23} y2={cy} stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" />
-      </g>
-
-      {/* Gradient Definition for Clean Whitish-Gray Knob */}
-      <defs>
-        <radialGradient id="yawKnobClean" cx="35%" cy="30%" r="70%">
-          <stop offset="0%" stopColor="#f4f4f5" />
-          <stop offset="60%" stopColor="#d4d4d8" />
-          <stop offset="100%" stopColor="#a1a1aa" />
-        </radialGradient>
-      </defs>
+      {/* Canonical CockpitRoundKnob */}
+      <CockpitRoundKnob cx={cx} cy={cy} size={48} rotation={rotation} />
     </svg>
-  );
-};
-
-/* -------------------------------------------------------------------------- */
-/* Authentic VerticalLeverToggle Component (Matching TestPanel / ELEC)        */
-/* -------------------------------------------------------------------------- */
-
-interface VerticalLeverToggleProps {
-  isUp: boolean;
-}
-
-const VerticalLeverToggle: React.FC<VerticalLeverToggleProps> = ({ isUp }) => {
-  const shaftTransform = isUp
-    ? 'translate(-50%, -44px) scaleY(1.05)'
-    : 'translate(-50%, 4px) scaleY(1.05)';
-
-  const ballTransform = isUp
-    ? 'translate(-50%, -42px)'
-    : 'translate(-50%, 14px)';
-
-  const ballShadow = isUp
-    ? '0 10px 12px rgba(0,0,0,0.7), inset 0 2px 3px rgba(255,255,255,0.9)'
-    : '0 -10px 12px rgba(0,0,0,0.7), inset 0 -2px 3px rgba(255,255,255,0.9)';
-
-  return (
-    <div className="relative w-10 h-10 flex items-center justify-center select-none will-change-transform">
-      {/* Outer socket bezel ring with realistic stepped radial lighting */}
-      <div
-        className="w-9 h-9 rounded-full border border-black/50 shadow-inner z-0"
-        style={{
-          backgroundImage: `
-            radial-gradient(1em 1.5em at 50% 50%, rgb(204, 204, 204) 25%, rgb(170, 170, 170) 49%, rgba(170, 170, 170, 0) 50%),
-            radial-gradient(0.65em 1em at 50% 53%, rgb(68, 68, 68), rgba(68, 68, 68, 0)),
-            radial-gradient(0.75em 0.75em at 55% 45%, rgb(255, 255, 255), rgba(255, 255, 255, 0)),
-            radial-gradient(100% 100% at 50% 50%, rgb(238, 238, 238), rgb(170, 170, 170) 10%, rgb(0, 0, 0) 18%, rgb(0, 0, 0) 21%, rgb(153, 153, 153) 21.5%, rgb(153, 153, 153) 24%, rgba(153, 153, 153, 0) 24.5%, rgb(221, 221, 221) 30.5%, rgb(221, 221, 221) 33%, rgb(68, 68, 68) 33.5%, rgb(68, 68, 68) 35%, rgba(68, 68, 68) 0 35.5%, rgb(221, 221, 221) 41.5%, rgb(238, 238, 238) 45%, rgb(68, 68, 85) 45.5%, rgb(68, 68, 85) 49%, rgba(68, 68, 85) 0 50%),
-            radial-gradient(100% 100% at center, rgb(170, 170, 170) 49%, rgba(170, 170, 170) 0 50%)
-          `,
-          boxShadow: '0 3px 6px rgba(0,0,0,0.7)',
-        }}
-      />
-
-      {/* Lever Parts (Dark Cylindrical Shaft & Metallic Bat Handle Tip) */}
-      <div className="absolute inset-0 pointer-events-none z-10">
-        <div
-          className="absolute left-1/2 top-1/2 w-3 h-9 rounded-full border border-[#444] transition-transform duration-150 ease-out will-change-transform"
-          style={{
-            backgroundColor: '#2b2b2b',
-            boxShadow: '0 0 5px #555 inset',
-            transform: shaftTransform,
-            transformOrigin: 'center bottom',
-          }}
-        />
-        <div
-          className="absolute left-1/2 top-1/2 w-4.5 h-4.5 rounded-full border border-zinc-400 transition-[transform,box-shadow] duration-150 ease-out will-change-transform z-10"
-          style={{
-            background: `
-              radial-gradient(35% 25% at 50% 25%, rgb(136, 136, 153) 20%, rgba(136, 136, 153, 0)),
-              radial-gradient(1em 0.75em at 32% 75%, rgb(102, 102, 102), rgba(102, 102, 102, 0)),
-              radial-gradient(1em 0.75em at 65% 78%, rgb(102, 102, 102), rgba(102, 102, 102, 0)),
-              radial-gradient(100% 100% at center, rgb(68, 68, 68) 49.5%, rgba(68, 68, 68, 0) 50%)
-            `,
-            transform: ballTransform,
-            boxShadow: ballShadow,
-          }}
-        />
-      </div>
-    </div>
   );
 };

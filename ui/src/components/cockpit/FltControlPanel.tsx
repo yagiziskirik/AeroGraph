@@ -2,6 +2,7 @@
 
 import React, { useState, useId, useRef } from 'react';
 import { Sound } from '../../services/sound';
+import { CockpitTwoWaySwitch } from './CockpitSwitch';
 
 export interface FltControlSwitches {
   digitalBackup?: boolean; // false = OFF (down), true = BACKUP (up)
@@ -234,7 +235,7 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                   title={`DIGITAL BACKUP: ${activeSwitches.digitalBackup ? 'BACKUP' : 'OFF'} (Left-click for BACKUP, Right-click for OFF)`}
                   className={`my-1 ${isSwitchAllowed('digitalBackup') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                 >
-                  <TwoWayToggle isUp={!!activeSwitches.digitalBackup} />
+                  <CockpitTwoWaySwitch isUp={!!activeSwitches.digitalBackup} />
                 </div>
 
                 <span
@@ -284,7 +285,7 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                   title={`ALT FLAPS: ${activeSwitches.altFlaps ? 'EXTEND' : 'NORM'} (Left-click for EXTEND, Right-click for NORM)`}
                   className={`my-1 ${isSwitchAllowed('altFlaps') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                 >
-                  <TwoWayToggle isUp={!!activeSwitches.altFlaps} />
+                  <CockpitTwoWaySwitch isUp={!!activeSwitches.altFlaps} />
                 </div>
 
                 <span
@@ -338,7 +339,7 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                   title={`MANUAL TF FLYUP: ${activeSwitches.manualTfFlyup ? 'DISABLE' : 'ENABLE'} (Left-click for DISABLE, Right-click for ENABLE)`}
                   className={`my-0.5 ${isSwitchAllowed('manualTfFlyup') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                 >
-                  <TwoWayToggle isUp={!!activeSwitches.manualTfFlyup} />
+                  <CockpitTwoWaySwitch isUp={!!activeSwitches.manualTfFlyup} />
                 </div>
 
                 <span
@@ -433,7 +434,7 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                   title={`LE FLAPS: ${activeSwitches.leFlaps ? 'LOCK' : 'AUTO'} (Left-click for LOCK, Right-click for AUTO)`}
                   className={`my-1 ${isSwitchAllowed('leFlaps') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                 >
-                  <TwoWayToggle isUp={!!activeSwitches.leFlaps} />
+                  <CockpitTwoWaySwitch isUp={!!activeSwitches.leFlaps} />
                 </div>
 
                 <span
@@ -483,7 +484,7 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                     title="FLCS RESET (Momentary): Press and hold left-click to reset FLCS faults"
                     className={isSwitchAllowed('flcsReset') ? 'cursor-pointer select-none active:scale-95' : 'cursor-not-allowed pointer-events-none select-none'}
                   >
-                    <TwoWayToggle isUp={!!activeSwitches.flcsReset} isRedCollar={true} />
+                    <CockpitTwoWaySwitch isUp={!!activeSwitches.flcsReset} isRedCollar={true} />
                   </div>
 
                   {/* Right Wire Loop Guard */}
@@ -543,7 +544,7 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
                     title={`BIT: ${activeSwitches.bit ? 'BIT' : 'OFF'} (Left-click for BIT, Right-click for OFF)`}
                     className={`my-1 ${isSwitchAllowed('bit') ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed pointer-events-none'}`}
                   >
-                    <TwoWayToggle isUp={!!activeSwitches.bit} />
+                    <CockpitTwoWaySwitch isUp={!!activeSwitches.bit} />
                   </div>
 
                   {/* Right Wire Loop Guard */}
@@ -573,78 +574,3 @@ export const FltControlPanel: React.FC<FltControlPanelProps> = ({
   );
 };
 
-/* -------------------------------------------------------------------------- */
-/* Standard 2-Way Lever Switch Component                                      */
-/* -------------------------------------------------------------------------- */
-
-interface TwoWayToggleProps {
-  isUp: boolean;
-  isRedCollar?: boolean;
-}
-
-const TwoWayToggle: React.FC<TwoWayToggleProps> = ({ isUp, isRedCollar = false }) => {
-  const shaftTransform = isUp
-    ? 'translate(-50%, -44px) scaleY(1.05)'
-    : 'translate(-50%, 4px) scaleY(1.05)';
-
-  const ballTransform = isUp
-    ? 'translate(-50%, -42px)'
-    : 'translate(-50%, 14px)';
-
-  const ballShadow = isUp
-    ? '0 10px 12px rgba(0,0,0,0.7), inset 0 2px 3px rgba(255,255,255,0.9)'
-    : '0 -10px 12px rgba(0,0,0,0.7), inset 0 -2px 3px rgba(255,255,255,0.9)';
-
-  return (
-    <div className="relative w-10 h-10 flex items-center justify-center select-none will-change-transform">
-      {/* Outer socket bezel ring */}
-      <div
-        className="w-9 h-9 rounded-full border border-black/50 shadow-inner z-0"
-        style={{
-          backgroundImage: `
-            radial-gradient(1em 1.5em at 50% 50%, rgb(204, 204, 204) 25%, rgb(170, 170, 170) 49%, rgba(170, 170, 170, 0) 50%),
-            radial-gradient(0.65em 1em at 50% 53%, rgb(68, 68, 68), rgba(68, 68, 68, 0)),
-            radial-gradient(0.75em 0.75em at 55% 45%, rgb(255, 255, 255), rgba(255, 255, 255, 0)),
-            radial-gradient(100% 100% at 50% 50%, rgb(238, 238, 238), rgb(170, 170, 170) 10%, rgb(0, 0, 0) 18%, rgb(0, 0, 0) 21%, rgb(153, 153, 153) 21.5%, rgb(153, 153, 153) 24%, rgba(153, 153, 153, 0) 24.5%, rgb(221, 221, 221) 30.5%, rgb(221, 221, 221) 33%, rgb(68, 68, 68) 33.5%, rgb(68, 68, 68) 35%, rgba(68, 68, 68) 0 35.5%, rgb(221, 221, 221) 41.5%, rgb(238, 238, 238) 45%, rgb(68, 68, 85) 45.5%, rgb(68, 68, 85) 49%, rgba(68, 68, 85) 0 50%),
-            radial-gradient(100% 100% at center, rgb(170, 170, 170) 49%, rgba(170, 170, 170) 0 50%)
-          `,
-          boxShadow: '0 3px 6px rgba(0,0,0,0.7)',
-        }}
-      />
-
-      {/* Red accent collar for FLCS RESET */}
-      {isRedCollar && (
-        <div className="absolute w-5 h-5 rounded-full border border-red-950/80 bg-red-900/60 pointer-events-none" />
-      )}
-
-      {/* Lever Parts (Shaft & Ball) */}
-      <div className="absolute inset-0 pointer-events-none z-10">
-        {/* Lever Shaft */}
-        <div
-          className="absolute left-1/2 top-1/2 w-3 h-9 rounded-full border border-[#444] transition-transform duration-150 ease-out will-change-transform"
-          style={{
-            backgroundColor: '#2b2b2b',
-            boxShadow: '0 0 5px #555 inset',
-            transform: shaftTransform,
-            transformOrigin: 'center bottom',
-          }}
-        />
-
-        {/* Lever Ball / Bat Handle Tip */}
-        <div
-          className="absolute left-1/2 top-1/2 w-4.5 h-4.5 rounded-full border border-zinc-400 transition-[transform,box-shadow] duration-150 ease-out will-change-transform z-10"
-          style={{
-            background: `
-              radial-gradient(35% 25% at 50% 25%, rgb(136, 136, 153) 20%, rgba(136, 136, 153, 0)),
-              radial-gradient(1em 0.75em at 32% 75%, rgb(102, 102, 102), rgba(102, 102, 102, 0)),
-              radial-gradient(1em 0.75em at 65% 78%, rgb(102, 102, 102), rgba(102, 102, 102, 0)),
-              radial-gradient(100% 100% at center, rgb(68, 68, 68) 49.5%, rgba(68, 68, 68, 0) 50%)
-            `,
-            transform: ballTransform,
-            boxShadow: ballShadow,
-          }}
-        />
-      </div>
-    </div>
-  );
-};
