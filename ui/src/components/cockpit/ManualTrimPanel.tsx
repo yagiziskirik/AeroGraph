@@ -3,6 +3,7 @@
 import React, { useState, useId, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Sound } from '../../services/sound';
 import { CockpitTwoWaySwitch } from './CockpitSwitch';
+import { CockpitRoundKnob } from './CockpitRotary';
 
 export interface ManualTrimValues {
   rollTrim?: number; // -3.0 (L WING DN) to +3.0 (R WING DN), neutral: 0.0
@@ -660,42 +661,8 @@ const YawTrimDial: React.FC<{ value: number }> = ({ value }) => {
         R
       </text>
 
-      {/* Rotating Large Whitish-Gray Knob with Clean Face & Black-Outlined White Pointer */}
-      <g
-        transform={`rotate(${rotation}, ${cx}, ${cy})`}
-        style={{ willChange: 'transform', transition: 'transform 70ms linear' }}
-      >
-        {/* Large Knob Body: 48px diameter (r = 24), clean whitish-gray metallic surface, NO center cap, NO perimeter grips */}
-        <circle
-          cx={cx}
-          cy={cy}
-          r="24"
-          fill="url(#yawKnobClean)"
-          stroke="#71717a"
-          strokeWidth="1.2"
-          style={{
-            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))',
-          }}
-        />
-
-        {/* Clean Inner Rim */}
-        <circle cx={cx} cy={cy} r="22.5" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8" />
-
-        {/* Indicator Line: White with Black Border Running Across to the Edge */}
-        {/* Outer Black Border Line */}
-        <line x1={cx + 3} y1={cy} x2={cx + 23.5} y2={cy} stroke="#000000" strokeWidth="4.2" strokeLinecap="round" />
-        {/* Inner Solid White Line */}
-        <line x1={cx + 4} y1={cy} x2={cx + 23} y2={cy} stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" />
-      </g>
-
-      {/* Gradient Definition for Clean Whitish-Gray Knob */}
-      <defs>
-        <radialGradient id="yawKnobClean" cx="35%" cy="30%" r="70%">
-          <stop offset="0%" stopColor="#f4f4f5" />
-          <stop offset="60%" stopColor="#d4d4d8" />
-          <stop offset="100%" stopColor="#a1a1aa" />
-        </radialGradient>
-      </defs>
+      {/* Canonical CockpitRoundKnob */}
+      <CockpitRoundKnob cx={cx} cy={cy} size={48} rotation={rotation} />
     </svg>
   );
 };
