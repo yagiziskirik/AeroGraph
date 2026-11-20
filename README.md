@@ -396,7 +396,7 @@ The **Tactical Avionics Console (TAC)** is the primary operational interface and
 The chassis top bar provides persistent telemetry at a glance:
 - **Station Selector**: Rapidly switch between the 4 primary consoles: `[01] KNEEBOARD BINDER`, `[02] CREW CHIEF BIT`, `[03] FOXVOX STATION`, and `[04] COCKPIT SETTINGS`.
 - **BMS Status**: Indicates whether Falcon BMS shared memory is active (`CONNECTED`) or awaiting launch (`STANDBY`).
-- **Voice Recognition Status**: Shows whether speech recognition is listening, or in standby sleep (`LISTENING`, `STANDBY`, or `DISABLED`).
+- **Voice Recognition Status & Quick Action**: Persistent status pill in the navigation bar showing whether speech recognition is active (`LISTENING (UNMUTED)`), muted (`STANDBY (MUTED)`), or turned off (`DISABLED`). Click it to quickly toggle mute/unmute, or press and hold it (with an animated progress line) to toggle the master voice recognition engine on/off.
 - **Microphone Peak Level**: Live CoreAudio peak VU-meter indicating incoming voice amplitude.
 - **Window Controls**: Native borderless window drag area, 8-directional edge resize handles, and minimize, maximize, and close controls.
 
@@ -605,8 +605,8 @@ The **Crew Chief BIT** view is a dedicated pre-flight diagnostic station for fli
 The **FoxVox Station** is your comms center and real-time speech operations dashboard, uniting profile management, real-time audio meters, live phrase recognition, and the interactive **Crew Chief Academy**:
 
 #### 8.1 Profile Controller & Engine Management
-- **Voice Recognition Master Toggle**: One-click switch to turn speech recognition and controller switch sampling `ON` or `OFF`.
-- **Microphone Listening State (`LISTENING` vs `STANDBY (MUTED)`)**: Quickly mute or unmute the microphone via the UI button or spoken commands (*"Stand by"* to mute, *"Radio check"* to unmute).
+- **Voice Recognition Master Toggle**: One-click switch to turn speech recognition and controller switch sampling `ON` or `OFF` (can also be toggled from anywhere by holding the top-right Voice Recognition button in the navigation bar).
+- **Microphone Listening State (`LISTENING` vs `STANDBY (MUTED)`)**: Quickly mute or unmute the microphone via the UI button, spoken commands (*"Stand by"* to mute, *"Radio check"* to unmute), or by clicking the top-right Voice Recognition button.
 - **Active Profile Banner**: Displays the currently loaded `.fvx` profile name, filepath, and live status badge:
   - `DEFAULT`: The clean, unedited bundled profile.
   - `MANAGED • MODIFIED`: A profile with your custom step order or skipped steps applied.
