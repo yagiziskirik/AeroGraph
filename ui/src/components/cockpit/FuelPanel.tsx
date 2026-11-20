@@ -2,6 +2,7 @@
 
 import React, { useState, useId } from 'react';
 import { Sound } from '../../services/sound';
+import { CockpitTwoWaySwitch } from './CockpitSwitch';
 
 export type FuelMasterPosition = 'MASTER' | 'OFF';
 export type TankInertingPosition = 'TANK_INERTING' | 'OFF';
@@ -340,7 +341,7 @@ export const FuelPanel: React.FC<FuelPanelProps> = ({
                   : 'cursor-not-allowed pointer-events-none opacity-80'
               }`}
             >
-              <VerticalLeverToggle isUp={activeTankInerting === 'TANK_INERTING'} />
+              <CockpitTwoWaySwitch isUp={activeTankInerting === 'TANK_INERTING'} />
             </div>
 
             <span
@@ -405,7 +406,7 @@ export const FuelPanel: React.FC<FuelPanelProps> = ({
                   : 'cursor-not-allowed pointer-events-none opacity-80'
               }`}
             >
-              <VerticalLeverToggle isUp={activeAirRefuel === 'OPEN'} />
+              <CockpitTwoWaySwitch isUp={activeAirRefuel === 'OPEN'} />
             </div>
 
             <span
@@ -486,73 +487,6 @@ const CockpitLeverSwitch: React.FC<CockpitLeverSwitchProps> = ({ position }) => 
 
         <div
           className="absolute left-1/2 top-1/2 w-5.5 h-5.5 rounded-full border border-zinc-400 transition-[transform,box-shadow] duration-150 ease-out will-change-transform z-10"
-          style={{
-            background: `
-              radial-gradient(35% 25% at 50% 25%, rgb(136, 136, 153) 20%, rgba(136, 136, 153, 0)),
-              radial-gradient(1em 0.75em at 32% 75%, rgb(102, 102, 102), rgba(102, 102, 102, 0)),
-              radial-gradient(1em 0.75em at 65% 78%, rgb(102, 102, 102), rgba(102, 102, 102, 0)),
-              radial-gradient(100% 100% at center, rgb(68, 68, 68) 49.5%, rgba(68, 68, 68, 0) 50%)
-            `,
-            transform: ballTransform,
-            boxShadow: ballShadow,
-          }}
-        />
-      </div>
-    </div>
-  );
-};
-
-/* -------------------------------------------------------------------------- */
-/* 2. Vertical 2-Way Lever Switch (BIT Switch for TANK INERTING & AIR REFUEL) */
-/* -------------------------------------------------------------------------- */
-
-interface VerticalLeverToggleProps {
-  isUp: boolean;
-}
-
-const VerticalLeverToggle: React.FC<VerticalLeverToggleProps> = ({ isUp }) => {
-  const shaftTransform = isUp
-    ? 'translate(-50%, -42px) scaleY(1.05)'
-    : 'translate(-50%, 2px) scaleY(1.05)';
-
-  const ballTransform = isUp
-    ? 'translate(-50%, -40px)'
-    : 'translate(-50%, 12px)';
-
-  const ballShadow = isUp
-    ? '0 10px 12px rgba(0,0,0,0.7), inset 0 2px 3px rgba(255,255,255,0.9)'
-    : '0 -10px 12px rgba(0,0,0,0.7), inset 0 -2px 3px rgba(255,255,255,0.9)';
-
-  return (
-    <div className="relative w-10 h-10 flex items-center justify-center select-none will-change-transform">
-      {/* Outer socket bezel ring */}
-      <div
-        className="w-9 h-9 rounded-full border border-black/50 shadow-inner z-0"
-        style={{
-          backgroundImage: `
-            radial-gradient(1em 1.5em at 50% 50%, rgb(204, 204, 204) 25%, rgb(170, 170, 170) 49%, rgba(170, 170, 170, 0) 50%),
-            radial-gradient(0.65em 1em at 50% 53%, rgb(68, 68, 68), rgba(68, 68, 68, 0)),
-            radial-gradient(0.75em 0.75em at 55% 45%, rgb(255, 255, 255), rgba(255, 255, 255, 0)),
-            radial-gradient(100% 100% at 50% 50%, rgb(238, 238, 238), rgb(170, 170, 170) 10%, rgb(0, 0, 0) 18%, rgb(0, 0, 0) 21%, rgb(153, 153, 153) 21.5%, rgb(153, 153, 153) 24%, rgba(153, 153, 153, 0) 24.5%, rgb(221, 221, 221) 30.5%, rgb(221, 221, 221) 33%, rgb(68, 68, 68) 33.5%, rgb(68, 68, 68) 35%, rgba(68, 68, 68) 0 35.5%, rgb(221, 221, 221) 41.5%, rgb(238, 238, 238) 45%, rgb(68, 68, 85) 45.5%, rgb(68, 68, 85) 49%, rgba(68, 68, 85) 0 50%),
-            radial-gradient(100% 100% at center, rgb(170, 170, 170) 49%, rgba(170, 170, 170, 0) 50%)
-          `,
-          boxShadow: '0 3px 6px rgba(0,0,0,0.7)',
-        }}
-      />
-
-      {/* Lever Parts (Shaft & Ball) */}
-      <div className="absolute inset-0 pointer-events-none z-10">
-        <div
-          className="absolute left-1/2 top-1/2 w-3 h-9 rounded-full border border-[#444] transition-transform duration-150 ease-out will-change-transform"
-          style={{
-            backgroundColor: '#2b2b2b',
-            boxShadow: '0 0 5px #555 inset',
-            transform: shaftTransform,
-            transformOrigin: 'center bottom',
-          }}
-        />
-        <div
-          className="absolute left-1/2 top-1/2 w-4.5 h-4.5 rounded-full border border-zinc-400 transition-[transform,box-shadow] duration-150 ease-out will-change-transform z-10"
           style={{
             background: `
               radial-gradient(35% 25% at 50% 25%, rgb(136, 136, 153) 20%, rgba(136, 136, 153, 0)),
