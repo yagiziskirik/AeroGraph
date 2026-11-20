@@ -23,7 +23,7 @@ import { TelemetryData, ProfileCategoryView, CrewChiefStateData, StateSnapshot }
 import { RampStartStep, StepSubstep, RAMP_START_STEPS, RAMP_STEPS_BY_NAME, DrillStepName } from '../services/voiceTrainingData';
 import { TacticalBrevityView } from './academy/TacticalBrevityView';
 import { Dash1ManualView } from './academy/Dash1ManualView';
-import { CockpitDrillStage, DRILL_STEP_ORDER, getOrderedDrillSteps } from './academy/CockpitDrillStage';
+import { CockpitDrillStage, DRILL_STEP_ORDER, DEFAULT_DISABLED_DRILL_STEPS, getOrderedDrillSteps } from './academy/CockpitDrillStage';
 import { AcademyDisclaimerModal } from './academy/AcademyDisclaimerModal';
 
 interface VoiceAcademyViewProps {
@@ -139,7 +139,7 @@ export const VoiceAcademyView: React.FC<VoiceAcademyViewProps> = ({
 
   // Drill Step Reordering & Enabling State (synchronized with FoxVox)
   const [drillOrder, setDrillOrder] = useState<string[]>(() => DRILL_STEP_ORDER as string[]);
-  const [disabledSteps, setDisabledSteps] = useState<string[]>([]);
+  const [disabledSteps, setDisabledSteps] = useState<string[]>(() => DEFAULT_DISABLED_DRILL_STEPS as string[]);
 
   useEffect(() => {
     const unsubSnapshot = Ipc.on('StateSnapshot', (snapshot: StateSnapshot) => {

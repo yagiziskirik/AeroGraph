@@ -19,7 +19,7 @@ import {
 import { Sound } from '../../services/sound';
 import { ShiningCheckbox } from '../../components/inputs';
 import { DrillStepName, RAMP_STEPS_BY_NAME } from '../../services/voiceTrainingData';
-import { DRILL_STEP_ORDER } from './CockpitDrillStage';
+import { DRILL_STEP_ORDER, DEFAULT_DISABLED_DRILL_STEPS } from './CockpitDrillStage';
 
 export interface BlockDefinition {
   id: string;
@@ -570,7 +570,7 @@ export const DrillSequenceManagerModal: React.FC<DrillSequenceManagerModalProps>
   const handleReset = () => {
     Sound.playClick();
     setBlocks(CANONICAL_BLOCK_DEFS);
-    setDisabled([]);
+    setDisabled(DEFAULT_DISABLED_DRILL_STEPS as string[]);
     setHasChanges(true);
     onResetSequence();
   };

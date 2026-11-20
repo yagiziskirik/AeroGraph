@@ -50,9 +50,14 @@ export const DRILL_STEP_ORDER: DrillStepName[] = [
   'FINALE_SALUTE',
 ];
 
+export const DEFAULT_DISABLED_DRILL_STEPS: DrillStepName[] = [
+  'LEFT_BRAKE_CHAN2',
+  'RIGHT_BRAKE_CHAN2',
+];
+
 export const getOrderedDrillSteps = (
   order: DrillStepName[] = DRILL_STEP_ORDER,
-  disabledSteps: string[] = []
+  disabledSteps: string[] = DEFAULT_DISABLED_DRILL_STEPS as string[]
 ): RampStartStep[] => {
   return order
     .filter((name) => !disabledSteps.includes(name))
@@ -3978,18 +3983,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 {currentStepName === 'LEFT_BRAKE_CHAN2' && currentSubstepIndex === 0 && (
                   <div className="flex items-center justify-between gap-4 w-full">
                     <span className="text-amber-300 font-bold text-xs">
-                      ⚡ Action Required: Right-click BRAKES switch on Landing Gear Panel to select CHAN 2 (lever DOWN).
+                      ⚡ Action Required: Select CHAN 2 on BRAKES switch on Landing Gear Panel.
                     </span>
-                    <button
-                      onClick={() => {
-                        setBrakeChannel('CHAN_2');
-                        Sound.playCommit();
-                        onAdvanceSubstep(1);
-                      }}
-                      className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 font-bold text-xs cursor-pointer shadow transition-[background-color] shrink-0"
-                    >
-                      SELECT CHAN 2
-                    </button>
                   </div>
                 )}
                 {currentStepName === 'LEFT_BRAKE_CHAN2' && currentSubstepIndex === 1 && (
@@ -4001,7 +3996,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 {currentStepName === 'LEFT_BRAKE_CHAN2' && currentSubstepIndex === 2 && (
                   <div className="flex items-center justify-between gap-4 w-full">
                     <span className="text-amber-300 font-bold text-xs">
-                      ⚡ Action Required: Press and release the left toe brake pedal (Channel 2).
+                      ⚡ Action Required: Press and release the left toe brake pedal (CHAN 2).
                     </span>
                     <button
                       onClick={() => onAdvanceSubstep(3)}
@@ -4014,7 +4009,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 {currentStepName === 'LEFT_BRAKE_CHAN2' && currentSubstepIndex === 3 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-emerald-400 font-bold">
-                      ✓ Channel 2 left caliper clamping verified good.
+                      ✓ CHAN 2 left caliper clamping verified good.
                     </span>
                     <button
                       onClick={() => advanceToNextStep()}
@@ -4035,7 +4030,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 {currentStepName === 'RIGHT_BRAKE_CHAN2' && currentSubstepIndex === 1 && (
                   <div className="flex items-center justify-between gap-4 w-full">
                     <span className="text-amber-300 font-bold text-xs">
-                      ⚡ Action Required: Press and release the right toe brake pedal (Channel 2).
+                      ⚡ Action Required: Press and release the right toe brake pedal (CHAN 2).
                     </span>
                     <button
                       onClick={() => onAdvanceSubstep(2)}
@@ -4048,7 +4043,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 {currentStepName === 'RIGHT_BRAKE_CHAN2' && currentSubstepIndex === 2 && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-emerald-400 font-bold">
-                      ✓ Channel 2 right caliper clamping verified good.
+                      ✓ CHAN 2 right caliper clamping verified good.
                     </span>
                     <button
                       onClick={() => onAdvanceSubstep(3)}
@@ -4062,18 +4057,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 {currentStepName === 'RIGHT_BRAKE_CHAN2' && currentSubstepIndex === 3 && (
                   <div className="flex items-center justify-between gap-4 w-full">
                     <span className="text-amber-300 font-bold text-xs">
-                      ⚡ Action Required: Left-click BRAKES switch on Landing Gear Panel to restore CHAN 1 (lever UP).
+                      ⚡ Action Required: Select CHAN 1 on BRAKES switch on Landing Gear Panel.
                     </span>
-                    <button
-                      onClick={() => {
-                        setBrakeChannel('CHAN_1');
-                        Sound.playCommit();
-                        advanceToNextStep();
-                      }}
-                      className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 font-bold text-xs cursor-pointer shadow transition-[background-color] shrink-0"
-                    >
-                      RESTORE CHAN 1
-                    </button>
                   </div>
                 )}
 
