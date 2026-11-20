@@ -23,4 +23,5 @@ export * from './TacticalControlInputCard';
 export * from './CockpitSwitch';
 export * from './CockpitRotary';
 export * from './LightingPanel';
+export * from './LandingGearPanel';
 
