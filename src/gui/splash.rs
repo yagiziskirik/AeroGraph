@@ -432,7 +432,11 @@ unsafe extern "system" fn splash_wnd_proc(
     }
 }
 
-fn run_splash_thread(tx: std::sync::mpsc::Sender<isize>, closed: Arc<AtomicBool>) {
+fn run_splash_thread(
+    tx: std::sync::mpsc::Sender<isize>,
+    closed: Arc<AtomicBool>,
+    target_rect: Option<(i32, i32, u32, u32)>,
+) {
     #[cfg(target_os = "windows")]
     unsafe {
         ANIM_FRAME.store(0, Ordering::Relaxed);
@@ -461,10 +465,17 @@ fn run_splash_thread(tx: std::sync::mpsc::Sender<isize>, closed: Arc<AtomicBool>
             let _ = RegisterClassExW(&wc);
         }
 
-        let screen_w = GetSystemMetrics(SM_CXSCREEN);
-        let screen_h = GetSystemMetrics(SM_CYSCREEN);
-        let x = ((screen_w - SPLASH_WIDTH) / 2).max(0);
-        let y = ((screen_h - SPLASH_HEIGHT) / 2).max(0);
+        let (x, y) = if let Some((mon_x, mon_y, mon_w, mon_h)) = target_rect {
+            let cx = mon_x + ((mon_w as i32 - SPLASH_WIDTH) / 2).max(0);
+            let cy = mon_y + ((mon_h as i32 - SPLASH_HEIGHT) / 2).max(0);
+            (cx, cy)
+        } else {
+            let screen_w = GetSystemMetrics(SM_CXSCREEN);
+            let screen_h = GetSystemMetrics(SM_CYSCREEN);
+            let cx = ((screen_w - SPLASH_WIDTH) / 2).max(0);
+            let cy = ((screen_h - SPLASH_HEIGHT) / 2).max(0);
+            (cx, cy)
+        };
 
         let hwnd_res = CreateWindowExW(
             WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
@@ -510,7 +521,8 @@ fn run_splash_thread(tx: std::sync::mpsc::Sender<isize>, closed: Arc<AtomicBool>
 
 impl SplashWindow {
     /// Instantly displays an animated, lightweight cockpit splash screen on a dedicated thread.
-    pub fn show() -> Option<Self> {
+    /// Can be centered within a specific target monitor physical rect (x, y, width, height).
+    pub fn show(target_rect: Option<(i32, i32, u32, u32)>) -> Option<Self> {
         #[cfg(target_os = "windows")]
         {
             let (tx, rx) = std::sync::mpsc::channel::<isize>();
@@ -520,7 +532,7 @@ impl SplashWindow {
             let handle = std::thread::Builder::new()
                 .name("AeroGraphSplash".to_string())
                 .spawn(move || {
-                    run_splash_thread(tx, c_thread);
+                    run_splash_thread(tx, c_thread, target_rect);
                 })
                 .ok()?;
 
@@ -536,6 +548,7 @@ impl SplashWindow {
 
         #[cfg(not(target_os = "windows"))]
         {
+            let _ = target_rect;
             None
         }
     }

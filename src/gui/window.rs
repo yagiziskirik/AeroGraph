@@ -78,6 +78,79 @@ fn build_http_response(
         .unwrap()
 }
 
+pub fn resolve_target_monitor<T>(
+    target: &EventLoopWindowTarget<T>,
+    config: &AppConfig,
+) -> Option<tao::monitor::MonitorHandle> {
+    let monitors: Vec<tao::monitor::MonitorHandle> = target.available_monitors().collect();
+    if monitors.is_empty() {
+        return target.primary_monitor();
+    }
+
+    let (win_w, win_h) = config.window_size;
+
+    if let Some((wx, wy)) = config.window_pos {
+        let win_l = wx;
+        let win_t = wy;
+        let win_r = wx + win_w as i32;
+        let win_b = wy + win_h as i32;
+
+        let center_x = wx + (win_w as i32) / 2;
+        let center_y = wy + (win_h as i32) / 2;
+
+        let mut best_monitor: Option<tao::monitor::MonitorHandle> = None;
+        let mut max_overlap_area: i64 = -1;
+
+        for mon in &monitors {
+            let scale = mon.scale_factor();
+            let pos = mon.position();
+            let size = mon.size();
+
+            let mon_l = (pos.x as f64 / scale).round() as i32;
+            let mon_t = (pos.y as f64 / scale).round() as i32;
+            let mon_r = mon_l + (size.width as f64 / scale).round() as i32;
+            let mon_b = mon_t + (size.height as f64 / scale).round() as i32;
+
+            let inter_w = (win_r.min(mon_r) - win_l.max(mon_l)).max(0) as i64;
+            let inter_h = (win_b.min(mon_b) - win_t.max(mon_t)).max(0) as i64;
+            let overlap_area = inter_w * inter_h;
+
+            let contains_center =
+                center_x >= mon_l && center_x < mon_r && center_y >= mon_t && center_y < mon_b;
+
+            // Prioritize monitor with greatest overlap area; break ties with center containment
+            if overlap_area > max_overlap_area
+                || (overlap_area == max_overlap_area && contains_center)
+            {
+                max_overlap_area = overlap_area;
+                best_monitor = Some(mon.clone());
+            }
+        }
+
+        if max_overlap_area > 0 {
+            return best_monitor;
+        }
+
+        // Fallback: check if (wx, wy) falls directly into physical monitor bounds
+        for mon in &monitors {
+            let pos = mon.position();
+            let size = mon.size();
+            let mon_l = pos.x;
+            let mon_t = pos.y;
+            let mon_r = pos.x + size.width as i32;
+            let mon_b = pos.y + size.height as i32;
+
+            if wx >= mon_l && wx < mon_r && wy >= mon_t && wy < mon_b {
+                return Some(mon.clone());
+            }
+        }
+    }
+
+    target
+        .primary_monitor()
+        .or_else(|| monitors.into_iter().next())
+}
+
 pub struct TacticalConsoleWindow {
     window: Arc<Window>,
     webview: WebView,
@@ -90,8 +163,10 @@ impl TacticalConsoleWindow {
         config: &AppConfig,
         ipc_handler: impl Fn(IpcRequest, &Window) + Send + Sync + 'static,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        let target_mon = resolve_target_monitor(target, config);
+
         let (mut width, mut height) = config.window_size;
-        if let Some(monitor) = target.primary_monitor() {
+        if let Some(ref monitor) = target_mon {
             let screen_size = monitor.size().to_logical::<f64>(monitor.scale_factor());
             let max_w = (screen_size.width * 0.90).round() as u32;
             let max_h = (screen_size.height * 0.88).round() as u32;
@@ -109,9 +184,23 @@ impl TacticalConsoleWindow {
 
         if let Some((x, y)) = config.window_pos {
             builder = builder.with_position(LogicalPosition::new(x as f64, y as f64));
+        } else if let Some(ref mon) = target_mon {
+            let scale = mon.scale_factor();
+            let pos = mon.position();
+            let size = mon.size();
+            let mon_l = (pos.x as f64 / scale).round() as i32;
+            let mon_t = (pos.y as f64 / scale).round() as i32;
+            let mon_w = (size.width as f64 / scale).round() as i32;
+            let mon_h = (size.height as f64 / scale).round() as i32;
+            let cx = mon_l + ((mon_w - width as i32) / 2).max(0);
+            let cy = mon_t + ((mon_h - height as i32) / 2).max(0);
+            builder = builder.with_position(LogicalPosition::new(cx as f64, cy as f64));
         }
 
         let window = Arc::new(builder.build(target)?);
+        if config.window_maximized {
+            window.set_maximized(true);
+        }
 
         let win_drag = window.clone();
         let ipc_callback = move |request: wry::http::Request<String>| {
@@ -135,7 +224,7 @@ impl TacticalConsoleWindow {
                 } else if matches!(ipc_req, IpcRequest::MinimizeWindow) {
                     win_drag.set_minimized(true);
                 } else if matches!(ipc_req, IpcRequest::ToggleMaximize) {
-                    win_drag.set_maximized(!win_drag.is_maximized());
+                    ipc_handler(ipc_req, &win_drag);
                 } else if matches!(ipc_req, IpcRequest::WindowReady) {
                     win_drag.set_visible(true);
                     win_drag.set_focus();

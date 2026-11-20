@@ -1225,6 +1225,31 @@ fn save_window_geometry(
             logical_size.width.round().max(1024.0) as u32,
             logical_size.height.round().max(680.0) as u32,
         );
+    } else if let Some(current_mon) = win.window().current_monitor() {
+        // Window is currently maximized. Ensure cfg.window_pos targets the active monitor
+        // where it is maximized, so subsequent launches and unmaximized restores stay on this screen.
+        let scale = current_mon.scale_factor();
+        let mon_pos = current_mon.position();
+        let mon_size = current_mon.size();
+
+        let mon_left = (mon_pos.x as f64 / scale).round() as i32;
+        let mon_top = (mon_pos.y as f64 / scale).round() as i32;
+        let mon_right = mon_left + (mon_size.width as f64 / scale).round() as i32;
+        let mon_bottom = mon_top + (mon_size.height as f64 / scale).round() as i32;
+
+        let is_on_current_mon = if let Some((x, y)) = cfg.window_pos {
+            x >= mon_left && x < mon_right && y >= mon_top && y < mon_bottom
+        } else {
+            false
+        };
+
+        if !is_on_current_mon {
+            let win_w = cfg.window_size.0 as i32;
+            let win_h = cfg.window_size.1 as i32;
+            let centered_x = mon_left + ((mon_right - mon_left - win_w) / 2).max(0);
+            let centered_y = mon_top + ((mon_bottom - mon_top - win_h) / 2).max(0);
+            cfg.window_pos = Some((centered_x, centered_y));
+        }
     }
     let _ = cfg.save();
 }
@@ -1416,7 +1441,18 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
         }
         IpcRequest::ToggleMaximize => {
             if let Some(win) = ctx.tactical_console.active_window() {
-                win.window().set_maximized(!win.window().is_maximized());
+                let currently_max = win.window().is_maximized();
+                if !currently_max {
+                    save_window_geometry(win, ctx.shared_config);
+                }
+                win.window().set_maximized(!currently_max);
+                if !currently_max {
+                    let mut cfg = ctx.shared_config.lock().unwrap();
+                    cfg.window_maximized = true;
+                    let _ = cfg.save();
+                } else {
+                    save_window_geometry(win, ctx.shared_config);
+                }
             }
         }
         IpcRequest::CloseWindow => {
