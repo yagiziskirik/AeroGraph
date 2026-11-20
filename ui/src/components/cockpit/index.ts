@@ -21,4 +21,6 @@ export * from './TestPanel';
 export * from './ThrottleQuadrant';
 export * from './TacticalControlInputCard';
 export * from './CockpitSwitch';
+export * from './CockpitRotary';
+export * from './LightingPanel';
 
