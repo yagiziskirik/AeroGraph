@@ -3,6 +3,7 @@
 import React, { useState, useId } from 'react';
 import { Sound } from '../../services/sound';
 import { CockpitTwoWaySwitch } from './CockpitSwitch';
+import { CockpitPointerKnob } from './CockpitRotary';
 
 export type FuelMasterPosition = 'MASTER' | 'OFF';
 export type TankInertingPosition = 'TANK_INERTING' | 'OFF';
@@ -526,63 +527,39 @@ const EngFeedDial: React.FC<EngFeedDialProps> = ({ position }) => {
 
   const rotation = rotationMap[position] ?? -135;
 
-  const cx = 50;
+  const cx = 57;
   const cy = 60;
 
   return (
     <svg
-      viewBox="0 0 100 104"
-      className="w-[104px] h-[104px] overflow-visible select-none"
+      viewBox="0 0 114 104"
+      className="w-[114px] h-[104px] overflow-visible select-none"
     >
-      <defs>
-        {/* Base skirt radial metallic gradient - Light whitish-gray matching YAW TRIM */}
-        <radialGradient id="engFeedSkirtGrad" cx="35%" cy="30%" r="70%">
-          <stop offset="0%" stopColor="#f4f4f5" />
-          <stop offset="55%" stopColor="#d4d4d8" />
-          <stop offset="85%" stopColor="#a1a1aa" />
-          <stop offset="100%" stopColor="#71717a" />
-        </radialGradient>
-
-        {/* Raised Pointer & Tail Bar linear gradient - Light whitish-gray matching YAW TRIM */}
-        <linearGradient id="engFeedBarGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#ffffff" />
-          <stop offset="30%" stopColor="#f4f4f5" />
-          <stop offset="70%" stopColor="#d4d4d8" />
-          <stop offset="100%" stopColor="#a1a1aa" />
-        </linearGradient>
-
-        {/* Drop shadow for 3D realism */}
-        <filter id="engFeedDropShadow" x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow dx="0.5" dy="2.5" stdDeviation="1.8" floodColor="#000" floodOpacity="0.75" />
-        </filter>
-      </defs>
-
       {/* Header: ENG FEED */}
       <text
-        x="50"
+        x={cx}
         y="11"
         fill="#e4e4e7"
         fontSize="8.5"
         fontWeight="900"
         fontFamily="monospace"
         textAnchor="middle"
-        className="select-none pointer-events-none"
       >
         ENG FEED
       </text>
 
       {/* Position 1: OFF (180° Horizontal Left) */}
-      <g className="select-none pointer-events-none">
+      <g>
         <line
-          x1="26"
+          x1="18"
           y1={cy}
-          x2="33"
+          x2="26"
           y2={cy}
           stroke={position === 'OFF' ? '#fbbf24' : '#d4d4d8'}
           strokeWidth="1.2"
         />
         <text
-          x="23"
+          x="15"
           y={cy + 3}
           fill={position === 'OFF' ? '#fbbf24' : '#d4d4d8'}
           fontSize="8"
@@ -595,20 +572,18 @@ const EngFeedDial: React.FC<EngFeedDialProps> = ({ position }) => {
       </g>
 
       {/* Position 2: NORM (135° Top-Left) with '+' crosshair */}
-      <g className="select-none pointer-events-none">
-        {/* Tick Mark */}
+      <g>
         <line
-          x1="32.5"
-          y1={cy - 17.5}
-          x2="37.5"
-          y2={cy - 12.5}
+          x1="28"
+          y1="31"
+          x2="33.5"
+          y2="36.5"
           stroke={position === 'NORM' ? '#fbbf24' : '#d4d4d8'}
           strokeWidth="1.2"
         />
-        {/* Small '+' crosshair marker above NORM */}
         <text
-          x="22"
-          y={cy - 28}
+          x="20"
+          y="22"
           fill="#a1a1aa"
           fontSize="7"
           fontWeight="bold"
@@ -617,10 +592,9 @@ const EngFeedDial: React.FC<EngFeedDialProps> = ({ position }) => {
         >
           +
         </text>
-        {/* NORM Label */}
         <text
-          x="27"
-          y={cy - 18}
+          x="25"
+          y="32"
           fill={position === 'NORM' ? '#fbbf24' : '#d4d4d8'}
           fontSize="8"
           fontWeight={position === 'NORM' ? '900' : '700'}
@@ -632,18 +606,18 @@ const EngFeedDial: React.FC<EngFeedDialProps> = ({ position }) => {
       </g>
 
       {/* Position 3: AFT (90° Straight UP) */}
-      <g className="select-none pointer-events-none">
+      <g>
         <line
           x1={cx}
-          y1="34"
+          y1="24"
           x2={cx}
-          y2="41"
+          y2="32"
           stroke={position === 'AFT' ? '#fbbf24' : '#d4d4d8'}
           strokeWidth="1.2"
         />
         <text
           x={cx}
-          y="28"
+          y="19"
           fill={position === 'AFT' ? '#fbbf24' : '#d4d4d8'}
           fontSize="8"
           fontWeight={position === 'AFT' ? '900' : '700'}
@@ -655,18 +629,18 @@ const EngFeedDial: React.FC<EngFeedDialProps> = ({ position }) => {
       </g>
 
       {/* Position 4: FWD (45° Top-Right) */}
-      <g className="select-none pointer-events-none">
+      <g>
         <line
-          x1="67.5"
-          y1={cy - 17.5}
-          x2="62.5"
-          y2={cy - 12.5}
+          x1="86"
+          y1="31"
+          x2="80.5"
+          y2="36.5"
           stroke={position === 'FWD' ? '#fbbf24' : '#d4d4d8'}
           strokeWidth="1.2"
         />
         <text
-          x="72"
-          y={cy - 18}
+          x="90"
+          y="32"
           fill={position === 'FWD' ? '#fbbf24' : '#d4d4d8'}
           fontSize="8"
           fontWeight={position === 'FWD' ? '900' : '700'}
@@ -677,85 +651,8 @@ const EngFeedDial: React.FC<EngFeedDialProps> = ({ position }) => {
         </text>
       </g>
 
-      {/* Base Circular Skirt */}
-      <circle
-        cx={cx}
-        cy={cy}
-        r="22.5"
-        fill="url(#engFeedSkirtGrad)"
-        stroke="#71717a"
-        strokeWidth="1"
-        filter="url(#engFeedDropShadow)"
-      />
-      <circle
-        cx={cx}
-        cy={cy}
-        r="21.5"
-        fill="none"
-        stroke="rgba(255,255,255,0.4)"
-        strokeWidth="0.7"
-      />
-
-      {/* Rotating Pointer with Rounded Tail */}
-      <g
-        transform={`rotate(${rotation}, ${cx}, ${cy})`}
-        style={{ willChange: 'transform', transition: 'transform 90ms ease-out' }}
-        filter="url(#engFeedDropShadow)"
-      >
-        {/* Main Bar Shape: Pointer on right (+X), rounded tail on left (-X) */}
-        {/* Tip: (cx + 23, cy); Upper wedge: (cx + 17, cy - 5.5); Upper edge: (cx - 7, cy - 6.5); */}
-        {/* Tail arc: A 6.5 6.5 0 0 0 (cx - 7, cy + 6.5); Lower edge: (cx + 17, cy + 5.5) */}
-        <path
-          d={`
-            M ${cx - 7},${cy - 6.5}
-            L ${cx + 17},${cy - 5.5}
-            L ${cx + 23},${cy}
-            L ${cx + 17},${cy + 5.5}
-            L ${cx - 7},${cy + 6.5}
-            A 6.5 6.5 0 0 1 ${cx - 7},${cy - 6.5}
-            Z
-          `}
-          fill="url(#engFeedBarGrad)"
-          stroke="#71717a"
-          strokeWidth="0.8"
-        />
-
-        {/* Top Highlight Chamfer */}
-        <path
-          d={`
-            M ${cx - 6},${cy - 5}
-            L ${cx + 15.5},${cy - 4}
-            L ${cx + 20.5},${cy}
-            L ${cx + 15.5},${cy + 4}
-            L ${cx - 6},${cy + 5}
-            A 5 5 0 0 1 ${cx - 6},${cy - 5}
-            Z
-          `}
-          fill="none"
-          stroke="rgba(255,255,255,0.45)"
-          strokeWidth="0.6"
-        />
-
-        {/* White Indicator Stripe with Crisp Black Border along the Pointer */}
-        <line
-          x1={cx + 1}
-          y1={cy}
-          x2={cx + 20.5}
-          y2={cy}
-          stroke="#000000"
-          strokeWidth="3.4"
-          strokeLinecap="round"
-        />
-        <line
-          x1={cx + 2}
-          y1={cy}
-          x2={cx + 19.5}
-          y2={cy}
-          stroke="#ffffff"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-        />
-      </g>
+      {/* Canonical CockpitPointerKnob rendered directly into the SVG at (cx, cy) */}
+      <CockpitPointerKnob cx={cx} cy={cy} size={58} rotation={rotation} />
     </svg>
   );
 };
