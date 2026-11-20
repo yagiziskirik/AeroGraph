@@ -6,7 +6,7 @@ import React from 'react';
 /* Common Bezel & Socket Styles (Concentric Stepped Rings)                   */
 /* -------------------------------------------------------------------------- */
 
-const SOCKET_BEZEL_STYLE: React.CSSProperties = {
+export const SOCKET_BEZEL_STYLE: React.CSSProperties = {
   backgroundImage: `
     radial-gradient(1em 1.5em at 50% 50%, rgb(204, 204, 204) 25%, rgb(170, 170, 170) 49%, rgba(170, 170, 170, 0) 50%),
     radial-gradient(0.65em 1em at 50% 53%, rgb(68, 68, 68), rgba(68, 68, 68, 0)),
