@@ -2405,7 +2405,11 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
                 .iter()
                 .map(|s| s.as_str().to_string())
                 .collect();
-            let default_disabled: Vec<String> = Vec::new();
+            let default_disabled: Vec<String> =
+                crate::fvx::reorder::DrillStepId::default_disabled()
+                    .iter()
+                    .map(|s| s.as_str().to_string())
+                    .collect();
 
             // 1. Update and save AppConfig
             {
@@ -2584,7 +2588,12 @@ fn push_snapshot_helper(
             .map(|s| s.as_str().to_string())
             .collect()
     });
-    let disabled_drill_steps = cfg.disabled_drill_steps.clone().unwrap_or_default();
+    let disabled_drill_steps = cfg.disabled_drill_steps.clone().unwrap_or_else(|| {
+        crate::fvx::reorder::DrillStepId::default_disabled()
+            .iter()
+            .map(|s| s.as_str().to_string())
+            .collect()
+    });
     let (mpo_button, mpo_device, _mpo_guid, mpo_is_key) = {
         let guard = shared_profile.lock().unwrap();
         if let Some(ref lp) = *guard {

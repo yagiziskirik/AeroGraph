@@ -80,6 +80,10 @@ impl DrillStepId {
             Self::FinaleSalute,
         ]
     }
+
+    pub fn default_disabled() -> Vec<Self> {
+        vec![Self::LeftBrakeChan2, Self::RightBrakeChan2]
+    }
 }
 
 impl std::str::FromStr for DrillStepId {
