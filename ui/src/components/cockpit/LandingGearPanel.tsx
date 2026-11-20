@@ -2,7 +2,12 @@
 
 import React, { useState, useId, useCallback } from 'react';
 import { Sound } from '../../services/sound';
-import { CockpitTwoWaySwitch, CockpitThreeWaySwitch, SOCKET_BEZEL_STYLE } from './CockpitSwitch';
+import {
+  CockpitTwoWaySwitch,
+  CockpitThreeWaySwitch,
+  CockpitLandingLightsSwitch,
+  SOCKET_BEZEL_STYLE,
+} from './CockpitSwitch';
 
 /* -------------------------------------------------------------------------- */
 /* Types & Interfaces                                                         */
@@ -929,7 +934,7 @@ export const LandingGearPanel: React.FC<LandingGearPanelProps> = ({
         </div>
 
         {/* 9. LIGHTS 3-Way Toggle Switch (LANDING / OFF / TAXI) */}
-        <div className="absolute left-[214px] top-[265px] flex flex-col items-center">
+        <div className="absolute left-[208px] top-[265px] flex flex-col items-center">
           {/* Header & LANDING Label */}
           <span className="text-[10px] font-black tracking-tight text-zinc-200 text-center uppercase leading-tight mb-1">
             LIGHTS
@@ -941,8 +946,8 @@ export const LandingGearPanel: React.FC<LandingGearPanelProps> = ({
             </span>
           </span>
 
-          {/* Switch Row with OFF in Center Right */}
-          <div className="relative flex items-center justify-center w-full">
+          {/* Switch Row with OFF directly to the right */}
+          <div className="relative flex items-center justify-center">
             <div
               onMouseDown={(e) => {
                 if (e.button === 0) advanceLights(); // Left-click advances UP (TAXI -> OFF -> LANDING)
@@ -955,7 +960,7 @@ export const LandingGearPanel: React.FC<LandingGearPanelProps> = ({
               title={`LIGHTS: ${activeLights} (Left-click advances UP towards LANDING, Right-click retracts DOWN towards TAXI)`}
               className={isAllowed('lights') ? 'cursor-pointer' : 'cursor-default pointer-events-none'}
             >
-              <CockpitThreeWaySwitch
+              <CockpitLandingLightsSwitch
                 position={
                   activeLights === 'LANDING'
                     ? 'UP'
@@ -968,7 +973,7 @@ export const LandingGearPanel: React.FC<LandingGearPanelProps> = ({
 
             {/* OFF label aligned directly to the right of the center switch position */}
             <span
-              className={`absolute left-[46px] top-1/2 -translate-y-1/2 text-[9.5px] font-black tracking-wider uppercase whitespace-nowrap pointer-events-none select-none ${
+              className={`absolute left-[54px] top-1/2 -translate-y-1/2 text-[9.5px] font-black tracking-wider uppercase whitespace-nowrap pointer-events-none select-none ${
                 activeLights === 'OFF' ? 'text-amber-400 font-extrabold' : 'text-zinc-400'
               }`}
             >

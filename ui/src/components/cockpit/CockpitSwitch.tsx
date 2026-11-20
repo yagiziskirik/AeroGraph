@@ -170,6 +170,95 @@ export const CockpitThreeWaySwitch: React.FC<CockpitThreeWaySwitchProps> = ({
 };
 
 /* -------------------------------------------------------------------------- */
+/* Landing Lights 3-Way Switch Component (Pill Paddle with 3 Tactile Bumps)   */
+/* -------------------------------------------------------------------------- */
+
+export interface CockpitLandingLightsSwitchProps {
+  position: ThreeWaySwitchPosition;
+  className?: string;
+}
+
+export const CockpitLandingLightsSwitch: React.FC<CockpitLandingLightsSwitchProps> = ({
+  position,
+  className = '',
+}) => {
+  const isUp = position === 'UP';
+  const isDown = position === 'DOWN';
+
+  const paddleTransform = isUp
+    ? 'translateY(-11px)'
+    : isDown
+    ? 'translateY(11px)'
+    : 'translateY(0)';
+
+  const paddleShadow = isUp
+    ? '0 7px 8px rgba(0,0,0,0.8), inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 1px rgba(0,0,0,0.6)'
+    : isDown
+    ? '0 -6px 8px rgba(0,0,0,0.8), inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 1px rgba(0,0,0,0.6)'
+    : '0 3px 5px rgba(0,0,0,0.75), inset 0 1px 1px rgba(255,255,255,0.45), inset 0 -1px 1px rgba(0,0,0,0.5)';
+
+  const shaftTransform = isUp
+    ? 'translate(-50%, -3px) scaleY(1)'
+    : isDown
+    ? 'translate(-50%, -9px) scaleY(1)'
+    : 'translate(-50%, -6px) scaleY(0)';
+
+  return (
+    <div
+      className={`relative w-[48px] h-[34px] flex items-center justify-center select-none will-change-transform ${className}`}
+    >
+      {/* Recessed socket well underneath */}
+      <div className="absolute w-[32px] h-[10px] rounded-full bg-[#0d0e10] border border-black/80 shadow-inner z-0 pointer-events-none" />
+
+      {/* Lever Shaft */}
+      <div
+        className="absolute left-1/2 top-1/2 w-3 h-3 rounded-sm transition-transform duration-150 ease-out will-change-transform z-10 pointer-events-none"
+        style={{
+          background: 'linear-gradient(to right, #1f2022 0%, #52555a 50%, #1f2022 100%)',
+          boxShadow: '0 0 2px rgba(0,0,0,0.9) inset',
+          transform: shaftTransform,
+          opacity: position === 'CENTER' ? 0 : 1,
+        }}
+      />
+
+      {/* Paddle (Bat Handle) with 3 Tactile Dots */}
+      <div
+        className="absolute w-[48px] h-[18px] rounded-full border border-[#1e201b] transition-[transform,box-shadow] duration-150 ease-out will-change-transform z-20 flex items-center justify-between px-1.5 pointer-events-none"
+        style={{
+          background: 'linear-gradient(to bottom, #a2a696 0%, #8e9383 50%, #717666 100%)',
+          transform: paddleTransform,
+          boxShadow: paddleShadow,
+        }}
+      >
+        {/* Left Tactile Dot */}
+        <div
+          className="w-2 h-2 rounded-full border border-[#7d7560]/80 shadow-[inset_0_1px_1.5px_rgba(0,0,0,0.45)]"
+          style={{
+            background: 'radial-gradient(circle at 45% 40%, #faf6e6 0%, #eae2c6 55%, #c8c0a0 100%)',
+          }}
+        />
+
+        {/* Center Tactile Dot */}
+        <div
+          className="w-2 h-2 rounded-full border border-[#7d7560]/80 shadow-[inset_0_1px_1.5px_rgba(0,0,0,0.45)]"
+          style={{
+            background: 'radial-gradient(circle at 45% 40%, #faf6e6 0%, #eae2c6 55%, #c8c0a0 100%)',
+          }}
+        />
+
+        {/* Right Tactile Dot */}
+        <div
+          className="w-2 h-2 rounded-full border border-[#7d7560]/80 shadow-[inset_0_1px_1.5px_rgba(0,0,0,0.45)]"
+          style={{
+            background: 'radial-gradient(circle at 45% 40%, #faf6e6 0%, #eae2c6 55%, #c8c0a0 100%)',
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
 /* Unified Switch Component (Accepts either 2-way or 3-way properties)         */
 /* -------------------------------------------------------------------------- */
 
