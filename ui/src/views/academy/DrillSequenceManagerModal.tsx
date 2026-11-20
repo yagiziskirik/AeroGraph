@@ -100,6 +100,12 @@ export const CANONICAL_BLOCK_DEFS: BlockDefinition[] = [
     stepNames: ['LEFT_BRAKE', 'RIGHT_BRAKE'],
   },
   {
+    id: 'BLOCK_BRAKES_CHAN2',
+    name: 'Brake Channel 2 Check (Alternate Channel)',
+    badge: 'OPTIONAL • 2 STEPS',
+    stepNames: ['LEFT_BRAKE_CHAN2', 'RIGHT_BRAKE_CHAN2'],
+  },
+  {
     id: 'BLOCK_AAR_DOOR',
     name: 'Air Refuel (AAR) Door Travel Check',
     stepNames: ['AAR_DOOR'],
