@@ -43,14 +43,21 @@ export const DRILL_STEP_ORDER: DrillStepName[] = [
   'DBU_CHECK',
   'LEFT_BRAKE',
   'RIGHT_BRAKE',
+  'LEFT_BRAKE_CHAN2',
+  'RIGHT_BRAKE_CHAN2',
   'AAR_DOOR',
   'CHOCKS_REMOVAL',
   'FINALE_SALUTE',
 ];
 
+export const DEFAULT_DISABLED_DRILL_STEPS: DrillStepName[] = [
+  'LEFT_BRAKE_CHAN2',
+  'RIGHT_BRAKE_CHAN2',
+];
+
 export const getOrderedDrillSteps = (
   order: DrillStepName[] = DRILL_STEP_ORDER,
-  disabledSteps: string[] = []
+  disabledSteps: string[] = DEFAULT_DISABLED_DRILL_STEPS as string[]
 ): RampStartStep[] => {
   return order
     .filter((name) => !disabledSteps.includes(name))
@@ -85,6 +92,8 @@ import {
   ManualPitchPanel,
   SpeedBrakeIndicator,
   FuelPanel,
+  LandingGearPanel,
+  BrakesPosition,
   MainPwrPosition,
   ElecPanelLights,
   TestPanelSwitches,
@@ -263,6 +272,22 @@ const matchSubstepPhrase = (
     return valid.includes(phrase) || cmd.includes('RIGHT BRAKE');
   }
 
+  // LEFT_BRAKE_CHAN2 Substep 2: Ready Left Brake (Chan 2)
+  if (step === 'LEFT_BRAKE_CHAN2' && substepOrder === 2) {
+    const valid = [
+      'READY LEFT BRAKE', 'CHIEF READY LEFT BRAKE', 'LEFT BRAKE', 'READY ON THE LEFT BRAKE'
+    ];
+    return valid.includes(phrase) || cmd.includes('LEFT BRAKE');
+  }
+
+  // RIGHT_BRAKE_CHAN2 Substep 1: Ready Right Brake (Chan 2)
+  if (step === 'RIGHT_BRAKE_CHAN2' && substepOrder === 1) {
+    const valid = [
+      'READY RIGHT BRAKE', 'CHIEF READY RIGHT BRAKE', 'RIGHT BRAKE', 'READY ON THE RIGHT BRAKE'
+    ];
+    return valid.includes(phrase) || cmd.includes('RIGHT BRAKE');
+  }
+
   // AAR_DOOR (Step 16) Substep 1: Ready AAR Door
   if ((step === 'AAR_DOOR' || step === 16) && substepOrder === 1) {
     const valid = [
@@ -416,7 +441,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   const hasAdvancedStep12SubstepRef = useRef(false);
   const mpoTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Step 14 & 15: Brakes (Physical Axis Integration)
+  // Step 14 & 15 & Chan 2: Brakes (Physical Axis Integration & Alternate Channel)
+  const [brakeChannel, setBrakeChannel] = useState<BrakesPosition>('CHAN_1');
 
   // Step 16: Fuel Panel / AAR Door
   const [airRefuelDoorPos, setAirRefuelDoorPos] = useState<'CLOSE' | 'OPEN'>('CLOSE');
@@ -817,19 +843,34 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
     }
 
     // 9. Brake tracking timers & refs reset
-    if (currentStepName !== 'LEFT_BRAKE' || currentSubstepIndex !== 1) {
+    const isLeftBrakePedalStep = (currentStepName === 'LEFT_BRAKE' && currentSubstepIndex === 1) ||
+      (currentStepName === 'LEFT_BRAKE_CHAN2' && currentSubstepIndex === 2);
+    if (!isLeftBrakePedalStep) {
       leftBrakeMovedRef.current = false;
       if (leftBrakeIdleTimerRef.current) {
         clearTimeout(leftBrakeIdleTimerRef.current);
         leftBrakeIdleTimerRef.current = null;
       }
     }
-    if (currentStepName !== 'RIGHT_BRAKE' || currentSubstepIndex !== 1) {
+    const isRightBrakePedalStep = (currentStepName === 'RIGHT_BRAKE' && currentSubstepIndex === 1) ||
+      (currentStepName === 'RIGHT_BRAKE_CHAN2' && currentSubstepIndex === 1);
+    if (!isRightBrakePedalStep) {
       rightBrakeMovedRef.current = false;
       if (rightBrakeIdleTimerRef.current) {
         clearTimeout(rightBrakeIdleTimerRef.current);
         rightBrakeIdleTimerRef.current = null;
       }
+    }
+    if (currentStepName === 'LEFT_BRAKE' || currentStepName === 'RIGHT_BRAKE') {
+      setBrakeChannel('CHAN_1');
+    }
+
+    if (currentStepName === 'LEFT_BRAKE_CHAN2' && currentSubstepIndex === 0) {
+      setBrakeChannel('CHAN_1');
+    }
+
+    if (currentStepName === 'RIGHT_BRAKE_CHAN2' && currentSubstepIndex === 3) {
+      setBrakeChannel('CHAN_2');
     }
 
     // 10. AAR_DOOR switch position reset
@@ -909,8 +950,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       return;
     }
 
-    // LEFT_BRAKE: Ready Left Brake (Multi-sound: "Copy" -> 2500ms walk delay -> "Ready left brake")
-    if (currentStepName === 'LEFT_BRAKE') {
+    // LEFT_BRAKE / LEFT_BRAKE_CHAN2: Ready Left Brake (Multi-sound: "Copy" -> 2500ms walk delay -> "Ready left brake")
+    if (currentStepName === 'LEFT_BRAKE' || currentStepName === 'LEFT_BRAKE_CHAN2') {
       Ipc.playDrillSound('copy');
       setTimeout(() => {
         Ipc.playDrillSound('ready-left-brake');
@@ -926,8 +967,8 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
       return;
     }
 
-    // RIGHT_BRAKE: Ready Right Brake (Multi-sound: "Copy" -> 2500ms walk delay -> "Ready right brake")
-    if (currentStepName === 'RIGHT_BRAKE') {
+    // RIGHT_BRAKE / RIGHT_BRAKE_CHAN2: Ready Right Brake (Multi-sound: "Copy" -> 2500ms walk delay -> "Ready right brake")
+    if (currentStepName === 'RIGHT_BRAKE' || currentStepName === 'RIGHT_BRAKE_CHAN2') {
       Ipc.playDrillSound('copy');
       setTimeout(() => {
         Ipc.playDrillSound('ready-right-brake');
@@ -1955,10 +1996,14 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
   }, [currentStepName, currentSubstepIndex, dbuSwitchOn, rollDisplay, pitchDisplay, yawDisplay, onAdvanceSubstep]);
 
   // =========================================================================
-  // STEP 14 & 15: PHYSICAL BRAKE PEDAL INTEGRATION (MOVEMENT & IDLE DETECTION)
+  // STEP 14 & 15 & CHAN 2: PHYSICAL BRAKE PEDAL INTEGRATION (MOVEMENT & IDLE DETECTION)
   // =========================================================================
   useEffect(() => {
-    if (currentStepName === 'LEFT_BRAKE' && currentSubstepIndex === 1) {
+    const isLeftBrakePedalActive =
+      (currentStepName === 'LEFT_BRAKE' && currentSubstepIndex === 1) ||
+      (currentStepName === 'LEFT_BRAKE_CHAN2' && currentSubstepIndex === 2);
+
+    if (isLeftBrakePedalActive) {
       if (leftBrakeDeflection >= 0.20) {
         if (leftBrakeIdleTimerRef.current) {
           clearTimeout(leftBrakeIdleTimerRef.current);
@@ -1977,14 +2022,18 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
               leftBrakeMovedRef.current = false;
               Sound.playCommit();
               Ipc.playDrillSound('left-brake-nomovement');
-              onAdvanceSubstep(2);
+              onAdvanceSubstep(currentStepName === 'LEFT_BRAKE' ? 2 : 3);
             }, 2000);
           }
         }
       }
     }
 
-    if (currentStepName === 'RIGHT_BRAKE' && currentSubstepIndex === 1) {
+    const isRightBrakePedalActive =
+      (currentStepName === 'RIGHT_BRAKE' && currentSubstepIndex === 1) ||
+      (currentStepName === 'RIGHT_BRAKE_CHAN2' && currentSubstepIndex === 1);
+
+    if (isRightBrakePedalActive) {
       if (rightBrakeDeflection >= 0.20) {
         if (rightBrakeIdleTimerRef.current) {
           clearTimeout(rightBrakeIdleTimerRef.current);
@@ -2003,7 +2052,7 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
               rightBrakeMovedRef.current = false;
               Sound.playCommit();
               Ipc.playDrillSound('right-brake-nomovement');
-              onAdvanceSubstep(2);
+              onAdvanceSubstep(currentStepName === 'RIGHT_BRAKE' ? 2 : 2);
             }, 2000);
           }
         }
@@ -2860,9 +2909,59 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
             )}
 
             {/* -------------------------------------------------------- */}
-            {/* CARD: Main Gear Brake Calipers & Deflection (Step 14 & 15) */}
+            {/* PANEL: Landing Gear Panel (Chan 2 Switch Select / Reset)  */}
             {/* -------------------------------------------------------- */}
-            {(currentStepName === 'LEFT_BRAKE' || currentStepName === 'RIGHT_BRAKE') && (
+            {((currentStepName === 'LEFT_BRAKE_CHAN2' && currentSubstepIndex === 0) ||
+              (currentStepName === 'RIGHT_BRAKE_CHAN2' && currentSubstepIndex === 3)) && (
+              <motion.div
+                key="panel-landing-gear-chan2"
+                layout
+                initial={{ opacity: 0, scale: 0.92, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.92, y: -12 }}
+                transition={{
+                  layout: { duration: 0.35, ease: [0.16, 1, 0.3, 1] },
+                  opacity: { duration: 0.22 },
+                  scale: { duration: 0.22 },
+                  y: { duration: 0.22 },
+                }}
+                style={{ willChange: 'opacity, transform' }}
+                className="flex items-center justify-center p-2"
+              >
+                <LandingGearPanel
+                  brakes={brakeChannel}
+                  onBrakesChange={(pos) => {
+                    setBrakeChannel(pos);
+                    if (currentStepName === 'LEFT_BRAKE_CHAN2' && currentSubstepIndex === 0 && pos === 'CHAN_2') {
+                      Sound.playCommit();
+                      onAdvanceSubstep(1);
+                    } else if (currentStepName === 'RIGHT_BRAKE_CHAN2' && currentSubstepIndex === 3 && pos === 'CHAN_1') {
+                      Sound.playCommit();
+                      advanceToNextStep();
+                    }
+                  }}
+                  allowSwitchClick={{ brakes: true }}
+                  gndJett="OFF"
+                  storesConfig="CAT_I"
+                  lights="OFF"
+                  parkingBrake="ANTI_SKID"
+                  gearLever="DN"
+                  hook="UP"
+                  wheelsNose={true}
+                  wheelsLeft={true}
+                  wheelsRight={true}
+                  gearWarningLight={false}
+                />
+              </motion.div>
+            )}
+
+            {/* -------------------------------------------------------- */}
+            {/* CARD: Main Gear Brake Calipers & Deflection (Brakes / Chan 2) */}
+            {/* -------------------------------------------------------- */}
+            {(currentStepName === 'LEFT_BRAKE' ||
+              currentStepName === 'RIGHT_BRAKE' ||
+              (currentStepName === 'LEFT_BRAKE_CHAN2' && currentSubstepIndex > 0) ||
+              (currentStepName === 'RIGHT_BRAKE_CHAN2' && currentSubstepIndex < 3)) && (
               <motion.div
                 key="card-brake-cluster"
                 layout
@@ -2879,9 +2978,25 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 className="flex flex-col lg:flex-row items-center justify-center gap-6"
               >
                 <TacticalDisplayCard
-                  src={currentStepName === 'LEFT_BRAKE' ? '/crewchief/FLCS/leftBrake.webp' : '/crewchief/FLCS/rightBrake.webp'}
-                  alt={currentStepName === 'LEFT_BRAKE' ? 'Left Main Gear Brake Caliper' : 'Right Main Gear Brake Caliper'}
-                  title={currentStepName === 'LEFT_BRAKE' ? 'LEFT MAIN GEAR BRAKE CALIPER' : 'RIGHT MAIN GEAR BRAKE CALIPER'}
+                  src={
+                    currentStepName === 'LEFT_BRAKE' || currentStepName === 'LEFT_BRAKE_CHAN2'
+                      ? '/crewchief/FLCS/leftBrake.webp'
+                      : '/crewchief/FLCS/rightBrake.webp'
+                  }
+                  alt={
+                    currentStepName === 'LEFT_BRAKE' || currentStepName === 'LEFT_BRAKE_CHAN2'
+                      ? 'Left Main Gear Brake Caliper'
+                      : 'Right Main Gear Brake Caliper'
+                  }
+                  title={
+                    currentStepName === 'LEFT_BRAKE'
+                      ? 'LEFT MAIN GEAR BRAKE CALIPER'
+                      : currentStepName === 'RIGHT_BRAKE'
+                      ? 'RIGHT MAIN GEAR BRAKE CALIPER'
+                      : currentStepName === 'LEFT_BRAKE_CHAN2'
+                      ? 'LEFT MAIN GEAR BRAKE CALIPER (CHAN 2)'
+                      : 'RIGHT MAIN GEAR BRAKE CALIPER (CHAN 2)'
+                  }
                   badge="HYDRAULIC LINE"
                   badgeColor="#22c55e"
                   badgeBg="rgba(34, 197, 94, 0.15)"
@@ -2892,7 +3007,15 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                 />
 
                 <TacticalControlInputCard
-                  title={currentStepName === 'LEFT_BRAKE' ? 'BRAKES // LEFT BRAKE CHECK' : 'BRAKES // RIGHT BRAKE CHECK'}
+                  title={
+                    currentStepName === 'LEFT_BRAKE'
+                      ? 'BRAKES // LEFT BRAKE CHECK'
+                      : currentStepName === 'RIGHT_BRAKE'
+                      ? 'BRAKES // RIGHT BRAKE CHECK'
+                      : currentStepName === 'LEFT_BRAKE_CHAN2'
+                      ? 'BRAKES // CHAN 2 LEFT BRAKE'
+                      : 'BRAKES // CHAN 2 RIGHT BRAKE'
+                  }
                   roll={rollDisplay}
                   pitch={pitchDisplay}
                   yaw={yawDisplay}
@@ -3853,6 +3976,89 @@ export const CockpitDrillStage: React.FC<CockpitDrillStageProps> = ({
                       <span>Continue</span>
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
+                  </div>
+                )}
+
+                {/* Step Channel 2 Check Banners */}
+                {currentStepName === 'LEFT_BRAKE_CHAN2' && currentSubstepIndex === 0 && (
+                  <div className="flex items-center justify-between gap-4 w-full">
+                    <span className="text-amber-300 font-bold text-xs">
+                      ⚡ Action Required: Select CHAN 2 on BRAKES switch on Landing Gear Panel.
+                    </span>
+                  </div>
+                )}
+                {currentStepName === 'LEFT_BRAKE_CHAN2' && currentSubstepIndex === 1 && (
+                  <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
+                    <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                    <span>Verbal Required: Transmit &quot;Ready on the left brake&quot;.</span>
+                  </span>
+                )}
+                {currentStepName === 'LEFT_BRAKE_CHAN2' && currentSubstepIndex === 2 && (
+                  <div className="flex items-center justify-between gap-4 w-full">
+                    <span className="text-amber-300 font-bold text-xs">
+                      ⚡ Action Required: Press and release the left toe brake pedal (CHAN 2).
+                    </span>
+                    <button
+                      onClick={() => onAdvanceSubstep(3)}
+                      className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 font-bold text-xs cursor-pointer shadow transition-[background-color] shrink-0"
+                    >
+                      SKIP BRAKE
+                    </button>
+                  </div>
+                )}
+                {currentStepName === 'LEFT_BRAKE_CHAN2' && currentSubstepIndex === 3 && (
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-emerald-400 font-bold">
+                      ✓ CHAN 2 left caliper clamping verified good.
+                    </span>
+                    <button
+                      onClick={() => advanceToNextStep()}
+                      className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
+                    >
+                      <span>Continue</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {currentStepName === 'RIGHT_BRAKE_CHAN2' && currentSubstepIndex === 0 && (
+                  <span className="text-emerald-300 font-bold inline-flex items-center gap-1.5">
+                    <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                    <span>Verbal Required: Transmit &quot;Ready on the right brake&quot;.</span>
+                  </span>
+                )}
+                {currentStepName === 'RIGHT_BRAKE_CHAN2' && currentSubstepIndex === 1 && (
+                  <div className="flex items-center justify-between gap-4 w-full">
+                    <span className="text-amber-300 font-bold text-xs">
+                      ⚡ Action Required: Press and release the right toe brake pedal (CHAN 2).
+                    </span>
+                    <button
+                      onClick={() => onAdvanceSubstep(2)}
+                      className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 font-bold text-xs cursor-pointer shadow transition-[background-color] shrink-0"
+                    >
+                      SKIP BRAKE
+                    </button>
+                  </div>
+                )}
+                {currentStepName === 'RIGHT_BRAKE_CHAN2' && currentSubstepIndex === 2 && (
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-emerald-400 font-bold">
+                      ✓ CHAN 2 right caliper clamping verified good.
+                    </span>
+                    <button
+                      onClick={() => onAdvanceSubstep(3)}
+                      className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs cursor-pointer shadow transition-[background-color] flex items-center gap-1.5 shrink-0"
+                    >
+                      <span>Continue</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+                {currentStepName === 'RIGHT_BRAKE_CHAN2' && currentSubstepIndex === 3 && (
+                  <div className="flex items-center justify-between gap-4 w-full">
+                    <span className="text-amber-300 font-bold text-xs">
+                      ⚡ Action Required: Select CHAN 1 on BRAKES switch on Landing Gear Panel.
+                    </span>
                   </div>
                 )}
 

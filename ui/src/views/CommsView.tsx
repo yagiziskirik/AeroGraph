@@ -8,7 +8,7 @@ import { SpeakerToggle, MicrophoneToggle } from '../components/inputs';
 import { HelpCircle, RotateCcw, Check, SlidersHorizontal, Undo2, BookOpen, Radio, Target, ArrowRight, FolderOpen } from 'lucide-react';
 import { VoiceAcademyView } from './VoiceAcademyView';
 import { DrillSequenceManagerModal } from './academy/DrillSequenceManagerModal';
-import { DRILL_STEP_ORDER } from './academy/CockpitDrillStage';
+import { DRILL_STEP_ORDER, DEFAULT_DISABLED_DRILL_STEPS } from './academy/CockpitDrillStage';
 
 const SAPI_PTT_DEFAULTS = {
   min_confidence: 50,
@@ -151,7 +151,7 @@ export const CommsView: React.FC<CommsViewProps> = ({
   // Crew Chief Sequence & FoxVox State Manager Modal
   const [isSequenceModalOpen, setIsSequenceModalOpen] = useState(false);
   const [drillOrder, setDrillOrder] = useState<string[]>(DRILL_STEP_ORDER as string[]);
-  const [disabledSteps, setDisabledSteps] = useState<string[]>([]);
+  const [disabledSteps, setDisabledSteps] = useState<string[]>(DEFAULT_DISABLED_DRILL_STEPS as string[]);
   const [isManagedProfile, setIsManagedProfile] = useState<boolean>(true);
   const [profileStatus, setProfileStatus] = useState<string>('DEFAULT');
 
@@ -1649,7 +1649,7 @@ export const CommsView: React.FC<CommsViewProps> = ({
         }}
         onResetSequence={() => {
           setDrillOrder(DRILL_STEP_ORDER as string[]);
-          setDisabledSteps([]);
+          setDisabledSteps(DEFAULT_DISABLED_DRILL_STEPS as string[]);
           Ipc.resetDrillSequence();
         }}
       />

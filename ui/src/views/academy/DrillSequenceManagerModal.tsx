@@ -19,7 +19,7 @@ import {
 import { Sound } from '../../services/sound';
 import { ShiningCheckbox } from '../../components/inputs';
 import { DrillStepName, RAMP_STEPS_BY_NAME } from '../../services/voiceTrainingData';
-import { DRILL_STEP_ORDER } from './CockpitDrillStage';
+import { DRILL_STEP_ORDER, DEFAULT_DISABLED_DRILL_STEPS } from './CockpitDrillStage';
 
 export interface BlockDefinition {
   id: string;
@@ -98,6 +98,12 @@ export const CANONICAL_BLOCK_DEFS: BlockDefinition[] = [
     name: 'Toe Brakes Check (Left & Right Channel)',
     badge: 'COUPLED • 2 STEPS',
     stepNames: ['LEFT_BRAKE', 'RIGHT_BRAKE'],
+  },
+  {
+    id: 'BLOCK_BRAKES_CHAN2',
+    name: 'Brake Channel 2 Check (Alternate Channel)',
+    badge: 'OPTIONAL • 2 STEPS',
+    stepNames: ['LEFT_BRAKE_CHAN2', 'RIGHT_BRAKE_CHAN2'],
   },
   {
     id: 'BLOCK_AAR_DOOR',
@@ -564,7 +570,7 @@ export const DrillSequenceManagerModal: React.FC<DrillSequenceManagerModalProps>
   const handleReset = () => {
     Sound.playClick();
     setBlocks(CANONICAL_BLOCK_DEFS);
-    setDisabled([]);
+    setDisabled(DEFAULT_DISABLED_DRILL_STEPS as string[]);
     setHasChanges(true);
     onResetSequence();
   };

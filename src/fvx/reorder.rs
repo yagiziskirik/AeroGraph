@@ -21,6 +21,8 @@ pub enum DrillStepId {
     DbuCheck,
     LeftBrake,
     RightBrake,
+    LeftBrakeChan2,
+    RightBrakeChan2,
     AarDoor,
     ChocksRemoval,
     FinaleSalute,
@@ -45,6 +47,8 @@ impl DrillStepId {
             Self::DbuCheck => "DBU_CHECK",
             Self::LeftBrake => "LEFT_BRAKE",
             Self::RightBrake => "RIGHT_BRAKE",
+            Self::LeftBrakeChan2 => "LEFT_BRAKE_CHAN2",
+            Self::RightBrakeChan2 => "RIGHT_BRAKE_CHAN2",
             Self::AarDoor => "AAR_DOOR",
             Self::ChocksRemoval => "CHOCKS_REMOVAL",
             Self::FinaleSalute => "FINALE_SALUTE",
@@ -69,10 +73,16 @@ impl DrillStepId {
             Self::DbuCheck,
             Self::LeftBrake,
             Self::RightBrake,
+            Self::LeftBrakeChan2,
+            Self::RightBrakeChan2,
             Self::AarDoor,
             Self::ChocksRemoval,
             Self::FinaleSalute,
         ]
+    }
+
+    pub fn default_disabled() -> Vec<Self> {
+        vec![Self::LeftBrakeChan2, Self::RightBrakeChan2]
     }
 }
 
@@ -97,6 +107,8 @@ impl std::str::FromStr for DrillStepId {
             "DBU_CHECK" => Ok(Self::DbuCheck),
             "LEFT_BRAKE" => Ok(Self::LeftBrake),
             "RIGHT_BRAKE" => Ok(Self::RightBrake),
+            "LEFT_BRAKE_CHAN2" => Ok(Self::LeftBrakeChan2),
+            "RIGHT_BRAKE_CHAN2" => Ok(Self::RightBrakeChan2),
             "AAR_DOOR" => Ok(Self::AarDoor),
             "CHOCKS_REMOVAL" => Ok(Self::ChocksRemoval),
             "FINALE_SALUTE" => Ok(Self::FinaleSalute),
@@ -371,6 +383,8 @@ fn step_contributes_increment(step: DrillStepId) -> bool {
             | DrillStepId::DbuCheck
             | DrillStepId::LeftBrake
             | DrillStepId::RightBrake
+            | DrillStepId::LeftBrakeChan2
+            | DrillStepId::RightBrakeChan2
             | DrillStepId::AarDoor
     )
 }

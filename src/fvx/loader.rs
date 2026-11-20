@@ -140,7 +140,10 @@ impl LoadedProfile {
     /// and removes custom sequence overrides from VariableInits.
     pub fn reset_crew_chief_sequence(&mut self) -> Result<(), String> {
         let default_order = crate::fvx::reorder::DrillStepId::default_order();
-        let disabled_steps = std::collections::HashSet::new();
+        let disabled_steps: std::collections::HashSet<_> =
+            crate::fvx::reorder::DrillStepId::default_disabled()
+                .into_iter()
+                .collect();
         crate::fvx::reorder::reorder_crew_chief_sequence(
             &mut self.raw_json,
             &default_order,

@@ -47,6 +47,8 @@ export type DrillStepName =
   | 'DBU_CHECK'
   | 'LEFT_BRAKE'
   | 'RIGHT_BRAKE'
+  | 'LEFT_BRAKE_CHAN2'
+  | 'RIGHT_BRAKE_CHAN2'
   | 'AAR_DOOR'
   | 'CHOCKS_REMOVAL'
   | 'FINALE_SALUTE';
@@ -1613,6 +1615,188 @@ export const RAMP_START_STEPS: RampStartStep[] = [
   },
 
   // =========================================================================
+  // STEP 16A: BRAKE CHANNEL 2 - LEFT BRAKE CHECK
+  // =========================================================================
+  {
+    id: 19,
+    stepName: 'LEFT_BRAKE_CHAN2',
+    code: 'STEP-16A',
+    title: 'Brake Channel 2: Left Brake Check',
+    phase: 'FLIGHT_CONTROLS',
+    whatHappenedLast: 'Primary brake checks complete on Channel 1.',
+    whatToPerformNow: 'Set BRAKES switch to CHAN 2 on Landing Gear panel, transmit "Ready Left Brake", then press and release left toe brake pedal.',
+    whatToExpectNext: 'Chief calls: "Copy" (wait 2.5s) -> "Ready left brake." Chief verifies left caliper clamping and zero hydraulic leaks on alternate Channel 2.',
+    cockpitVisual: {
+      panelName: 'LANDING GEAR PANEL & LEFT TOE BRAKE',
+      subSystem: 'Alternate Hydraulic Brake Channel 2 & Caliper',
+      focalControls: ['BRAKES Switch (CHAN 2)', 'Left Rudder Toe Brake Pedal', 'Left Main Gear Hydraulic Caliper']
+    },
+    pilotSpokenCalls: {
+      primary: 'Ready Left Brake',
+      prefixVariants: ['Chief Ready Left Brake', 'Left Brake', 'Ready on the Left Brake'],
+      synonyms: ['Left Brake']
+    },
+    expectedChiefResponse: 'Copy. (2.5s delay) -> Ready left brake. (Press and release toe brake pedal).',
+    substeps: [
+      {
+        id: '16a-1',
+        order: 1,
+        label: 'Select Brake Channel 2',
+        phaseType: 'ACTION',
+        description: 'Set BRAKES switch to CHAN 2 (Right-click lever DOWN) on the Landing Gear panel to engage alternate brake hydraulic subsystem.',
+        cockpitPanel: 'Landing Gear Panel (Left Auxiliary Console)',
+        visualCue: 'BRAKES toggle flipped down to CHAN 2 position; red collar visible.',
+        interactiveControl: {
+          type: 'MOCK_SWITCH',
+          label: 'BRAKES SWITCH -> CHAN 2',
+          actionPrompt: 'Right-click BRAKES toggle to select CHAN 2'
+        },
+        rationale: 'Switches brake hydraulic supply to alternate Channel 2 (Hydraulic System A) to verify redundant braking capability.'
+      },
+      {
+        id: '16a-2',
+        order: 2,
+        label: 'Verbal Callout "Ready Left Brake"',
+        phaseType: 'VERBAL',
+        description: 'Inform the Chief that left brake Channel 2 check is beginning. Speak "Ready Left Brake" into the microphone.',
+        cockpitPanel: 'Left Console / Intercom',
+        visualCue: 'Chief acknowledges "Copy", pauses 2.5s, then calls "Ready left brake."',
+        interactiveControl: {
+          type: 'VOICE_CALLOUT',
+          label: 'READY LEFT BRAKE CALLOUT',
+          actionPrompt: 'Speak "Ready Left Brake" into your microphone'
+        },
+        expectedChiefResponse: 'Ready left brake.',
+        rationale: 'Coordinates left main landing gear Channel 2 brake inspection with ground crew.'
+      },
+      {
+        id: '16a-3',
+        order: 3,
+        label: 'Left Toe Brake Press and Release (Chan 2)',
+        phaseType: 'ACTION',
+        description: 'Depress left toe brake pedal past 20% to announce movement, then release back to idle to verify caliper release.',
+        cockpitPanel: 'Rudder Footwell (Left Brake Pedal)',
+        visualCue: 'Left toe brake pedal depressed and released; hydraulic pressure transfers to left brake caliper via Channel 2.',
+        interactiveControl: {
+          type: 'AXIS_MONITOR',
+          axisChannel: 'left_brake',
+          axisThreshold: 0.20,
+          label: 'PRESS & RELEASE LEFT BRAKE',
+          actionPrompt: 'Press and release left toe brake (or skip)'
+        },
+        rationale: 'Applies hydraulic pressure through Channel 2 to verify alternate piston operation.'
+      },
+      {
+        id: '16a-4',
+        order: 4,
+        label: 'Left Brake Channel 2 Inspection Complete',
+        phaseType: 'VERIFY',
+        description: 'Chief confirms solid caliper clamping and zero hydraulic line leaks on Channel 2.',
+        cockpitPanel: 'Left Main Landing Gear Caliper',
+        visualCue: 'Left main gear brake caliper pistons clamp firmly; zero hydraulic fluid seepage.',
+        interactiveControl: {
+          type: 'VERIFICATION',
+          label: 'LEFT BRAKE CHAN 2 GOOD',
+          actionPrompt: 'Release left brake and proceed to right brake'
+        },
+        expectedChiefResponse: 'Movement. No movement.',
+        rationale: 'Chief visually verifies left brake caliper operation on alternate Channel 2.'
+      }
+    ]
+  },
+
+  // =========================================================================
+  // STEP 16B: BRAKE CHANNEL 2 - RIGHT BRAKE CHECK
+  // =========================================================================
+  {
+    id: 20,
+    stepName: 'RIGHT_BRAKE_CHAN2',
+    code: 'STEP-16B',
+    title: 'Brake Channel 2: Right Brake Check',
+    phase: 'FLIGHT_CONTROLS',
+    whatHappenedLast: 'Left brake Channel 2 inspected and verified good.',
+    whatToPerformNow: 'Transmit "Ready Right Brake", wait for Chief ("Ready right brake"), press and release right toe brake pedal, then reset BRAKES switch to CHAN 1.',
+    whatToExpectNext: 'Chief calls: "Copy" (wait 2.5s) -> "Ready right brake." Verify right caliper clamping on Channel 2, then return switch to CHAN 1.',
+    cockpitVisual: {
+      panelName: 'RIGHT RUDDER TOE BRAKE & LANDING GEAR PANEL',
+      subSystem: 'Alternate Hydraulic Brake Channel 2 & Caliper',
+      focalControls: ['Right Rudder Toe Brake Pedal', 'Right Main Gear Hydraulic Caliper', 'BRAKES Switch (CHAN 1)']
+    },
+    pilotSpokenCalls: {
+      primary: 'Ready Right Brake',
+      prefixVariants: ['Chief Ready Right Brake', 'Right Brake', 'Ready on the Right Brake'],
+      synonyms: ['Right Brake']
+    },
+    expectedChiefResponse: 'Copy. (2.5s delay) -> Ready right brake. (Press and release toe brake pedal).',
+    substeps: [
+      {
+        id: '16b-1',
+        order: 1,
+        label: 'Verbal Callout "Ready Right Brake"',
+        phaseType: 'VERBAL',
+        description: 'Inform the Chief that right brake Channel 2 check is beginning. Speak "Ready Right Brake" into the microphone.',
+        cockpitPanel: 'Left Console / Intercom',
+        visualCue: 'Chief acknowledges "Copy", pauses 2.5s, then calls "Ready right brake."',
+        interactiveControl: {
+          type: 'VOICE_CALLOUT',
+          label: 'READY RIGHT BRAKE CALLOUT',
+          actionPrompt: 'Speak "Ready Right Brake" into your microphone'
+        },
+        expectedChiefResponse: 'Ready right brake.',
+        rationale: 'Coordinates right main landing gear Channel 2 brake inspection with ground crew.'
+      },
+      {
+        id: '16b-2',
+        order: 2,
+        label: 'Right Toe Brake Press and Release (Chan 2)',
+        phaseType: 'ACTION',
+        description: 'Depress right toe brake pedal past 20% to announce movement, then release back to idle to verify caliper release.',
+        cockpitPanel: 'Rudder Footwell (Right Brake Pedal)',
+        visualCue: 'Right toe brake pedal depressed and released; hydraulic pressure transfers to right brake caliper via Channel 2.',
+        interactiveControl: {
+          type: 'AXIS_MONITOR',
+          axisChannel: 'right_brake',
+          axisThreshold: 0.20,
+          label: 'PRESS & RELEASE RIGHT BRAKE',
+          actionPrompt: 'Press and release right toe brake (or skip)'
+        },
+        rationale: 'Applies hydraulic pressure through Channel 2 to verify alternate right piston operation.'
+      },
+      {
+        id: '16b-3',
+        order: 3,
+        label: 'Right Brake Channel 2 Inspection Complete',
+        phaseType: 'VERIFY',
+        description: 'Chief confirms solid caliper clamping and zero hydraulic line leaks on Channel 2.',
+        cockpitPanel: 'Right Main Landing Gear Caliper',
+        visualCue: 'Right main gear brake caliper pistons clamp firmly; zero hydraulic fluid seepage.',
+        interactiveControl: {
+          type: 'VERIFICATION',
+          label: 'RIGHT BRAKE CHAN 2 GOOD',
+          actionPrompt: 'Release right brake and reset BRAKES switch to CHAN 1'
+        },
+        expectedChiefResponse: 'Movement. No movement.',
+        rationale: 'Chief visually verifies right brake caliper operation on alternate Channel 2.'
+      },
+      {
+        id: '16b-4',
+        order: 4,
+        label: 'Reset Brake Channel to CHAN 1',
+        phaseType: 'ACTION',
+        description: 'Return BRAKES switch to CHAN 1 (Left-click lever UP) on the Landing Gear panel for normal taxi and takeoff operations.',
+        cockpitPanel: 'Landing Gear Panel (Left Auxiliary Console)',
+        visualCue: 'BRAKES toggle flipped up to CHAN 1 position; normal primary braking restored.',
+        interactiveControl: {
+          type: 'MOCK_SWITCH',
+          label: 'BRAKES SWITCH -> CHAN 1',
+          actionPrompt: 'Left-click BRAKES toggle to restore CHAN 1'
+        },
+        rationale: 'Restores primary brake Channel 1 (Hydraulic System B) before taxi.'
+      }
+    ]
+  },
+
+  // =========================================================================
   // STEP 16: READY AIR REFUELING (AAR) DOOR CHECK
   // =========================================================================
   {
@@ -1839,7 +2023,9 @@ export const RAMP_STEPS_BY_NAME: Record<DrillStepName, RampStartStep> = {
   DBU_CHECK: RAMP_START_STEPS[13],
   LEFT_BRAKE: RAMP_START_STEPS[14],
   RIGHT_BRAKE: RAMP_START_STEPS[15],
-  AAR_DOOR: RAMP_START_STEPS[16],
-  CHOCKS_REMOVAL: RAMP_START_STEPS[17],
-  FINALE_SALUTE: RAMP_START_STEPS[18],
+  LEFT_BRAKE_CHAN2: RAMP_START_STEPS[16],
+  RIGHT_BRAKE_CHAN2: RAMP_START_STEPS[17],
+  AAR_DOOR: RAMP_START_STEPS[18],
+  CHOCKS_REMOVAL: RAMP_START_STEPS[19],
+  FINALE_SALUTE: RAMP_START_STEPS[20],
 };
