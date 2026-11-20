@@ -54,8 +54,14 @@ Source: "..\target\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignorevers
 Source: "..\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\icon.png"; DestDir: "{app}"; Flags: ignoreversion
 
-; Core Assets (Binaries, Briefings, Charts, Data, Profiles, Sounds, Custom checklists)
-Source: "..\assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "work\*,images\*.png"
+; Core Assets (Binaries, Briefings, Charts, Data, Sounds, Custom checklists - excluding profile .fvx files from blind overwrite)
+Source: "..\assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "work\*,images\*.png,profiles\*\*.fvx"
+
+; Canonical Master Profile Template (Always updated on release)
+Source: "..\assets\profiles\Falcon BMS 4.38 v1.3.1\Falcon BMS 4.38 v1.3.1.canonical.fvx"; DestDir: "{app}\assets\profiles\Falcon BMS 4.38 v1.3.1"; Flags: ignoreversion
+
+; Active Working Profile (Installed on initial install only; never overwrites user customizations)
+Source: "..\assets\profiles\Falcon BMS 4.38 v1.3.1\Falcon BMS 4.38 v1.3.1.fvx"; DestDir: "{app}\assets\profiles\Falcon BMS 4.38 v1.3.1"; Flags: onlyifdoesntexist
 
 ; POH Flight Reference Notes
 Source: "..\notes\*"; DestDir: "{app}\notes"; Flags: ignoreversion recursesubdirs createallsubdirs

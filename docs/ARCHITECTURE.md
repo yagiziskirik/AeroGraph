@@ -104,7 +104,11 @@ flowchart TD
 - **`updater.rs`**: Flight-safe background updater that queries GitHub Releases on startup without interrupting active 3D flights.
 
 ### `src/fvx/`: FoxVox Profile & Variable Harvesting
-- **`loader.rs` & `models.rs`**: Full Rust deserializer for FoxVox `.fvx` profiles without external runtime dependencies. Translates commands, groups, phrases, and key macros into memory. Manages non-destructive profile serialization, canonical signature identification (`AEROGRAPH_PROFILE_ID`), embedded sequence roundtripping, and collision-proof disaster-recovery backups in `%APPDATA%/AeroGraph/backups/`.
+- **`loader.rs` & `models.rs`**: Full Rust deserializer for FoxVox `.fvx` profiles without external runtime dependencies. Translates commands, groups, phrases, and key macros into memory:
+  - Manages non-destructive profile serialization, canonical signature identification (`AEROGRAPH_PROFILE_ID`), semantic profile version tracking (`AEROGRAPH_PROFILE_VERSION`), embedded sequence roundtripping, and collision-proof backups in `%APPDATA%/AeroGraph/backups/`.
+  - **Master Template Architecture**: Maintains `Falcon BMS 4.38 v1.3.1.canonical.fvx` as the immutable factory template updated by installers, while preserving `Falcon BMS 4.38 v1.3.1.fvx` as the active user working profile in-place for 100% FoxVox folder structure compatibility.
+  - **Non-Destructive Migration Engine**: Automatically upgrades legacy and older profile versions on startup, adopting upstream additions while re-applying pilot MPO hardware bindings and custom Crew Chief drill sequences.
+  - **Audio Asset Fallback Resolution**: Resolves `.mp3` audio files against the profile directory with transparent fallback to the static factory assets tree, eliminating duplicate audio files in user data.
 - **`reorder.rs`**: **Crew Chief Sequence & State Machine Rewiring Engine**:
   - Dynamically reorders procedural checkpoints and enables/disables checkpoint blocks (SEC, EPU, Trim, Brakes).
   - Recalculates `Completed >= X` milestone gates on flight surface checks and final salute based on active preceding increments.

@@ -361,9 +361,61 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(ref p) => {
             log::info!("Loading profile: {:?}", p);
             match LoadedProfile::load_from_file(p) {
-                Ok(lp) => {
+                Ok(mut lp) => {
                     config.profile_path = Some(p.to_string_lossy().to_string());
                     sync_profile_sequence_to_config(&lp, &mut config);
+
+                    // Harvest MPO binding if not yet in config
+                    if config.mpo_binding.is_none() {
+                        let (btn, dev, guid, is_key) = lp.get_mpo_binding();
+                        if btn != 8 || is_key || dev != "F16 TQS by YGZ" {
+                            config.mpo_binding = Some(crate::config::MpoBindingConfig {
+                                button: btn,
+                                device: dev,
+                                guid,
+                                is_key,
+                            });
+                        }
+                    }
+
+                    // Check for migration from canonical template
+                    if lp.is_managed() {
+                        if let Some(canonical_path) = AppConfig::canonical_default_profile_path() {
+                            if canonical_path != *p {
+                                if let Ok(template_lp) =
+                                    LoadedProfile::load_from_file(&canonical_path)
+                                {
+                                    let template_ver = template_lp.canonical_version().max(1);
+                                    let active_ver = lp.canonical_version();
+                                    if active_ver < template_ver {
+                                        log::info!(
+                                            "Upgrading profile from version {} to canonical version {}",
+                                            active_ver,
+                                            template_ver
+                                        );
+                                        let _ = lp.ensure_backup();
+                                        if let Err(e) =
+                                            lp.migrate_from_template(&template_lp, &config)
+                                        {
+                                            log::error!(
+                                                "Failed to migrate profile to canonical version {}: {}",
+                                                template_ver,
+                                                e
+                                            );
+                                        } else if let Err(e) = lp.save_to_file(p) {
+                                            log::error!("Failed to save migrated profile: {:?}", e);
+                                        } else {
+                                            log::info!(
+                                                "Successfully migrated and synchronized profile to version {}",
+                                                template_ver
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     let _ = config.save();
                     Some(lp)
                 }
@@ -1173,6 +1225,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 );
                                             }
                                         }
+                                    }
+                                    {
+                                        let mut cfg = shared_config.lock().unwrap();
+                                        cfg.mpo_binding = Some(crate::config::MpoBindingConfig {
+                                            button: btn,
+                                            device: dev.clone(),
+                                            guid: guid.clone(),
+                                            is_key: false,
+                                        });
+                                        let _ = cfg.save();
                                     }
                                     reload_trigger.store(true, Ordering::SeqCst);
                                     let cfg = shared_config.lock().unwrap().clone();
@@ -2080,6 +2142,16 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
                     let _ = lp.save_to_file(&lp.profile_path);
                 }
             }
+            {
+                let mut cfg = ctx.shared_config.lock().unwrap();
+                cfg.mpo_binding = Some(crate::config::MpoBindingConfig {
+                    button,
+                    device: device.clone().unwrap_or_else(|| "Controller".to_string()),
+                    guid: "".to_string(),
+                    is_key: false,
+                });
+                let _ = cfg.save();
+            }
             ctx.reload_trigger.store(true, Ordering::SeqCst);
             if let Some(win) = ctx.tactical_console.active_window() {
                 let cfg = ctx.shared_config.lock().unwrap().clone();
@@ -2094,6 +2166,11 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
                     lp.set_mpo_binding(8, Some("F16 TQS by YGZ"), None);
                     let _ = lp.save_to_file(&lp.profile_path);
                 }
+            }
+            {
+                let mut cfg = ctx.shared_config.lock().unwrap();
+                cfg.mpo_binding = None;
+                let _ = cfg.save();
             }
             ctx.reload_trigger.store(true, Ordering::SeqCst);
             if let Some(win) = ctx.tactical_console.active_window() {
@@ -2140,6 +2217,16 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
                         let _ = lp.save_to_file(&lp.profile_path);
                         updated = true;
                     }
+                    {
+                        let mut cfg = ctx.shared_config.lock().unwrap();
+                        cfg.mpo_binding = Some(crate::config::MpoBindingConfig {
+                            button: btn.button_index,
+                            device: dev_name.clone(),
+                            guid: dev_guid.clone(),
+                            is_key: false,
+                        });
+                        let _ = cfg.save();
+                    }
                     if let Some(win) = ctx.tactical_console.active_window() {
                         win.send_event(
                             "MpoBindingCaptured",
@@ -2159,6 +2246,16 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
                         lp.set_mpo_key_binding(kc as u32, Some(&key_name));
                         let _ = lp.save_to_file(&lp.profile_path);
                         updated = true;
+                    }
+                    {
+                        let mut cfg = ctx.shared_config.lock().unwrap();
+                        cfg.mpo_binding = Some(crate::config::MpoBindingConfig {
+                            button: kc as u32,
+                            device: key_name.clone(),
+                            guid: "KEYBOARD".to_string(),
+                            is_key: true,
+                        });
+                        let _ = cfg.save();
                     }
                     if let Some(win) = ctx.tactical_console.active_window() {
                         win.send_event(
@@ -2198,6 +2295,16 @@ fn handle_ipc_message(req: crate::gui::ipc::IpcRequest, ctx: &mut IpcContext<'_>
                     lp.set_mpo_key_binding(key_code, Some(&key_name));
                     let _ = lp.save_to_file(&lp.profile_path);
                 }
+            }
+            {
+                let mut cfg = ctx.shared_config.lock().unwrap();
+                cfg.mpo_binding = Some(crate::config::MpoBindingConfig {
+                    button: key_code,
+                    device: key_name.clone(),
+                    guid: "KEYBOARD".to_string(),
+                    is_key: true,
+                });
+                let _ = cfg.save();
             }
             ctx.reload_trigger.store(true, Ordering::SeqCst);
             if let Some(win) = ctx.tactical_console.active_window() {

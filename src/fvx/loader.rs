@@ -233,44 +233,149 @@ impl LoadedProfile {
 
     /// Checks if this profile carries the official AeroGraph canonical profile identifier.
     pub fn is_canonical_profile(&self) -> bool {
+        self.canonical_version() > 0
+    }
+
+    /// Extracts the canonical AeroGraph profile version (e.g. 1 for CANONICAL_V1, 2 for CANONICAL_V2).
+    /// Returns 0 for legacy, untagged, or custom profiles.
+    pub fn canonical_version(&self) -> u32 {
         if let Some(inits) = &self.profile.VariableInits {
+            for v in inits {
+                if v.Name.eq_ignore_ascii_case("AEROGRAPH_PROFILE_VERSION") {
+                    if let Some(ref val) = v.Value {
+                        if let Some(n) = val.as_u64() {
+                            return n as u32;
+                        }
+                        if let Some(s) = val.as_str() {
+                            if let Ok(n) = s.trim().parse::<u32>() {
+                                return n;
+                            }
+                        }
+                    }
+                }
+            }
             for v in inits {
                 if v.Name.eq_ignore_ascii_case("AEROGRAPH_PROFILE_ID") {
                     if let Some(ref val) = v.Value {
-                        let s = val.as_str().unwrap_or("");
+                        let s = val.as_str().unwrap_or("").to_uppercase();
+                        if let Some(idx) = s.find("CANONICAL_V") {
+                            let rest = &s[idx + "CANONICAL_V".len()..];
+                            if let Ok(n) = rest.trim().parse::<u32>() {
+                                return n;
+                            }
+                        }
                         if s.contains("CANONICAL") {
-                            return true;
+                            return 1;
                         }
                     }
                 }
             }
         }
-        false
+        0
     }
 
-    /// Injects the official AeroGraph canonical profile identifier into `VariableInits`.
-    pub fn tag_canonical_profile(&mut self) {
+    /// Injects the official AeroGraph canonical profile identifier and version into `VariableInits`.
+    pub fn tag_canonical_version(&mut self, version: u32) {
         if let Some(inits) = self
             .raw_json
             .get_mut("VariableInits")
             .and_then(|v| v.as_array_mut())
         {
-            let already_tagged = inits.iter().any(|v| {
-                v.get("Name")
-                    .and_then(|n| n.as_str())
-                    .map(|n| n.eq_ignore_ascii_case("AEROGRAPH_PROFILE_ID"))
-                    .unwrap_or(false)
-            });
-            if !already_tagged {
-                inits.push(serde_json::json!({
-                    "Name": "AEROGRAPH_PROFILE_ID",
-                    "Value": "CANONICAL_V1"
-                }));
-                if let Ok(p) = serde_json::from_value(self.raw_json.clone()) {
-                    self.profile = p;
-                }
+            let id_val = format!("CANONICAL_V{}", version);
+            set_or_insert_variable(inits, "AEROGRAPH_PROFILE_ID", &id_val);
+            set_or_insert_variable(inits, "AEROGRAPH_PROFILE_VERSION", &version.to_string());
+            if let Ok(p) = serde_json::from_value(self.raw_json.clone()) {
+                self.profile = p;
             }
         }
+    }
+
+    /// Injects the official AeroGraph canonical profile identifier (V1) into `VariableInits`.
+    pub fn tag_canonical_profile(&mut self) {
+        self.tag_canonical_version(1);
+    }
+
+    /// Non-destructively migrates this profile using the provided canonical template.
+    /// Replaces the underlying state machine/commands with the template while re-applying:
+    /// 1. MPO hardware button or key bindings from config (or harvested from this profile).
+    /// 2. Custom Crew Chief drill step order and disabled steps.
+    pub fn migrate_from_template(
+        &mut self,
+        template_lp: &LoadedProfile,
+        config: &crate::config::AppConfig,
+    ) -> Result<(), String> {
+        let current_mpo = self.get_mpo_binding();
+        let (current_order, current_disabled) = self.get_embedded_sequence().unwrap_or_else(|| {
+            (
+                config.drill_step_order.clone().unwrap_or_default(),
+                config.disabled_drill_steps.clone().unwrap_or_default(),
+            )
+        });
+
+        // Adopt template's raw json and refresh typed struct
+        self.raw_json = template_lp.raw_json.clone();
+        if let Ok(p) = serde_json::from_value(self.raw_json.clone()) {
+            self.profile = p;
+        } else {
+            return Err("Failed to deserialize canonical template into profile struct".into());
+        }
+
+        // Tag with template version
+        let template_ver = template_lp.canonical_version().max(1);
+        self.tag_canonical_version(template_ver);
+
+        // Re-apply MPO binding
+        if let Some(ref mpo) = config.mpo_binding {
+            if mpo.is_key {
+                self.set_mpo_key_binding(mpo.button, Some(&mpo.device));
+            } else {
+                let dev_name = if mpo.device.is_empty() {
+                    None
+                } else {
+                    Some(mpo.device.as_str())
+                };
+                let dev_guid = if mpo.guid.is_empty() {
+                    None
+                } else {
+                    Some(mpo.guid.as_str())
+                };
+                self.set_mpo_binding(mpo.button, dev_name, dev_guid);
+            }
+        } else if current_mpo.0 != 8 || current_mpo.3 || current_mpo.1 != "F16 TQS by YGZ" {
+            if current_mpo.3 {
+                self.set_mpo_key_binding(current_mpo.0, Some(&current_mpo.1));
+            } else {
+                let dev_name = if current_mpo.1.is_empty() {
+                    None
+                } else {
+                    Some(current_mpo.1.as_str())
+                };
+                let dev_guid = if current_mpo.2.is_empty() {
+                    None
+                } else {
+                    Some(current_mpo.2.as_str())
+                };
+                self.set_mpo_binding(current_mpo.0, dev_name, dev_guid);
+            }
+        }
+
+        // Re-apply custom drill order & disabled steps if any were customized
+        if !current_order.is_empty() || !current_disabled.is_empty() {
+            let order_ids: Vec<crate::fvx::reorder::DrillStepId> = current_order
+                .iter()
+                .filter_map(|s| s.parse().ok())
+                .collect();
+            let disabled_ids: std::collections::HashSet<crate::fvx::reorder::DrillStepId> =
+                current_disabled
+                    .iter()
+                    .filter_map(|s| s.parse().ok())
+                    .collect();
+            if !order_ids.is_empty() {
+                self.reorder_crew_chief(&order_ids, &disabled_ids)?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Dynamically harvests the complete set of unique variable names declared, queried, or updated in this profile.
@@ -566,6 +671,37 @@ impl LoadedProfile {
             let cand = self.base_dir.join(fname);
             if cand.exists() {
                 return cand;
+            }
+        }
+
+        // Fallback to bundled factory assets directory if not found in base_dir
+        let factory_base = crate::config::AppConfig::find_assets_dir()
+            .join("profiles")
+            .join("Falcon BMS 4.38 v1.3.1");
+        if factory_base.exists() {
+            let factory_joined = factory_base.join(clean);
+            if factory_joined.exists() {
+                return factory_joined;
+            }
+            if let Some(idx) = clean.find("VCC/") {
+                let sub = &clean[idx..];
+                let cand = factory_base.join(sub);
+                if cand.exists() {
+                    return cand;
+                }
+            }
+            if let Some(idx) = clean.find("Sounds/") {
+                let sub = &clean[idx..];
+                let cand = factory_base.join(sub);
+                if cand.exists() {
+                    return cand;
+                }
+            }
+            if let Some(fname) = Path::new(&sanitized).file_name() {
+                let cand = factory_base.join(fname);
+                if cand.exists() {
+                    return cand;
+                }
             }
         }
 
@@ -888,11 +1024,18 @@ mod tests {
         lp.save_to_file(path)
             .expect("Failed to save tagged profile");
 
-        let reloaded = LoadedProfile::load_from_file(path).expect("Failed to reload profile");
+        let canonical_path =
+            "assets/profiles/Falcon BMS 4.38 v1.3.1/Falcon BMS 4.38 v1.3.1.canonical.fvx";
+        lp.save_to_file(canonical_path)
+            .expect("Failed to save canonical template");
+
+        let reloaded =
+            LoadedProfile::load_from_file(canonical_path).expect("Failed to reload profile");
         assert!(
             reloaded.is_canonical_profile(),
             "Reloaded profile must be canonical"
         );
+        assert_eq!(reloaded.canonical_version(), 1);
     }
 
     #[test]
@@ -943,5 +1086,91 @@ mod tests {
             reset_embedded.is_none(),
             "Reset must clear custom embedded overrides"
         );
+    }
+
+    #[test]
+    fn test_canonical_version_and_tagging() {
+        let path = "assets/profiles/Falcon BMS 4.38 v1.3.1/Falcon BMS 4.38 v1.3.1.fvx";
+        let mut lp = LoadedProfile::load_from_file(path).expect("Failed to load profile");
+
+        lp.tag_canonical_version(2);
+        assert_eq!(lp.canonical_version(), 2);
+        assert!(lp.is_canonical_profile());
+
+        lp.tag_canonical_version(1);
+        assert_eq!(lp.canonical_version(), 1);
+        assert!(lp.is_canonical_profile());
+    }
+
+    #[test]
+    fn test_non_destructive_migration() {
+        let path = "assets/profiles/Falcon BMS 4.38 v1.3.1/Falcon BMS 4.38 v1.3.1.fvx";
+        let mut active_lp = LoadedProfile::load_from_file(path).expect("Failed to load profile");
+
+        // Simulate active profile customizations
+        assert!(active_lp.set_mpo_binding(42, Some("My Custom Throttle"), Some("CUSTOM_GUID_123")));
+        let custom_order = vec![
+            crate::fvx::reorder::DrillStepId::EngageChief,
+            crate::fvx::reorder::DrillStepId::ElecPower,
+            crate::fvx::reorder::DrillStepId::BigMovements,
+        ];
+        let mut disabled = std::collections::HashSet::new();
+        disabled.insert(crate::fvx::reorder::DrillStepId::SecCheck);
+        active_lp
+            .reorder_crew_chief(&custom_order, &disabled)
+            .expect("Failed to reorder");
+
+        // Simulate a new canonical template (V2)
+        let mut template_lp = LoadedProfile::load_from_file(path).expect("Failed to load template");
+        template_lp.tag_canonical_version(2);
+
+        let mut cfg = crate::config::AppConfig::default();
+        cfg.mpo_binding = Some(crate::config::MpoBindingConfig {
+            button: 42,
+            device: "My Custom Throttle".into(),
+            guid: "CUSTOM_GUID_123".into(),
+            is_key: false,
+        });
+
+        // Run migration
+        active_lp
+            .migrate_from_template(&template_lp, &cfg)
+            .expect("Migration failed");
+
+        // Verify version upgraded to 2
+        assert_eq!(active_lp.canonical_version(), 2);
+
+        // Verify MPO binding was preserved
+        let (btn, dev, guid, is_key) = active_lp.get_mpo_binding();
+        assert_eq!(btn, 42);
+        assert_eq!(dev, "My Custom Throttle");
+        assert_eq!(guid, "CUSTOM_GUID_123");
+        assert!(!is_key);
+
+        // Verify drill sequence was preserved
+        let embedded = active_lp
+            .get_embedded_sequence()
+            .expect("Embedded sequence missing");
+        assert_eq!(embedded.0[2], "BIG_MOVEMENTS");
+        assert_eq!(embedded.1, vec!["SEC_CHECK"]);
+    }
+
+    #[test]
+    fn test_resolve_asset_path_fallback() {
+        let temp_dir = std::env::temp_dir();
+        let isolated_profile = temp_dir.join("isolated_test.fvx");
+        let path = "assets/profiles/Falcon BMS 4.38 v1.3.1/Falcon BMS 4.38 v1.3.1.fvx";
+        let lp = LoadedProfile::load_from_file(path).expect("Failed to load profile");
+        lp.save_to_file(&isolated_profile)
+            .expect("Failed to save isolated profile");
+
+        let isolated_lp =
+            LoadedProfile::load_from_file(&isolated_profile).expect("Failed to reload isolated");
+        let resolved = isolated_lp.resolve_asset_path("VCC/Sounds/10SpeedBreaksOpen.mp3");
+        assert!(
+            resolved.exists(),
+            "Asset path must fallback to factory asset directory"
+        );
+        let _ = std::fs::remove_file(isolated_profile);
     }
 }
