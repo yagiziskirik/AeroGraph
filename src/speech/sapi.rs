@@ -43,7 +43,7 @@ impl SapiEngine {
             let token: ISpObjectToken = CoCreateInstance(&SpObjectToken, None, CLSCTX_ALL)?;
             token.SetId(None, token_id, false)?;
 
-            recognizer.SetInput(&token, true)?;
+            recognizer.SetInput(&token, false)?;
 
             // Adjust silence timeouts to allow natural pauses without cutting off mid-sentence
             let prop_end: Vec<u16> = "EndSilenceTimeout\0".encode_utf16().collect();
