@@ -1,11 +1,12 @@
+use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use windows::Win32::Media::Audio::Endpoints::IAudioMeterInformation;
 use windows::Win32::Media::Audio::{
-    eCapture, eCommunications, eConsole, eMultimedia, IAudioClient, IMMDeviceEnumerator,
-    MMDeviceEnumerator, AUDCLNT_SHAREMODE_SHARED,
+    eCapture, eCommunications, eConsole, eMultimedia, IAudioCaptureClient, IAudioClient,
+    IMMDeviceEnumerator, MMDeviceEnumerator, AUDCLNT_SHAREMODE_SHARED,
 };
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
@@ -15,6 +16,7 @@ use windows::Win32::System::Com::{
 pub struct AudioPeakMeter {
     meter: Option<IAudioMeterInformation>,
     _client: Option<IAudioClient>,
+    capture_client: Option<IAudioCaptureClient>,
 }
 
 unsafe impl Send for AudioPeakMeter {}
@@ -24,7 +26,11 @@ impl AudioPeakMeter {
         Self::default()
     }
 
-    fn init_meter() -> (Option<IAudioMeterInformation>, Option<IAudioClient>) {
+    fn init_meter() -> (
+        Option<IAudioMeterInformation>,
+        Option<IAudioClient>,
+        Option<IAudioCaptureClient>,
+    ) {
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
             let enumerator: IMMDeviceEnumerator =
@@ -35,7 +41,7 @@ impl AudioPeakMeter {
                             "AudioPeakMeter: Failed to create MMDeviceEnumerator: {:?}",
                             err
                         );
-                        return (None, None);
+                        return (None, None, None);
                     }
                 };
 
@@ -49,32 +55,58 @@ impl AudioPeakMeter {
                 Some(d) => d,
                 None => {
                     log::warn!("AudioPeakMeter: No default audio capture endpoint found.");
-                    return (None, None);
+                    return (None, None, None);
                 }
             };
 
             // Start a lightweight shared capture stream so Windows keeps the capture pin actively running
             let client: Option<IAudioClient> = device.Activate(CLSCTX_ALL, None).ok();
+            let mut capture_client: Option<IAudioCaptureClient> = None;
             if let Some(ref client) = client {
                 if let Ok(pwfx) = client.GetMixFormat() {
                     let _ =
                         client.Initialize(AUDCLNT_SHAREMODE_SHARED, 0, 10_000_000, 0, pwfx, None);
+                    capture_client = client.GetService().ok();
                     let _ = client.Start();
                     log::info!("AudioPeakMeter: Active capture stream initialized via CoreAudio");
                 }
             }
 
             let meter: Option<IAudioMeterInformation> = device.Activate(CLSCTX_ALL, None).ok();
-            (meter, client)
+            (meter, client, capture_client)
         }
     }
 
     pub fn get_peak(&mut self) -> f32 {
         if self.meter.is_none() {
-            let (m, c) = Self::init_meter();
+            let (m, c, cap) = Self::init_meter();
             self.meter = m;
             self._client = c;
+            self.capture_client = cap;
         }
+
+        // Drain capture buffer so the shared audio stream never overflows
+        if let Some(ref capture) = self.capture_client {
+            unsafe {
+                while let Ok(packet_size) = capture.GetNextPacketSize() {
+                    if packet_size == 0 {
+                        break;
+                    }
+                    let mut p_data: *mut u8 = ptr::null_mut();
+                    let mut num_frames: u32 = 0;
+                    let mut flags: u32 = 0;
+                    if capture
+                        .GetBuffer(&mut p_data, &mut num_frames, &mut flags, None, None)
+                        .is_ok()
+                    {
+                        let _ = capture.ReleaseBuffer(num_frames);
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
         if let Some(ref meter) = self.meter {
             unsafe {
                 if let Ok(peak) = meter.GetPeakValue() {
@@ -83,6 +115,7 @@ impl AudioPeakMeter {
             }
             self.meter = None;
             self._client = None;
+            self.capture_client = None;
         }
         0.0
     }
@@ -118,6 +151,7 @@ impl AudioPeakMeter {
                             }
                             peak_meter.meter = None;
                             peak_meter._client = None;
+                            peak_meter.capture_client = None;
                             mic_level.store(0, Ordering::Relaxed);
                         }
                         thread::sleep(Duration::from_millis(100));
